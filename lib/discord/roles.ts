@@ -9,6 +9,33 @@ type ApplyManagedRoleSelectionArgs = {
   managedRolesById: Map<string, ManagedRole>;
 };
 
+type DiscordApiErrorBody = {
+  code?: number;
+  message?: string;
+};
+
+function parseDiscordApiError(body: string): DiscordApiErrorBody | null {
+  try {
+    return JSON.parse(body) as DiscordApiErrorBody;
+  } catch {
+    return null;
+  }
+}
+
+function getDiscordRoleErrorMessage(status: number, responseBody: string) {
+  const parsedBody = parseDiscordApiError(responseBody);
+
+  if (status === 404 && parsedBody?.code === 10004) {
+    return "The bot user cannot access this server. Invite the bot with both the bot and applications.commands scopes, and verify DISCORD_BOT_TOKEN belongs to the same Discord application handling interactions.";
+  }
+
+  if (status === 403 && parsedBody?.code === 50001) {
+    return "The bot does not have access to update roles in this server. Check that the bot is installed in the server and that the production token matches this application.";
+  }
+
+  return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;
+}
+
 async function discordRoleRequest(url: string, botToken: string, method: "PUT" | "DELETE") {
   const response = await fetch(url, {
     method,
@@ -22,7 +49,7 @@ async function discordRoleRequest(url: string, botToken: string, method: "PUT" |
   }
 
   const body = await response.text();
-  throw new Error(`${response.status} ${response.statusText}${body ? `: ${body}` : ""}`);
+  throw new Error(getDiscordRoleErrorMessage(response.status, body));
 }
 
 function mentionRoles(roleIds: string[]) {
