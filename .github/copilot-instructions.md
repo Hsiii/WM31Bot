@@ -1,0 +1,4 @@
+- This repository is a Next.js TypeScript project deployed to Vercel.
+- Discord functionality must remain compatible with serverless interactions, not websocket gateway bots.
+- Keep role management config driven through environment variables unless persistent storage is explicitly requested.
+- Prefer minimal, focused changes and preserve the existing visual style on the setup page.
