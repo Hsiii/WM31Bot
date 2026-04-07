@@ -80,6 +80,7 @@ export async function POST(request: Request) {
   }
 
   const interaction = JSON.parse(rawBody) as DiscordInteraction;
+  const commandName = interaction.data?.name;
 
   if (interaction.type === 1) {
     return jsonResponse({ type: 1 });
@@ -95,7 +96,12 @@ export async function POST(request: Request) {
     });
   }
 
-  if (interaction.type !== 2 || !interaction.data?.name) {
+  const userId = getUserId(interaction);
+
+  if (
+    commandName !== JOIN_WORDLE_CHANNEL_COMMAND_NAME &&
+    commandName !== LEAVE_WORDLE_CHANNEL_COMMAND_NAME
+  ) {
     return jsonResponse({
       type: 4,
       data: {
@@ -104,8 +110,6 @@ export async function POST(request: Request) {
       },
     });
   }
-
-  const userId = getUserId(interaction);
 
   if (!interaction.guild_id || !userId) {
     return jsonResponse({
@@ -118,21 +122,6 @@ export async function POST(request: Request) {
   }
 
   const wordleRole = getWordleRole(config.managedRoles);
-  const commandName = interaction.data.name;
-
-  if (
-    commandName !== JOIN_WORDLE_CHANNEL_COMMAND_NAME &&
-    commandName !== LEAVE_WORDLE_CHANNEL_COMMAND_NAME
-  ) {
-    return jsonResponse({
-      type: 4,
-      data: {
-        flags: 64,
-        content: "Unknown command.",
-      },
-    });
-  }
-
   const currentRoleIds = getMemberRoleIds(interaction);
   const managedRolesById = getManagedRolesById([wordleRole]);
   const selectedRoleIds =
