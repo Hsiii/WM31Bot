@@ -1,3 +1,5 @@
+import { TARGET_GUILD_ID, WORDLE_ROLE_ID, WORDLE_ROLE_LABEL } from "@/lib/discord/constants";
+
 export type ManagedRole = {
   id: string;
   label: string;
@@ -45,9 +47,20 @@ function ensureRoleShape(input: unknown, index: number): ManagedRole {
   return { id, label, description, emoji };
 }
 
+function getDefaultManagedRoles(): ManagedRole[] {
+  return [
+    {
+      id: WORDLE_ROLE_ID,
+      label: WORDLE_ROLE_LABEL,
+      description: "Access to the Wordle channel",
+      emoji: "🟩",
+    },
+  ];
+}
+
 export function parseManagedRoles(rawValue: string | undefined) {
   if (!rawValue) {
-    return [];
+    return getDefaultManagedRoles();
   }
 
   let parsed: unknown;
@@ -84,12 +97,16 @@ export function parseManagedRoles(rawValue: string | undefined) {
   return roles;
 }
 
+export function getWordleRole(managedRoles: ManagedRole[]) {
+  return managedRoles.find((role) => role.id === WORDLE_ROLE_ID) ?? getDefaultManagedRoles()[0];
+}
+
 export function getDiscordConfig(): DiscordConfig {
   return {
     applicationId: requireEnv("DISCORD_APPLICATION_ID"),
     publicKey: requireEnv("DISCORD_PUBLIC_KEY"),
     botToken: requireEnv("DISCORD_BOT_TOKEN"),
-    guildId: process.env.DISCORD_GUILD_ID?.trim() || undefined,
+    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     managedRoles: parseManagedRoles(process.env.SELF_ASSIGNABLE_ROLES),
   };
 }

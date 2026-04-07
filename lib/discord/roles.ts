@@ -1,3 +1,4 @@
+import { TARGET_GUILD_ID, WORDLE_ROLE_ID } from "@/lib/discord/constants";
 import type { ManagedRole } from "@/lib/discord/env";
 
 type ApplyManagedRoleSelectionArgs = {
@@ -31,6 +32,10 @@ function getDiscordRoleErrorMessage(status: number, responseBody: string) {
 
   if (status === 403 && parsedBody?.code === 50001) {
     return "The bot does not have access to update roles in this server. Check that the bot is installed in the server and that the production token matches this application.";
+  }
+
+  if (status === 403 && parsedBody?.code === 50013) {
+    return `Discord denied the role update in guild ${TARGET_GUILD_ID}. Ensure the bot has the Manage Roles permission and that its highest role is above role ${WORDLE_ROLE_ID} in the server role hierarchy.`;
   }
 
   return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;

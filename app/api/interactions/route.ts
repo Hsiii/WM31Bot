@@ -1,10 +1,9 @@
 import {
-  COMMAND_NAME,
-  CLEAR_ROLES_CUSTOM_ID,
-  ROLE_SELECT_CUSTOM_ID,
+  JOIN_WORDLE_CHANNEL_COMMAND_NAME,
+  LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "@/lib/discord/constants";
-import { getDiscordConfig } from "@/lib/discord/env";
-import { buildRolePickerResponse, buildRoleUpdateResponse } from "@/lib/discord/messages";
+import { getDiscordConfig, getWordleRole } from "@/lib/discord/env";
+import { buildRoleCommandResponse } from "@/lib/discord/messages";
 import { applyManagedRoleSelection, getManagedRolesById } from "@/lib/discord/roles";
 import { verifyDiscordRequest } from "@/lib/discord/verify";
 
@@ -96,11 +95,7 @@ export async function POST(request: Request) {
     });
   }
 
-  if (interaction.type === 2 && interaction.data?.name === COMMAND_NAME) {
-    return jsonResponse(buildRolePickerResponse(config.managedRoles, getMemberRoleIds(interaction)));
-  }
-
-  if (interaction.type !== 3 || !interaction.data?.custom_id) {
+  if (interaction.type !== 2 || !interaction.data?.name) {
     return jsonResponse({
       type: 4,
       data: {
@@ -122,21 +117,26 @@ export async function POST(request: Request) {
     });
   }
 
-  const managedRolesById = getManagedRolesById(config.managedRoles);
-  const customId = interaction.data.custom_id;
-  const selectedRoleIds = customId === CLEAR_ROLES_CUSTOM_ID ? [] : interaction.data.values ?? [];
+  const wordleRole = getWordleRole(config.managedRoles);
+  const commandName = interaction.data.name;
 
-  if (customId !== ROLE_SELECT_CUSTOM_ID && customId !== CLEAR_ROLES_CUSTOM_ID) {
+  if (
+    commandName !== JOIN_WORDLE_CHANNEL_COMMAND_NAME &&
+    commandName !== LEAVE_WORDLE_CHANNEL_COMMAND_NAME
+  ) {
     return jsonResponse({
       type: 4,
       data: {
         flags: 64,
-        content: "Unknown component interaction.",
+        content: "Unknown command.",
       },
     });
   }
 
   const currentRoleIds = getMemberRoleIds(interaction);
+  const managedRolesById = getManagedRolesById([wordleRole]);
+  const selectedRoleIds =
+    commandName === JOIN_WORDLE_CHANNEL_COMMAND_NAME ? [wordleRole.id] : [];
 
   try {
     const result = await applyManagedRoleSelection({
@@ -148,27 +148,14 @@ export async function POST(request: Request) {
       managedRolesById,
     });
 
-    return jsonResponse(
-      buildRoleUpdateResponse({
-        managedRoles: config.managedRoles,
-        currentRoleIds: result.nextRoleIds,
-        message: result.message,
-      }),
-    );
+    return jsonResponse(buildRoleCommandResponse(result.message));
   } catch (error) {
-    return jsonResponse({
-      type: 7,
-      data: {
-        content:
-          error instanceof Error
-            ? `Could not update roles: ${error.message}`
-            : "Could not update roles.",
-        components: buildRoleUpdateResponse({
-          managedRoles: config.managedRoles,
-          currentRoleIds,
-          message: "Try again after checking the bot permissions and role hierarchy.",
-        }).data.components,
-      },
-    });
+    return jsonResponse(
+      buildRoleCommandResponse(
+        error instanceof Error
+          ? `Could not update roles: ${error.message}`
+          : "Could not update roles.",
+      ),
+    );
   }
 }

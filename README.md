@@ -1,13 +1,12 @@
 # WM31Bot
 
-WM31Bot is a Vercel-compatible Discord bot for self-assignable roles. It does not rely on a persistent gateway connection. Instead, Discord sends slash-command and component interactions to a serverless endpoint, which makes it a good fit for Vercel.
+WM31Bot is a Vercel-compatible Discord bot for Wordle channel access. It does not rely on a persistent gateway connection. Instead, Discord sends slash-command interactions to a serverless endpoint, which makes it a good fit for Vercel.
 
 ## What it does
 
-- Publishes a `/roles` slash command.
-- Shows users an ephemeral multi-select menu with the roles you allow.
-- Adds newly selected roles and removes managed roles that were unselected.
-- Restricts the bot to one guild if `DISCORD_GUILD_ID` is set.
+- Publishes `/join-wordle-channel` and `/leave-wordle-channel`.
+- Adds or removes the Wordle access role with a single slash command.
+- Restricts the bot to guild `1282936453134815275`.
 
 ## Why this works on Vercel
 
@@ -21,7 +20,7 @@ Traditional Discord bots keep a websocket connection open. Vercel functions are 
 
 1. Install dependencies.
 2. Copy `.env.example` to `.env.local`.
-3. Fill in the Discord application ID, public key, bot token, optional guild ID, and the JSON array of self-assignable roles.
+3. Fill in the Discord application ID, public key, bot token, and optional overrides for the fixed guild and role configuration.
 4. Run the slash-command registration script.
 5. Start the app locally.
 
@@ -39,24 +38,19 @@ npm run dev
 | `DISCORD_APPLICATION_ID` | Yes | Discord application ID |
 | `DISCORD_PUBLIC_KEY` | Yes | Public key used to verify interaction signatures |
 | `DISCORD_BOT_TOKEN` | Yes | Bot token used for Discord REST role updates |
-| `DISCORD_GUILD_ID` | No | Restricts the bot to a single guild and registers faster guild-scoped commands |
-| `SELF_ASSIGNABLE_ROLES` | Yes | JSON array of up to 25 allowed role definitions |
+| `DISCORD_GUILD_ID` | No | Overrides the default guild restriction. Defaults to `1282936453134815275` |
+| `SELF_ASSIGNABLE_ROLES` | No | Optional JSON role config. Defaults to the Wordle role `1451976411152781466` |
 
-Example role config:
+Default role config:
 
 ```json
 [
   {
     "id": "123456789012345678",
-    "label": "Announcements",
-    "description": "Ping me for updates",
-    "emoji": "📣"
-  },
-  {
-    "id": "234567890123456789",
-    "label": "Events",
-    "description": "Community event notifications",
-    "emoji": "🎉"
+    "id": "1451976411152781466",
+    "label": "Wordle Channel",
+    "description": "Access to the Wordle channel",
+    "emoji": "🟩"
   }
 ]
 ```
@@ -65,10 +59,10 @@ Example role config:
 
 1. Create a Discord application and add a bot user.
 2. Invite the bot to your server with `Manage Roles` permission.
-3. Move the bot role above every self-assignable role in the server role hierarchy.
+3. Move the bot role above role `1451976411152781466` in the server role hierarchy.
 4. Deploy the app to Vercel.
 5. In the Discord Developer Portal, set the Interactions Endpoint URL to `https://your-domain/api/interactions`.
-6. Run `npm run register:commands` with your production environment variables to publish `/roles`.
+6. Run `npm run register:commands` with your production environment variables to publish `/join-wordle-channel` and `/leave-wordle-channel`.
 
 ## Deploy to Vercel
 
@@ -79,7 +73,6 @@ Example role config:
 
 ## Notes and limits
 
-- Discord select menus support at most 25 roles.
-- The bot only manages roles listed in `SELF_ASSIGNABLE_ROLES`.
-- The bot must have a higher role than any role it should assign.
-- The interaction response is ephemeral, so only the invoking user sees the role picker.
+- The bot only manages the Wordle role by default.
+- The bot must have a higher role than `1451976411152781466` to assign or remove it.
+- The interaction response is ephemeral, so only the invoking user sees the result.

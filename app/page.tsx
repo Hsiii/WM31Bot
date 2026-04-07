@@ -13,7 +13,7 @@ export default function Home() {
         <p className="lede">
           This project uses Discord interactions instead of a long-running gateway
           connection, so it deploys cleanly on Vercel and still lets members add
-          or remove approved roles from a slash command.
+          or remove Wordle channel access from simple slash commands.
         </p>
         <div className="panel-grid">
           <article className="panel accent">
@@ -23,8 +23,8 @@ export default function Home() {
           </article>
           <article className="panel">
             <span className="panel-label">Command</span>
-            <strong>/roles</strong>
-            <p>Shows an ephemeral role picker and syncs the user&apos;s managed roles.</p>
+            <strong>/join-wordle-channel</strong>
+            <p>Use `/leave-wordle-channel` to remove the same access role.</p>
           </article>
         </div>
       </section>
@@ -59,7 +59,7 @@ export default function Home() {
         <article className="card">
           <h2>Managed roles preview</h2>
           {summary.roles.length === 0 ? (
-            <p>No roles configured yet. Add JSON to SELF_ASSIGNABLE_ROLES.</p>
+            <p>No roles configured yet.</p>
           ) : (
             <ul className="role-list">
               {summary.roles.map((role) => (
@@ -78,9 +78,10 @@ export default function Home() {
           <ol className="steps-list">
             <li>Create a Discord application and bot.</li>
             <li>Invite the bot with Manage Roles permission.</li>
-            <li>Copy .env.example to .env.local and fill in your IDs, keys, and role JSON.</li>
+            <li>Move the bot role above the Wordle access role in the server hierarchy.</li>
+            <li>Copy .env.example to .env.local and fill in your IDs and keys.</li>
             <li>Deploy to Vercel, then set the interactions endpoint to /api/interactions.</li>
-            <li>Run <code>{exampleCommand}</code> to publish the /roles slash command.</li>
+            <li>Run <code>{exampleCommand}</code> to publish the Wordle slash commands.</li>
           </ol>
         </article>
 

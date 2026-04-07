@@ -13,8 +13,13 @@ const url = guildId
 
 const commands = [
   {
-    name: "roles",
-    description: "Manage your self-assignable server roles",
+    name: "join-wordle-channel",
+    description: "Grant the Wordle channel access role",
+    dm_permission: false,
+  },
+  {
+    name: "leave-wordle-channel",
+    description: "Remove the Wordle channel access role",
     dm_permission: false,
   },
 ];
