@@ -3,7 +3,6 @@ import {
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "@/lib/discord/constants";
 import { getDiscordConfig, getWordleRole } from "@/lib/discord/env";
-import { buildRoleCommandResponse } from "@/lib/discord/messages";
 import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
@@ -13,6 +12,8 @@ import {
 import { verifyDiscordRequest } from "@/lib/discord/verify";
 
 export const runtime = "nodejs";
+
+const EPHEMERAL_FLAG = 64;
 
 type DiscordInteraction = {
   type: number;
@@ -162,11 +163,17 @@ export async function POST(request: Request) {
     return jsonResponse(buildRoleCommandResponse(message));
   } catch (error) {
     return jsonResponse(
-      buildRoleCommandResponse(
-        error instanceof Error
-          ? `Could not update roles: ${error.message}`
-          : "Could not update roles.",
-      ),
+      buildRoleCommandResponse(error instanceof Error ? `Could not update roles: ${error.message}` : "Could not update roles."),
     );
   }
+}
+
+function buildRoleCommandResponse(message: string) {
+  return {
+    type: 4,
+    data: {
+      flags: EPHEMERAL_FLAG,
+      content: message,
+    },
+  };
 }

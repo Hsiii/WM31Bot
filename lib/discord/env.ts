@@ -1,4 +1,4 @@
-import { TARGET_GUILD_ID, WORDLE_ROLE_ID, WORDLE_ROLE_LABEL } from "@/lib/discord/constants";
+import { TARGET_GUILD_ID, WORDLE_ROLE_ID } from "@/lib/discord/constants";
 
 export type ManagedRole = {
   id: string;
@@ -51,7 +51,7 @@ function getDefaultManagedRoles(): ManagedRole[] {
   return [
     {
       id: WORDLE_ROLE_ID,
-      label: WORDLE_ROLE_LABEL,
+      label: "Wordle Channel",
       description: "Access to the Wordle channel",
       emoji: "🟩",
     },
@@ -68,11 +68,11 @@ export function parseManagedRoles(rawValue: string | undefined) {
   try {
     parsed = JSON.parse(rawValue);
   } catch {
-    throw new Error("SELF_ASSIGNABLE_ROLES must be valid JSON")
+    throw new Error("SELF_ASSIGNABLE_ROLES must be valid JSON");
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error("SELF_ASSIGNABLE_ROLES must be a JSON array")
+    throw new Error("SELF_ASSIGNABLE_ROLES must be a JSON array");
   }
 
   if (parsed.length === 0) {
@@ -80,7 +80,7 @@ export function parseManagedRoles(rawValue: string | undefined) {
   }
 
   if (parsed.length > 25) {
-    throw new Error("Discord select menus support at most 25 role options")
+    throw new Error("Discord select menus support at most 25 role options");
   }
 
   const roles = parsed.map((role, index) => ensureRoleShape(role, index));
@@ -88,7 +88,7 @@ export function parseManagedRoles(rawValue: string | undefined) {
 
   for (const role of roles) {
     if (ids.has(role.id)) {
-      throw new Error(`Duplicate role ID found in SELF_ASSIGNABLE_ROLES: ${role.id}`)
+      throw new Error(`Duplicate role ID found in SELF_ASSIGNABLE_ROLES: ${role.id}`);
     }
 
     ids.add(role.id);
