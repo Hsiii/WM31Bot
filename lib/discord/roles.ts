@@ -15,6 +15,19 @@ type DiscordApiErrorBody = {
   message?: string;
 };
 
+type DiscordGuildMember = {
+  roles?: string[];
+  user?: {
+    id?: string;
+  };
+};
+
+type RoleMemberSummary = {
+  memberIds: string[];
+  totalCount: number;
+  usedFallbackCount: boolean;
+};
+
 function parseDiscordApiError(body: string): DiscordApiErrorBody | null {
   try {
     return JSON.parse(body) as DiscordApiErrorBody;
@@ -41,7 +54,7 @@ function getDiscordRoleErrorMessage(status: number, responseBody: string) {
   return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;
 }
 
-async function discordRoleRequest(url: string, botToken: string, method: "PUT" | "DELETE") {
+async function discordApiRequest(url: string, botToken: string, method = "GET"): Promise<Response> {
   const response = await fetch(url, {
     method,
     headers: {
@@ -50,11 +63,15 @@ async function discordRoleRequest(url: string, botToken: string, method: "PUT" |
   });
 
   if (response.ok) {
-    return;
+    return response;
   }
 
   const body = await response.text();
   throw new Error(getDiscordRoleErrorMessage(response.status, body));
+}
+
+async function discordRoleRequest(url: string, botToken: string, method: "PUT" | "DELETE") {
+  await discordApiRequest(url, botToken, method);
 }
 
 function mentionRoles(roleIds: string[]) {
@@ -63,6 +80,110 @@ function mentionRoles(roleIds: string[]) {
 
 export function getManagedRolesById(managedRoles: ManagedRole[]) {
   return new Map(managedRoles.map((role) => [role.id, role]));
+}
+
+export function formatRoleMemberSummary({
+  roleLabel,
+  memberIds,
+  totalCount,
+  usedFallbackCount,
+}: {
+  roleLabel: string;
+  memberIds: string[];
+  totalCount: number;
+  usedFallbackCount: boolean;
+}) {
+  if (totalCount === 0) {
+    return `Current ${roleLabel} members: none.`;
+  }
+
+  if (usedFallbackCount || memberIds.length === 0) {
+    return `Current ${roleLabel} members: ${totalCount}.`;
+  }
+
+  const lines = [`Current ${roleLabel} members (${totalCount}):`];
+  let visibleCount = 0;
+
+  for (const memberId of memberIds) {
+    const mention = `<@${memberId}>`;
+    const candidate = `${lines.join("\n")}\n${mention}`;
+
+    if (candidate.length > 1800) {
+      break;
+    }
+
+    lines.push(mention);
+    visibleCount += 1;
+  }
+
+  if (visibleCount < totalCount) {
+    lines.push(`...and ${totalCount - visibleCount} more.`);
+  }
+
+  return lines.join("\n");
+}
+
+export async function getRoleMemberSummary({
+  guildId,
+  roleId,
+  botToken,
+}: {
+  guildId: string;
+  roleId: string;
+  botToken: string;
+}): Promise<RoleMemberSummary> {
+  const memberIds: string[] = [];
+  let after = "0";
+
+  try {
+    while (true) {
+      const response = await discordApiRequest(
+        `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000&after=${after}`,
+        botToken,
+      );
+      const page = (await response.json()) as DiscordGuildMember[];
+
+      if (page.length === 0) {
+        break;
+      }
+
+      for (const member of page) {
+        const memberId = member.user?.id;
+
+        if (!memberId) {
+          continue;
+        }
+
+        if (member.roles?.includes(roleId)) {
+          memberIds.push(memberId);
+        }
+      }
+
+      after = page[page.length - 1]?.user?.id ?? after;
+
+      if (page.length < 1000) {
+        break;
+      }
+    }
+
+    return {
+      memberIds,
+      totalCount: memberIds.length,
+      usedFallbackCount: false,
+    };
+  } catch {
+    const response = await discordApiRequest(
+      `https://discord.com/api/v10/guilds/${guildId}/roles/member-counts`,
+      botToken,
+    );
+    const roleCounts = (await response.json()) as Record<string, number>;
+
+    return {
+      memberIds: [],
+      totalCount: roleCounts[roleId] ?? 0,
+      usedFallbackCount: true,
+    };
+  }
 }
 
 export async function applyManagedRoleSelection({

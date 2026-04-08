@@ -4,7 +4,12 @@ import {
 } from "@/lib/discord/constants";
 import { getDiscordConfig, getWordleRole } from "@/lib/discord/env";
 import { buildRoleCommandResponse } from "@/lib/discord/messages";
-import { applyManagedRoleSelection, getManagedRolesById } from "@/lib/discord/roles";
+import {
+  applyManagedRoleSelection,
+  formatRoleMemberSummary,
+  getManagedRolesById,
+  getRoleMemberSummary,
+} from "@/lib/discord/roles";
 import { verifyDiscordRequest } from "@/lib/discord/verify";
 
 export const runtime = "nodejs";
@@ -137,7 +142,24 @@ export async function POST(request: Request) {
       managedRolesById,
     });
 
-    return jsonResponse(buildRoleCommandResponse(result.message));
+    let message = result.message;
+
+    if (commandName === JOIN_WORDLE_CHANNEL_COMMAND_NAME) {
+      const summary = await getRoleMemberSummary({
+        guildId: interaction.guild_id,
+        roleId: wordleRole.id,
+        botToken: config.botToken,
+      });
+
+      message = `${message}\n\n${formatRoleMemberSummary({
+        roleLabel: wordleRole.label,
+        memberIds: summary.memberIds,
+        totalCount: summary.totalCount,
+        usedFallbackCount: summary.usedFallbackCount,
+      })}`;
+    }
+
+    return jsonResponse(buildRoleCommandResponse(message));
   } catch (error) {
     return jsonResponse(
       buildRoleCommandResponse(
