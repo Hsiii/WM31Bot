@@ -17,6 +17,11 @@ import {
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
 import { startXPostMonitor } from "../lib/discord/x-post-monitor";
+import {
+  configureChatbotReminderScheduler,
+  type Reminder,
+} from "../lib/discord/reminders";
+import { createDiscordRequest } from "../lib/discord/chatbot";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });
@@ -86,6 +91,25 @@ const server = Bun.serve({
   fetch: handleRequest,
   websocket: macAgentWebSocketHandler,
 });
+
+const reminderBotToken = process.env.DISCORD_BOT_TOKEN?.trim();
+if (reminderBotToken) {
+  const discordRequest = createDiscordRequest(reminderBotToken);
+  configureChatbotReminderScheduler(async (reminder: Reminder) => {
+    await discordRequest(`/channels/${reminder.channelId}/messages`, {
+      method: "POST",
+      body: {
+        content: `<@${reminder.requesterUserId}> ⏰ ${reminder.content}`,
+        allowed_mentions: {
+          parse: [],
+          users: [reminder.requesterUserId],
+        },
+      },
+    });
+  });
+} else {
+  console.warn("Reminder scheduler disabled: DISCORD_BOT_TOKEN is missing.");
+}
 
 if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {
   startInstagramGateway();

@@ -38,17 +38,11 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
 
 function requestMessageContext(job: ChatbotJob) {
   const message = job.requestMessage;
-  if (
-    !message ||
-    (!message.attachments.length &&
-      !message.reactions?.length &&
-      !message.referencedMessage)
-  ) {
-    return undefined;
-  }
+  if (!message) return undefined;
 
   return {
     author: message.author,
+    timestamp: message.timestamp,
     ...(message.authorAliases?.length
       ? { authorAliases: message.authorAliases }
       : {}),
