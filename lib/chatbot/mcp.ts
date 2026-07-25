@@ -122,6 +122,28 @@ export type ChatbotMcpSessionHandlers = {
   }) => Promise<ChatbotMcpContextResult>;
   addReaction?: (emoji: string) => Promise<boolean>;
   addReactionDescription?: string;
+  createReminder?: (input: {
+    content: string;
+    runAt?: string;
+    cron?: string;
+    timezone?: string;
+  }) => Promise<{
+    id: string;
+    content: string;
+    nextRunAt: string;
+    cron?: string;
+    timezone?: string;
+  }>;
+  listReminders?: () => Promise<
+    Array<{
+      id: string;
+      content: string;
+      nextRunAt: string;
+      cron?: string;
+      timezone?: string;
+    }>
+  >;
+  cancelReminder?: (reminderId: string) => Promise<boolean>;
 };
 
 type ChatbotMcpSession = {
@@ -367,6 +389,108 @@ function createServer(session: ChatbotMcpSession) {
           const reacted = await session.handlers.addReaction!(emoji);
           session.reacted ||= reacted;
           return toolResult({ status: "complete", reacted });
+        } catch (error) {
+          return unavailable(error);
+        }
+      },
+    );
+  }
+
+  if (
+    session.handlers.createReminder &&
+    session.handlers.listReminders &&
+    session.handlers.cancelReminder
+  ) {
+    server.registerTool(
+      "create_reminder",
+      {
+        description:
+          "Create a reminder in the current Discord channel for the current requester. For a one-time wall-clock reminder, provide runAt as an ISO 8601 timestamp including Z or a UTC offset and timezone as the IANA timezone used to resolve it. Relative-duration timers do not need a timezone. For a recurring reminder, provide a standard five-field cron expression and an IANA timezone. Provide exactly one schedule type.",
+        inputSchema: {
+          content: z.string().trim().min(1).max(1_500),
+          runAt: z.string().trim().max(50).optional(),
+          cron: z.string().trim().max(100).optional(),
+          timezone: z.string().trim().max(100).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          if (Boolean(input.runAt) === Boolean(input.cron)) {
+            return toolResult({
+              status: "invalid",
+              error: "Provide exactly one of runAt or cron.",
+            });
+          }
+          if (input.cron && !input.timezone) {
+            return toolResult({
+              status: "invalid",
+              error: "Recurring reminders require an IANA timezone.",
+            });
+          }
+          return toolResult({
+            status: "complete",
+            reminder: await session.handlers.createReminder!(input),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not create reminder.",
+          });
+        }
+      },
+    );
+
+    server.registerTool(
+      "list_reminders",
+      {
+        description:
+          "List the current requester's reminders in the current Discord channel.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () => {
+        try {
+          return toolResult({
+            status: "complete",
+            reminders: await session.handlers.listReminders!(),
+          });
+        } catch (error) {
+          return unavailable(error);
+        }
+      },
+    );
+
+    server.registerTool(
+      "cancel_reminder",
+      {
+        description:
+          "Cancel one reminder belonging to the current requester in the current Discord channel. Use list_reminders first when the reminder ID is not already known.",
+        inputSchema: {
+          reminderId: z.string().uuid(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ reminderId }) => {
+        try {
+          const cancelled = await session.handlers.cancelReminder!(reminderId);
+          return toolResult({
+            status: cancelled ? "complete" : "not_found",
+            cancelled,
+          });
         } catch (error) {
           return unavailable(error);
         }

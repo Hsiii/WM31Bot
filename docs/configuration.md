@@ -27,6 +27,7 @@ live in [operations.md](operations.md).
 | `MINISAGO_AMBIENT_REACTIONS_ENABLED`   | No        | Set to `true` to let MiniSago consider occasional reactions             |
 | `MINISAGO_AMBIENT_ATTENTION_CHANCE`    | No        | Chance from 0–1 that a notification burst schedules an ambient check    |
 | `MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR` | No        | Global hourly ceiling for ambient model calls; defaults to 4            |
+| `MINISAGO_REMINDER_STATE_FILE`         | No        | Persistent one-time and cron reminder state                             |
 | `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticates the trusted Mac worker profile                            |
 | `MINISAGO_WORKER_BRIDGE_SECRET`        | Chatbot   | Authenticates the server-owned cloud worker profile                     |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`    | No        | Default destination for `bun run publish:panel`                         |
@@ -103,6 +104,16 @@ attachments. The Discord token never leaves the hosted service.
 Mention answers use the same host-owned reaction broker and emoji inventory.
 One answer inference can choose a reply, a reaction bound to the triggering
 message, or both; it does not require a second reaction-planning model call.
+
+Authorized chatbot users can create one-time timers or recurring five-field
+cron reminders through the same host-bound MCP session. Reminder identity and
+destination are bound to the real requester and current channel; model
+arguments cannot target another user or channel. Wall-clock and recurring
+requests require a timezone or unambiguous location; MiniSago asks when neither
+is supplied, then includes the resolved IANA timezone in its setup message
+without requiring a confirmation step. Relative-duration timers do not require
+a timezone. A user can keep at most 50 active reminders. Listing and
+cancellation are limited to that requester in the current channel.
 
 The checked-in deployment still hardcodes:
 
@@ -201,5 +212,6 @@ are:
 - `TOEFL_VOCAB_STATE_FILE`
 - `GAMER_FORUM_STATE_FILE`
 - `X_POST_STATE_FILE`
+- `MINISAGO_REMINDER_STATE_FILE`
 
 Do not place these files on the container's ephemeral filesystem in production.

@@ -184,4 +184,93 @@ describe("MiniSago MCP server", () => {
     await client.close();
     session.revoke();
   });
+
+  test("creates, lists, and cancels bearer-bound reminders", async () => {
+    const created: unknown[] = [];
+    const cancelled: string[] = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      createReminder: async (input) => {
+        created.push(input);
+        return {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          content: input.content,
+          nextRunAt: "2026-07-26T01:00:00.000Z",
+          ...(input.cron ? { cron: input.cron } : {}),
+          ...(input.timezone ? { timezone: input.timezone } : {}),
+        };
+      },
+      listReminders: async () => [
+        {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          content: "stand up",
+          nextRunAt: "2026-07-26T01:00:00.000Z",
+        },
+      ],
+      cancelReminder: async (reminderId) => {
+        cancelled.push(reminderId);
+        return true;
+      },
+    });
+    const client = await connect(session.token);
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name)).toContain("create_reminder");
+    const invalid = await client.callTool({
+      name: "create_reminder",
+      arguments: {
+        content: "stand up",
+        runAt: "2026-07-26T01:00:00Z",
+        cron: "0 9 * * *",
+      },
+    });
+    expect(invalid.structuredContent).toMatchObject({ status: "invalid" });
+    expect(created).toHaveLength(0);
+
+    const missingTimezone = await client.callTool({
+      name: "create_reminder",
+      arguments: {
+        content: "stand up",
+        cron: "0 9 * * *",
+      },
+    });
+    expect(missingTimezone.structuredContent).toMatchObject({
+      status: "invalid",
+    });
+    expect(created).toHaveLength(0);
+
+    const createResult = await client.callTool({
+      name: "create_reminder",
+      arguments: {
+        content: "stand up",
+        cron: "0 9 * * *",
+        timezone: "Asia/Taipei",
+      },
+    });
+    expect(createResult.structuredContent).toMatchObject({
+      status: "complete",
+      reminder: {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        cron: "0 9 * * *",
+      },
+    });
+
+    const listResult = await client.callTool({
+      name: "list_reminders",
+      arguments: {},
+    });
+    expect(listResult.structuredContent).toMatchObject({
+      status: "complete",
+      reminders: [{ content: "stand up" }],
+    });
+
+    await client.callTool({
+      name: "cancel_reminder",
+      arguments: { reminderId: "123e4567-e89b-12d3-a456-426614174000" },
+    });
+    expect(cancelled).toEqual(["123e4567-e89b-12d3-a456-426614174000"]);
+
+    await client.close();
+    session.revoke();
+  });
 });

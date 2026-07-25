@@ -21,6 +21,7 @@ import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
 } from "./reactions";
+import { getChatbotReminderScheduler } from "./reminders";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
@@ -1424,6 +1425,7 @@ export async function handleChatbotMention({
                 discordRequest,
               })
           : undefined;
+      const reminderScheduler = getChatbotReminderScheduler();
 
       mcpSession = registerChatbotMcpSession({
         getRecentMessages: recentMessages,
@@ -1504,6 +1506,43 @@ export async function handleChatbotMention({
         ...(reactionTool
           ? {
               addReactionDescription: `${reactionTool.description} Available values: ${JSON.stringify(reactionTool.metadata ?? {})}`,
+            }
+          : {}),
+        ...(reminderScheduler
+          ? {
+              createReminder: async (input) => {
+                const reminder = await reminderScheduler.create({
+                  ...input,
+                  requesterUserId,
+                  channelId: message.channel_id,
+                });
+                return {
+                  id: reminder.id,
+                  content: reminder.content,
+                  nextRunAt: reminder.nextRunAt,
+                  ...(reminder.cron ? { cron: reminder.cron } : {}),
+                  ...(reminder.timezone ? { timezone: reminder.timezone } : {}),
+                };
+              },
+              listReminders: async () =>
+                (
+                  await reminderScheduler.list(
+                    requesterUserId,
+                    message.channel_id,
+                  )
+                ).map((reminder) => ({
+                  id: reminder.id,
+                  content: reminder.content,
+                  nextRunAt: reminder.nextRunAt,
+                  ...(reminder.cron ? { cron: reminder.cron } : {}),
+                  ...(reminder.timezone ? { timezone: reminder.timezone } : {}),
+                })),
+              cancelReminder: (reminderId: string) =>
+                reminderScheduler.cancel(
+                  requesterUserId,
+                  message.channel_id,
+                  reminderId,
+                ),
             }
           : {}),
       });
