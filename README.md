@@ -115,7 +115,8 @@ following the bot into every server.
 
 For the configured GitHub repository, MiniSago opens a Discord discussion
 thread for each pull request, adds the relevant reviewers, pins the review
-request, and archives the thread after the pull request is merged.
+request, pings the author with the server's `:approved:` emote when the pull
+request is approved, and archives the thread after it is merged.
 
 ## Where features work
 

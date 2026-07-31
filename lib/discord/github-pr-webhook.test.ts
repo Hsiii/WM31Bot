@@ -20,14 +20,18 @@ function sign(body: string, secret: string) {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
 }
 
-function webhookRequest(payload: unknown, secret: string) {
+function webhookRequest(
+  payload: unknown,
+  secret: string,
+  event = "pull_request",
+) {
   const body = JSON.stringify(payload);
 
   return new Request("https://minisago.example/api/github/webhook", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-GitHub-Event": "pull_request",
+      "X-GitHub-Event": event,
       "X-Hub-Signature-256": sign(body, secret),
     },
     body,
@@ -46,6 +50,13 @@ function pullRequestPayload(action: string, merged = false) {
       merged,
       user: { login: "Hsiii" },
     },
+  };
+}
+
+function approvedReviewPayload() {
+  return {
+    ...pullRequestPayload("submitted"),
+    review: { state: "approved" },
   };
 }
 
@@ -114,7 +125,7 @@ describe("GitHub PR webhook", () => {
   });
 
   test.serial(
-    "creates one public thread, adds participants, pins the review, and archives it on merge",
+    "creates one public thread, adds participants, pins the review, pings the author on approval, and archives it on merge",
     async () => {
       const secret = "integration-test-secret";
       const stateDirectory = await mkdtemp(join(tmpdir(), "minisago-pr-test-"));
@@ -148,6 +159,16 @@ describe("GitHub PR webhook", () => {
           return Response.json({ id: "message-42" });
         }
 
+        if (url.endsWith("/guilds/1282936453134815275/emojis")) {
+          return Response.json([
+            {
+              id: "approved-emoji-id",
+              name: "approved",
+              available: true,
+            },
+          ]);
+        }
+
         return new Response(null, { status: 204 });
       }) as typeof fetch;
 
@@ -167,6 +188,30 @@ describe("GitHub PR webhook", () => {
         expect(await duplicateResponse.json()).toEqual({
           ok: true,
           result: "already-created",
+        });
+
+        const approvedResponse = await handleGithubWebhookRequest(
+          webhookRequest(
+            approvedReviewPayload(),
+            secret,
+            "pull_request_review",
+          ),
+        );
+        expect(await approvedResponse.json()).toEqual({
+          ok: true,
+          result: "notified",
+        });
+
+        const duplicateApprovalResponse = await handleGithubWebhookRequest(
+          webhookRequest(
+            approvedReviewPayload(),
+            secret,
+            "pull_request_review",
+          ),
+        );
+        expect(await duplicateApprovalResponse.json()).toEqual({
+          ok: true,
+          result: "already-notified",
         });
 
         const mergedResponse = await handleGithubWebhookRequest(
@@ -209,6 +254,22 @@ describe("GitHub PR webhook", () => {
             body: undefined,
           },
           {
+            url: "https://discord.com/api/v10/guilds/1282936453134815275/emojis",
+            method: "GET",
+            body: undefined,
+          },
+          {
+            url: "https://discord.com/api/v10/channels/thread-42/messages",
+            method: "POST",
+            body: {
+              content: `<@${HSI_ID}> <:approved:approved-emoji-id>`,
+              allowed_mentions: {
+                parse: [],
+                users: [HSI_ID],
+              },
+            },
+          },
+          {
             url: "https://discord.com/api/v10/channels/thread-42",
             method: "PATCH",
             body: { archived: true },
@@ -219,6 +280,10 @@ describe("GitHub PR webhook", () => {
         expect(state.threads["hsiii/health-check-system#42"].archived).toBe(
           true,
         );
+        expect(
+          state.threads["hsiii/health-check-system#42"]
+            .approvalNotificationSent,
+        ).toBe(true);
       } finally {
         globalThis.fetch = originalFetch;
         restoreEnvironmentVariable("GITHUB_WEBHOOK_SECRET", originalSecret);
