@@ -159,7 +159,11 @@ describe("GitHub PR webhook", () => {
           return Response.json({ id: "message-42" });
         }
 
-        if (url.endsWith("/guilds/1282936453134815275/emojis")) {
+        if (url.endsWith("/channels/thread-42")) {
+          return Response.json({ guild_id: "pr-guild-id" });
+        }
+
+        if (url.endsWith("/guilds/pr-guild-id/emojis")) {
           return Response.json([
             {
               id: "approved-emoji-id",
@@ -254,7 +258,12 @@ describe("GitHub PR webhook", () => {
             body: undefined,
           },
           {
-            url: "https://discord.com/api/v10/guilds/1282936453134815275/emojis",
+            url: "https://discord.com/api/v10/channels/thread-42",
+            method: "GET",
+            body: undefined,
+          },
+          {
+            url: "https://discord.com/api/v10/guilds/pr-guild-id/emojis",
             method: "GET",
             body: undefined,
           },

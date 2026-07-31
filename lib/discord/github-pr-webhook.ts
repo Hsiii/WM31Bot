@@ -2,8 +2,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { TARGET_GUILD_ID } from "./constants";
-
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const TARGET_REPOSITORY = "Hsiii/health-check-system";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
@@ -57,7 +55,6 @@ type ThreadState = {
 type WebhookConfig = {
   botToken: string;
   channelId: string;
-  guildId: string;
   secret: string;
   stateFile: string;
 };
@@ -68,6 +65,10 @@ type DiscordThread = {
 
 type DiscordMessage = {
   id: string;
+};
+
+type DiscordChannel = {
+  guild_id?: string;
 };
 
 type DiscordEmoji = {
@@ -162,7 +163,6 @@ function getWebhookConfig(): WebhookConfig | null {
     channelId:
       process.env.GITHUB_PR_THREAD_CHANNEL_ID?.trim() ||
       DEFAULT_THREAD_CHANNEL_ID,
-    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     stateFile:
       process.env.GITHUB_PR_THREAD_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
   };
@@ -344,9 +344,18 @@ async function notifyAuthorOfApproval(
     return "not-found" as const;
   }
 
+  const channel = await discordRequest<DiscordChannel>(
+    config.botToken,
+    `/channels/${record.threadId}`,
+  );
+
+  if (!channel?.guild_id) {
+    throw new Error(`Discord thread ${record.threadId} has no guild ID`);
+  }
+
   const emojis = await discordRequest<DiscordEmoji[]>(
     config.botToken,
-    `/guilds/${config.guildId}/emojis`,
+    `/guilds/${channel.guild_id}/emojis`,
   );
   const approvedEmoji = emojis?.find(
     (emoji) => emoji.name === APPROVED_EMOJI_NAME && emoji.available !== false,
@@ -354,7 +363,7 @@ async function notifyAuthorOfApproval(
 
   if (!approvedEmoji) {
     throw new Error(
-      `Discord guild ${config.guildId} does not have an available :${APPROVED_EMOJI_NAME}: emoji`,
+      `Discord guild ${channel.guild_id} does not have an available :${APPROVED_EMOJI_NAME}: emoji`,
     );
   }
 
