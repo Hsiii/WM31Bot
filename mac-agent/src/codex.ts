@@ -110,16 +110,6 @@ export function buildSeatbeltProfile(codexPath: string) {
 (allow process-exec (literal "${escapeSeatbeltLiteral(codexPath)}"))`;
 }
 
-export function codexSandboxCompatibilityArguments(
-  platform: NodeJS.Platform = process.platform,
-) {
-  // Bubblewrap cannot create nested user namespaces in the unprivileged
-  // Docker worker. Landlock keeps Linux jobs sandboxed inside that boundary.
-  return platform === "linux"
-    ? ["--config", "features.use_legacy_landlock=true"]
-    : [];
-}
-
 export function codexEnvironment(
   codexHome: string,
   codexPath: string,
@@ -399,7 +389,6 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--skip-git-repo-check",
       "--ignore-user-config",
       "--strict-config",
-      ...codexSandboxCompatibilityArguments(),
       "--model",
       profile.model,
       "--cd",

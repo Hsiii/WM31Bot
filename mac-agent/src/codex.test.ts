@@ -15,7 +15,6 @@ import {
   codexFailureMessage,
   codexEnvironment,
   codexProfileForJob as codexProfileForJobWithConfig,
-  codexSandboxCompatibilityArguments,
   COMMUNITY_CHATBOT_PROFILE,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   outputSchemaForJob,
@@ -58,14 +57,6 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
-  test("uses Landlock when Linux runs inside the unprivileged worker", () => {
-    expect(codexSandboxCompatibilityArguments("linux")).toEqual([
-      "--config",
-      "features.use_legacy_landlock=true",
-    ]);
-    expect(codexSandboxCompatibilityArguments("darwin")).toEqual([]);
-  });
-
   test("uses Luna for chat and routing, then Sol medium for owner dev work", () => {
     expect(COMMUNITY_CHATBOT_PROFILE).toEqual({
       model: "gpt-5.6-luna",
