@@ -2,11 +2,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { TARGET_GUILD_ID } from "./constants";
+
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const TARGET_REPOSITORY = "Hsiii/health-check-system";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
 const DEFAULT_STATE_FILE = ".data/github-pr-threads.json";
 const PUBLIC_THREAD_TYPE = 11;
+const APPROVED_EMOJI_NAME = "approved";
 
 const TEAM = {
   Hsiii: "917446775873343600",
@@ -31,6 +34,9 @@ type PullRequestPayload = {
       login?: string;
     };
   };
+  review?: {
+    state?: string;
+  };
 };
 
 type ThreadRecord = {
@@ -39,6 +45,7 @@ type ThreadRecord = {
   url: string;
   authorLogin: string;
   reviewRequestSent: boolean;
+  approvalNotificationSent?: boolean;
   archived: boolean;
 };
 
@@ -50,6 +57,7 @@ type ThreadState = {
 type WebhookConfig = {
   botToken: string;
   channelId: string;
+  guildId: string;
   secret: string;
   stateFile: string;
 };
@@ -60,6 +68,13 @@ type DiscordThread = {
 
 type DiscordMessage = {
   id: string;
+};
+
+type DiscordEmoji = {
+  id: string;
+  name?: string | null;
+  animated?: boolean;
+  available?: boolean;
 };
 
 export type ReviewRequest = {
@@ -147,6 +162,7 @@ function getWebhookConfig(): WebhookConfig | null {
     channelId:
       process.env.GITHUB_PR_THREAD_CHANNEL_ID?.trim() ||
       DEFAULT_THREAD_CHANNEL_ID,
+    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     stateFile:
       process.env.GITHUB_PR_THREAD_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
   };
@@ -305,6 +321,64 @@ async function openReviewThread(
   return "created" as const;
 }
 
+async function notifyAuthorOfApproval(
+  config: WebhookConfig,
+  details: NonNullable<ReturnType<typeof getPullRequestDetails>>,
+) {
+  const state = await readState(config.stateFile);
+  const record = state.threads[details.key];
+
+  if (!record) {
+    return "not-found" as const;
+  }
+
+  if (record.approvalNotificationSent) {
+    return "already-notified" as const;
+  }
+
+  const authorDiscordId = isTeamLogin(record.authorLogin)
+    ? TEAM[record.authorLogin]
+    : undefined;
+
+  if (!authorDiscordId) {
+    return "not-found" as const;
+  }
+
+  const emojis = await discordRequest<DiscordEmoji[]>(
+    config.botToken,
+    `/guilds/${config.guildId}/emojis`,
+  );
+  const approvedEmoji = emojis?.find(
+    (emoji) => emoji.name === APPROVED_EMOJI_NAME && emoji.available !== false,
+  );
+
+  if (!approvedEmoji) {
+    throw new Error(
+      `Discord guild ${config.guildId} does not have an available :${APPROVED_EMOJI_NAME}: emoji`,
+    );
+  }
+
+  const emoji = `<${approvedEmoji.animated ? "a" : ""}:${APPROVED_EMOJI_NAME}:${approvedEmoji.id}>`;
+  await discordRequest(
+    config.botToken,
+    `/channels/${record.threadId}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        content: `<@${authorDiscordId}> ${emoji}`,
+        allowed_mentions: {
+          parse: [],
+          users: [authorDiscordId],
+        },
+      }),
+    },
+  );
+
+  record.approvalNotificationSent = true;
+  await writeState(config.stateFile, state);
+  return "notified" as const;
+}
+
 async function archiveReviewThread(
   config: WebhookConfig,
   details: NonNullable<ReturnType<typeof getPullRequestDetails>>,
@@ -362,7 +436,9 @@ export async function handleGithubWebhookRequest(request: Request) {
     );
   }
 
-  if (request.headers.get("X-GitHub-Event") !== "pull_request") {
+  const event = request.headers.get("X-GitHub-Event");
+
+  if (event !== "pull_request" && event !== "pull_request_review") {
     return Response.json({ ok: true, ignored: true }, { status: 202 });
   }
 
@@ -384,12 +460,27 @@ export async function handleGithubWebhookRequest(request: Request) {
   }
 
   try {
-    if (payload.action === "ready_for_review") {
+    if (event === "pull_request" && payload.action === "ready_for_review") {
       const result = await enqueue(() => openReviewThread(config, details));
       return Response.json({ ok: true, result });
     }
 
-    if (payload.action === "closed" && details.merged) {
+    if (
+      event === "pull_request_review" &&
+      payload.action === "submitted" &&
+      payload.review?.state?.toLowerCase() === "approved"
+    ) {
+      const result = await enqueue(() =>
+        notifyAuthorOfApproval(config, details),
+      );
+      return Response.json({ ok: true, result });
+    }
+
+    if (
+      event === "pull_request" &&
+      payload.action === "closed" &&
+      details.merged
+    ) {
       const result = await enqueue(() => archiveReviewThread(config, details));
       return Response.json({ ok: true, result });
     }
