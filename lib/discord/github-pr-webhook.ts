@@ -518,11 +518,7 @@ export async function handleGithubWebhookRequest(request: Request) {
       return Response.json({ ok: true, result });
     }
 
-    if (
-      event === "pull_request" &&
-      payload.action === "closed" &&
-      details.merged
-    ) {
+    if (event === "pull_request" && payload.action === "closed") {
       const result = await enqueue(() => archiveReviewThread(config, details));
       return Response.json({ ok: true, result });
     }
