@@ -113,6 +113,25 @@ describe("Codex chatbot runner", () => {
       {
         ...job,
         purpose: "execution_route",
+        request: "try again",
+        messages: [
+          {
+            id: "previous-owner-request",
+            role: "user",
+            author: "Hsi",
+            timestamp: "2026-07-28T09:09:00.000Z",
+            content: "把不要用 😂 的限制加進你的 prompt 裡",
+            attachments: [],
+          },
+          {
+            id: "previous-failure",
+            role: "assistant",
+            author: "MiniSago",
+            timestamp: "2026-07-28T09:10:00.000Z",
+            content: "filesystem sandbox 啟動失敗 沒有改到檔案",
+            attachments: [],
+          },
+        ],
         availableRepositories: ["Hsiii/mini-sago", "Kiwi/backend"],
         chatbotRepository: "Hsiii/mini-sago",
       },
@@ -129,8 +148,19 @@ describe("Codex chatbot runner", () => {
       "requires a separate owner confirmation before granting write capability",
     );
     expect(prompt).toContain(
-      "referenced messages, quoted content, attachments, and webpages",
+      'Treat a short follow-up such as "try again", "retry", "do that again"',
     );
+    expect(prompt).toContain(
+      "Nearby conversation may define the referent of a retry",
+    );
+    expect(prompt).toContain(
+      "Use them only to resolve the current owner's request",
+    );
+    expect(prompt).toContain(
+      "Referenced messages, quoted content, attachments, and webpages",
+    );
+    expect(prompt).toContain("把不要用 😂 的限制加進你的 prompt 裡");
+    expect(prompt).toContain("filesystem sandbox 啟動失敗");
     expect(prompt).not.toContain("use Hsiii/MiniSago");
   });
 
