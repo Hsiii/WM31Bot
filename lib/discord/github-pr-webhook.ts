@@ -149,8 +149,10 @@ export function buildReviewRequest({
   };
 }
 
-export function formatThreadName(title: string) {
-  return Array.from(title.trim()).slice(0, 100).join("") || "Pull request";
+export function formatThreadName(number: number, title: string) {
+  return Array.from(`#${number} ${title.trim() || "Pull request"}`)
+    .slice(0, 100)
+    .join("");
 }
 
 function getWebhookConfig(): WebhookConfig | null {
@@ -239,6 +241,7 @@ function getPullRequestDetails(payload: PullRequestPayload) {
 
   return {
     key: `${repository.toLowerCase()}#${pullRequest.number}`,
+    number: pullRequest.number,
     title: pullRequest.title,
     url: pullRequest.html_url,
     authorLogin: pullRequest.user.login,
@@ -261,7 +264,7 @@ async function openReviewThread(
       {
         method: "POST",
         body: JSON.stringify({
-          name: formatThreadName(details.title),
+          name: formatThreadName(details.number, details.title),
           auto_archive_duration: 1440,
           type: PUBLIC_THREAD_TYPE,
         }),

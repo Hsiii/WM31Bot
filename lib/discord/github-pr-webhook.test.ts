@@ -121,8 +121,11 @@ describe("GitHub PR webhook", () => {
   });
 
   test("keeps public thread names within Discord's 100-character limit", () => {
-    expect(formatThreadName(`  ${"a".repeat(120)}  `)).toHaveLength(100);
-    expect(formatThreadName("   ")).toBe("Pull request");
+    expect(formatThreadName(42, `  ${"a".repeat(120)}  `)).toHaveLength(100);
+    expect(formatThreadName(42, "Make health checks clearer")).toBe(
+      "#42 Make health checks clearer",
+    );
+    expect(formatThreadName(42, "   ")).toBe("#42 Pull request");
   });
 
   test.serial(
@@ -232,7 +235,7 @@ describe("GitHub PR webhook", () => {
             url: "https://discord.com/api/v10/channels/1521506395034226830/threads",
             method: "POST",
             body: {
-              name: "Make health checks clearer",
+              name: "#42 Make health checks clearer",
               auto_archive_duration: 1440,
               type: 11,
             },
