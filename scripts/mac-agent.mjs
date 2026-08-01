@@ -187,6 +187,10 @@ async function install() {
       process.env.MINISAGO_WORKER_PRIORITY?.trim() || "50",
     ),
     envLine(
+      "MINISAGO_MAC_FILE_ROOTS",
+      process.env.MINISAGO_MAC_FILE_ROOTS?.trim() || "",
+    ),
+    envLine(
       "MINISAGO_WORKSPACE_ROOT",
       process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(userHome, "Projects"),
     ),

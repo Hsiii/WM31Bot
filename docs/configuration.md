@@ -52,6 +52,7 @@ scheduled-monitor variable names.
 | `MINISAGO_BRIDGE_URL`            | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets     |
 | `MINISAGO_MCP_URL`               | No       | Curated MCP endpoint; derived from the bridge origin and restricted to HTTPS or local HTTP |
 | `MINISAGO_MAC_BRIDGE_SECRET`     | Mac      | Must match the hosted Mac-profile secret                                                   |
+| `MINISAGO_MAC_FILE_ROOTS`        | No       | Colon-separated folders the owner may ask MiniSago to search and send files from           |
 | `MINISAGO_CODEX_PATH`            | No       | Codex executable                                                                           |
 | `MINISAGO_CODEX_HOME`            | No       | Isolated helper state                                                                      |
 | `MINISAGO_SESSION_MONITOR_PATH`  | No       | Compiled macOS lock monitor                                                                |

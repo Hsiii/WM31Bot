@@ -7,6 +7,7 @@ import {
   CHATBOT_PROTOCOL_VERSION,
   CHATBOT_WORKER_CAPABILITIES,
   type ChatbotJob,
+  type ChatbotOutgoingFile,
   type ChatbotWorkerCapability,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
@@ -49,7 +50,7 @@ type Workflow = {
 };
 
 export type MacAgentJobResult =
-  | { ok: true; content: string }
+  | { ok: true; content: string; files?: ChatbotOutgoingFile[] }
   | { ok: false; error: string };
 
 export type DispatchResult =
@@ -126,6 +127,34 @@ function validRepositories(repositories: unknown): repositories is string[] {
         typeof repository === "string" &&
         /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/iu.test(repository),
     )
+  );
+}
+
+function validOutgoingFiles(
+  value: unknown,
+): value is ChatbotOutgoingFile[] | undefined {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.length <= 1 &&
+      value.every(
+        (file) =>
+          file &&
+          typeof file === "object" &&
+          typeof file.filename === "string" &&
+          file.filename.length > 0 &&
+          file.filename.length <= 255 &&
+          !/[\\/\0]/u.test(file.filename) &&
+          typeof file.contentType === "string" &&
+          file.contentType.length <= 100 &&
+          Number.isInteger(file.size) &&
+          file.size >= 0 &&
+          file.size <= 8 * 1024 * 1024 &&
+          typeof file.data === "string" &&
+          file.data.length <= 12 * 1024 * 1024 &&
+          /^[A-Za-z0-9+/]*={0,2}$/u.test(file.data) &&
+          Buffer.byteLength(file.data, "base64") === file.size,
+      ))
   );
 }
 
@@ -527,11 +556,25 @@ export class MacAgentBridge {
     const pendingJob = this.pendingJobs.get(message.jobId);
     if (!pendingJob || pendingJob.workerId !== worker.id) return;
 
+    if (message.ok && !validOutgoingFiles(message.files)) {
+      this.deletePendingJob(pendingJob);
+      clearTimeout(pendingJob.timer);
+      pendingJob.resolve({
+        ok: false,
+        error: "Worker returned invalid files.",
+      });
+      return;
+    }
+
     this.deletePendingJob(pendingJob);
     clearTimeout(pendingJob.timer);
     pendingJob.resolve(
       message.ok
-        ? { ok: true, content: message.content }
+        ? {
+            ok: true,
+            content: message.content,
+            ...(message.files?.length ? { files: message.files } : {}),
+          }
         : { ok: false, error: message.error },
     );
   }

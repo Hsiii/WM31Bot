@@ -19,6 +19,7 @@ export type MacAgentConfig = {
   chatbotAccess: ChatbotAccessConfig;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
+  macFileRoots: string[];
   mcpUrl: string;
   headless: boolean;
   sessionMonitorPath: string;
@@ -39,6 +40,28 @@ const defaultApplicationSupport =
   process.platform === "darwin"
     ? join(homedir(), "Library", "Application Support", "MiniSago")
     : join(homedir(), ".local", "state", "minisago");
+
+export function macFileRoots(
+  configured = process.env.MINISAGO_MAC_FILE_ROOTS,
+  home = homedir(),
+) {
+  const defaults = [
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Movies",
+    "Music",
+    "Pictures",
+    join("Library", "Mobile Documents", "com~apple~CloudDocs"),
+  ].map((path) => join(home, path));
+  const candidates = configured?.trim()
+    ? configured.split(":").map((path) => path.trim())
+    : defaults;
+
+  return [
+    ...new Set(candidates.filter(isAbsolute).map((path) => resolve(path))),
+  ];
+}
 
 async function isExecutable(path: string) {
   try {
@@ -235,6 +258,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
           2,
       ),
     ),
+    macFileRoots: macFileRoots(),
     mcpUrl: validateMcpUrl(
       process.env.MINISAGO_MCP_URL?.trim() || defaultMcpUrl(bridgeUrl),
     ),

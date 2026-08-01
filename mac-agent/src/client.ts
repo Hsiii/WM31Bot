@@ -14,6 +14,7 @@ import {
 } from "./codex";
 import { SessionMonitor } from "./session-monitor";
 import { ChatbotTraceStore } from "./trace-store";
+import { prepareOutgoingFiles } from "./outgoing-files";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const AUTH_RETRY_MS = 30_000;
@@ -210,7 +211,7 @@ export class MacAgentClient {
     console.log(`Job ${job.id} started.`);
 
     try {
-      const content =
+      const rawContent =
         job.purpose === "trace_lookup"
           ? (() => {
               const trace = this.traceStore.previousTrace(
@@ -235,9 +236,20 @@ export class MacAgentClient {
               return answer;
             })();
 
+      const outgoing =
+        job.purpose === "answer" && job.executionTarget === "mac"
+          ? await prepareOutgoingFiles(rawContent, this.config.macFileRoots)
+          : { content: rawContent, files: [] };
+
       if (!controller.signal.aborted && this.authenticated) {
         this.currentJobs.delete(job.id);
-        this.send({ type: "result", jobId: job.id, ok: true, content });
+        this.send({
+          type: "result",
+          jobId: job.id,
+          ok: true,
+          content: outgoing.content,
+          ...(outgoing.files.length ? { files: outgoing.files } : {}),
+        });
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
     } catch (error) {

@@ -12,6 +12,7 @@ import type {
   ChatbotExecutionMode,
   ChatbotExecutionTarget,
   ChatbotMutationScope,
+  ChatbotOutgoingFile,
   ChatbotJob,
   ChatbotMemberResult,
   ChatbotMessage,
@@ -139,7 +140,7 @@ export type DiscordSearchQuery = {
 
 export type DiscordRequest = <T>(
   path: string,
-  options?: { method?: string; body?: unknown },
+  options?: { method?: string; body?: unknown; formData?: FormData },
 ) => Promise<T>;
 
 type ActiveConversation = {
@@ -967,9 +968,9 @@ export async function getRecentHumanMessages({
   return messages.reverse();
 }
 
-function replyBody(message: DiscordMessage, content: string) {
+function replyBody(message: DiscordMessage, content: string | null) {
   return {
-    content,
+    ...(content ? { content } : {}),
     message_reference: {
       message_id: message.id,
       fail_if_not_exists: false,
@@ -981,9 +982,9 @@ function replyBody(message: DiscordMessage, content: string) {
   };
 }
 
-function channelMessageBody(content: string) {
+function channelMessageBody(content: string | null) {
   return {
-    content,
+    ...(content ? { content } : {}),
     allowed_mentions: {
       parse: [],
     },
@@ -992,8 +993,9 @@ function channelMessageBody(content: string) {
 
 export async function postChatbotResponse(
   message: DiscordMessage,
-  content: string | string[],
+  content: string | string[] | null,
   discordRequest: DiscordRequest,
+  files: ChatbotOutgoingFile[] = [],
 ) {
   const contents = Array.isArray(content) ? content : [content];
   let canPostDirectly = false;
@@ -1008,12 +1010,31 @@ export async function postChatbotResponse(
   }
 
   for (const [index, content] of contents.entries()) {
+    const body =
+      canPostDirectly || index > 0
+        ? channelMessageBody(content)
+        : replyBody(message, content);
+    const uploadFiles = index === 0 ? files : [];
+    const formData =
+      uploadFiles.length > 0
+        ? (() => {
+            const form = new FormData();
+            form.append("payload_json", JSON.stringify(body));
+            for (const [fileIndex, file] of uploadFiles.entries()) {
+              form.append(
+                `files[${fileIndex}]`,
+                new Blob([Buffer.from(file.data, "base64")], {
+                  type: file.contentType,
+                }),
+                file.filename,
+              );
+            }
+            return form;
+          })()
+        : undefined;
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
-      body:
-        canPostDirectly || index > 0
-          ? channelMessageBody(content)
-          : replyBody(message, content),
+      ...(formData ? { formData } : { body }),
     });
   }
 }
@@ -1460,6 +1481,7 @@ export async function handleChatbotMention({
   }
   let reacted = mcpSnapshot.reacted;
   let reply: string | null = null;
+  const files = result.ok ? (result.files ?? []) : [];
   if (result.ok) {
     const decision = await executeChatbotAnswerDecision({
       content: result.content,
@@ -1477,14 +1499,15 @@ export async function handleChatbotMention({
   if (mcpSnapshot.searchUnavailable && reply) {
     reply = `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${reply}`;
   }
-  if (!reply && !reacted) {
+  if (!reply && !reacted && files.length === 0) {
     reply = "我剛剛卡住了 晚點再叫我一次";
   }
-  if (reply) {
+  if (reply || files.length > 0) {
     await postChatbotResponse(
       message,
-      formatDiscordAnswers(reply),
+      reply ? formatDiscordAnswers(reply) : null,
       discordRequest,
+      files,
     );
     conversationTracker?.activate(message.channel_id, requesterUserId);
   }
@@ -1495,7 +1518,7 @@ export async function handleChatbotMention({
 export function createDiscordRequest(botToken: string): DiscordRequest {
   async function discordRequest<T>(
     path: string,
-    options: { method?: string; body?: unknown } = {},
+    options: { method?: string; body?: unknown; formData?: FormData } = {},
     retries = 3,
   ): Promise<T> {
     const headers: Record<string, string> = {
@@ -1510,7 +1533,8 @@ export function createDiscordRequest(botToken: string): DiscordRequest {
       method: options.method ?? "GET",
       headers,
       body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
+        options.formData ??
+        (options.body === undefined ? undefined : JSON.stringify(options.body)),
     });
 
     if (response.status === 429 && retries > 0) {
