@@ -21,10 +21,7 @@ import {
   parseExecutionRoute,
   parsePreviousTraceLookup,
   postChatbotResponse,
-  postMutationApproval,
-  registerMutationApproval,
   searchGuildMessages,
-  takeChatbotMutationApproval,
   toChatbotMessage,
 } from "./chatbot";
 
@@ -705,105 +702,6 @@ describe("Discord chatbot", () => {
       mode: "chat",
       target: "default",
     });
-  });
-
-  test("lets only the owner consume a one-time mutation confirmation", () => {
-    const message = {
-      id: "mutation-request-1",
-      channel_id: "channel-1",
-      guild_id: "917436845187563610",
-      content: `<@${BOT_ID}> fix the chatbot`,
-      timestamp: "2026-07-23T10:00:00.000Z",
-      author: { id: "917446775873343600", username: "Hsi" },
-    };
-    const customId = registerMutationApproval(message, BOT_ID, {
-      requestMessageId: message.id,
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "Hsiii/mini-sago",
-    });
-    const discordRequest = async () => undefined as never;
-
-    expect(customId).toMatch(/^minisago:mutation:[0-9a-f-]{36}$/u);
-    expect(
-      takeChatbotMutationApproval({
-        customId,
-        userId: "community-member",
-        discordRequest,
-        accessConfig: ACCESS_CONFIG,
-      }),
-    ).toEqual({ status: "forbidden" });
-    const accepted = takeChatbotMutationApproval({
-      customId,
-      userId: "917446775873343600",
-      discordRequest,
-      accessConfig: ACCESS_CONFIG,
-    });
-    expect(accepted).toMatchObject({
-      status: "accepted",
-      content: "已允許這次在 `Hsiii/mini-sago` 的 code 工作",
-    });
-    expect(
-      takeChatbotMutationApproval({
-        customId,
-        userId: "917446775873343600",
-        discordRequest,
-        accessConfig: ACCESS_CONFIG,
-      }),
-    ).toEqual({ status: "expired" });
-  });
-
-  test("posts mutation permission as a one-time Discord button", async () => {
-    const requests: Array<{ path: string; body: unknown }> = [];
-    await postMutationApproval(
-      {
-        id: "mutation-request-1",
-        channel_id: "channel-1",
-        content: "fix the chatbot",
-        timestamp: "2026-07-23T10:00:00.000Z",
-      },
-      {
-        requestMessageId: "mutation-request-1",
-        mode: "dev",
-        target: "default",
-        mutationScope: "code",
-        repository: "Hsiii/mini-sago",
-      },
-      "minisago:mutation:approval-id",
-      async (path, options) => {
-        requests.push({ path, body: options?.body });
-        return undefined as never;
-      },
-    );
-
-    expect(requests).toEqual([
-      {
-        path: "/channels/channel-1/messages",
-        body: {
-          content:
-            "我理解成要在 `Hsiii/mini-sago` 修改程式碼並建立草稿 PR\n按下面的按鈕才會真的給這次工作寫入權限",
-          message_reference: {
-            message_id: "mutation-request-1",
-            fail_if_not_exists: false,
-          },
-          allowed_mentions: { parse: [], replied_user: true },
-          components: [
-            {
-              type: 1,
-              components: [
-                {
-                  type: 2,
-                  style: 3,
-                  label: "允許這次寫入",
-                  custom_id: "minisago:mutation:approval-id",
-                },
-              ],
-            },
-          ],
-        },
-      },
-    ]);
   });
 
   test("asks for a repository instead of dispatching an invalid dev job", () => {

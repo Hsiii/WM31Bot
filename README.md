@@ -83,9 +83,9 @@ PR review, repository changes, tests, and draft-PR delivery. GitHub credentials
 use one dedicated repo-scoped `gh` login; community and ordinary chat runs
 cannot execute GitHub tooling. Owner development runs in `dev`; each job
 receives only its selected disposable repository checkout. Remote mutation
-remains disabled until the router proposes an issue/code/deploy scope and Hsi
-presses the one-time Discord confirmation button. Oracle runs one worker and
-one dedicated login. See
+remains disabled unless the owner-only router selects an issue/code/deploy scope
+from Hsi's current request. Per-job wrappers enforce that exact scope. Oracle
+runs one worker and one dedicated login. See
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12) for credential and
 GitHub ruleset setup.
 

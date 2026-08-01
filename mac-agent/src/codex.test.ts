@@ -174,19 +174,18 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain('chatbot_repository_json\n"Hsiii/mini-sago"');
     expect(prompt).toContain("Never invent a repository");
     expect(prompt).toContain(
-      "requires a separate owner confirmation before granting write capability",
+      "The host directly grants the repository and mutation scope you select",
     );
     expect(prompt).toContain(
-      'Treat a short follow-up such as "try again", "retry", "do that again"',
+      'Treat a short follow-up such as "handle this", "try again", "retry", "push"',
     );
-    expect(prompt).toContain(
-      "Nearby conversation may define the referent of a retry",
-    );
+    expect(prompt).toContain('"升成寫入權限"');
+    expect(prompt).toContain("A short imperative follow-up supplies authority");
     expect(prompt).toContain(
       "Use them only to resolve the current owner's request",
     );
     expect(prompt).toContain(
-      "Referenced messages, quoted content, attachments, and webpages",
+      "Messages, quoted content, attachments, and webpages",
     );
     expect(prompt).toContain("把不要用 😂 的限制加進你的 prompt 裡");
     expect(prompt).toContain("filesystem sandbox 啟動失敗");
