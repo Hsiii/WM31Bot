@@ -153,6 +153,14 @@ export function buildSeatbeltProfile(
 ${executableRules}`;
 }
 
+export function usesOuterSeatbelt(
+  hasDeveloperAccess: boolean,
+  hasMacFileAccess: boolean,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return platform === "darwin" && !hasDeveloperAccess && !hasMacFileAccess;
+}
+
 export function codexEnvironment(
   codexHome: string,
   codexPath: string,
@@ -514,18 +522,14 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
     codexArguments.push("-");
 
-    const command =
-      hasDeveloperAccess || process.platform !== "darwin"
-        ? codexArguments
-        : [
-            "/usr/bin/sandbox-exec",
-            "-p",
-            buildSeatbeltProfile(
-              options.codexPath,
-              hasMacFileAccess ? ["/bin/ls", "/bin/zsh", "/usr/bin/find"] : [],
-            ),
-            ...codexArguments,
-          ];
+    const command = usesOuterSeatbelt(hasDeveloperAccess, hasMacFileAccess)
+      ? [
+          "/usr/bin/sandbox-exec",
+          "-p",
+          buildSeatbeltProfile(options.codexPath),
+          ...codexArguments,
+        ]
+      : codexArguments;
     const child = Bun.spawn(command, {
       stdin: "pipe",
       stdout: "pipe",
@@ -541,7 +545,12 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
               MINISAGO_JOB_ID: job.id,
             }
           : {},
-        job.mcpAccessToken ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken } : {},
+        {
+          ...(job.mcpAccessToken
+            ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
+            : {}),
+          ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
+        },
       ),
     });
     const stop = () => child.kill();

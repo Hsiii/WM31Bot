@@ -28,6 +28,7 @@ import {
   PROMPT_VERSION,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
   SOCIAL_ACTION_PROFILE,
+  usesOuterSeatbelt,
 } from "./codex";
 
 const ACCESS_CONFIG: ChatbotAccessConfig = {
@@ -228,7 +229,10 @@ describe("Codex chatbot runner", () => {
       false,
     );
     expect(prompt).toContain("explicitly routed to Hsi's Mac");
-    expect(prompt).toContain("Use find with one or more allowed roots");
+    expect(prompt).toContain(
+      "Use find directly with one or more allowed roots",
+    );
+    expect(prompt).toContain("do not use pipes");
     expect(prompt).toContain(JSON.stringify(roots));
     expect(outputSchemaForJob(macJob)).toBe(MAC_FILE_ANSWER_OUTPUT_SCHEMA);
     expect(MAC_FILE_ANSWER_OUTPUT_SCHEMA.properties.files.maxItems).toBe(1);
@@ -464,7 +468,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(29);
+    expect(PROMPT_VERSION).toBe(30);
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("use the reminder tools");
@@ -564,14 +568,11 @@ describe("Codex chatbot runner", () => {
     );
   });
 
-  test("can allow only bounded file-search executables in the outer sandbox", () => {
-    const profile = buildSeatbeltProfile("/Applications/ChatGPT.app/codex", [
-      "/bin/zsh",
-      "/usr/bin/find",
-    ]);
-
-    expect(profile).toContain('(allow process-exec (literal "/bin/zsh"))');
-    expect(profile).toContain('(allow process-exec (literal "/usr/bin/find"))');
+  test("lets Codex apply its own sandbox for Mac file commands", () => {
+    expect(usesOuterSeatbelt(false, false, "darwin")).toBe(true);
+    expect(usesOuterSeatbelt(false, true, "darwin")).toBe(false);
+    expect(usesOuterSeatbelt(true, false, "darwin")).toBe(false);
+    expect(usesOuterSeatbelt(false, false, "linux")).toBe(false);
   });
 
   test("keeps the Codex launcher and Bun Node shim on the restricted path", () => {
