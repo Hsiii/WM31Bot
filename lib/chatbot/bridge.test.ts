@@ -354,6 +354,7 @@ describe("Mac agent bridge", () => {
       available: 2,
       capacity: 2,
       active: 0,
+      mac: "available",
     });
 
     const first = bridge.acquireWorkflow();
@@ -417,16 +418,23 @@ describe("Mac agent bridge", () => {
     await Promise.all([cloudDispatch.result, fallbackDispatch.result]);
     fallback.workflow.release();
 
-    expect(first.workflow.route(["dev", "mac"], "Hsiii/mini-sago")).toEqual({
+    expect(first.workflow.route(["chat", "mac"])).toEqual({
       status: "accepted",
     });
     const localDispatch = first.workflow.dispatch({
       ...macJob,
       id: "local-job",
+      executionMode: "chat",
+      executionTarget: "mac",
     });
     expect(JSON.parse(mac.sent.at(-1)!)).toEqual({
       type: "job",
-      job: { ...macJob, id: "local-job" },
+      job: {
+        ...macJob,
+        id: "local-job",
+        executionMode: "chat",
+        executionTarget: "mac",
+      },
     });
     bridge.message(
       mac.socket,
@@ -441,6 +449,9 @@ describe("Mac agent bridge", () => {
       throw new Error("Expected Mac-routed job");
     }
     expect(await localDispatch.result).toEqual({ ok: true, content: "local" });
+    expect(first.workflow.route(["dev", "mac"], "Hsiii/mini-sago")).toEqual({
+      status: "accepted",
+    });
     first.workflow.release();
   });
 

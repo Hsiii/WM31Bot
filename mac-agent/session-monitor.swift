@@ -15,6 +15,21 @@ func emit(_ state: String) {
     fflush(stdout)
 }
 
+var lastState: String?
+
+func emitIfChanged(_ state: String) {
+    guard state != lastState else {
+        return
+    }
+
+    lastState = state
+    emit(state)
+}
+
+func reconcileSession() {
+    emitIfChanged(isSessionLocked() ? "locked" : "unlocked")
+}
+
 let distributedCenter = DistributedNotificationCenter.default()
 let workspaceCenter = NSWorkspace.shared.notificationCenter
 
@@ -23,7 +38,7 @@ distributedCenter.addObserver(
     object: nil,
     queue: .main
 ) { _ in
-    emit("locked")
+    emitIfChanged("locked")
 }
 
 distributedCenter.addObserver(
@@ -31,7 +46,7 @@ distributedCenter.addObserver(
     object: nil,
     queue: .main
 ) { _ in
-    emit("unlocked")
+    reconcileSession()
 }
 
 workspaceCenter.addObserver(
@@ -39,7 +54,7 @@ workspaceCenter.addObserver(
     object: nil,
     queue: .main
 ) { _ in
-    emit("locked")
+    emitIfChanged("locked")
 }
 
 workspaceCenter.addObserver(
@@ -47,8 +62,13 @@ workspaceCenter.addObserver(
     object: nil,
     queue: .main
 ) { _ in
-    emit(isSessionLocked() ? "locked" : "unlocked")
+    reconcileSession()
 }
 
-emit(isSessionLocked() ? "locked" : "unlocked")
+// Background LaunchAgents can miss distributed unlock notifications.
+Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+    reconcileSession()
+}
+
+reconcileSession()
 RunLoop.main.run()
