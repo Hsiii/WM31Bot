@@ -6,6 +6,8 @@ export const LEAVE_WORDLE_CHANNEL_COMMAND_NAME = "leave-wordle-channel";
 export const JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME = "join-brawlstars-channel";
 export const LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME =
   "leave-brawlstars-channel";
+export const JOIN_VC_COMMAND_NAME = "join-vc";
+export const LEAVE_VC_COMMAND_NAME = "leave-vc";
 export const CHANNEL_ACCESS_PANEL_TITLE = "遊戲頻道入口";
 export const CHANNEL_ACCESS_SELECT_CUSTOM_ID =
   "minisago:channel-access:select:v1";

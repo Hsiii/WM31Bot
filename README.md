@@ -105,6 +105,10 @@ Slash commands provide the same actions as a fallback:
 | `/join-brawlstars-channel`  | Open the Brawl Stars channel |
 | `/leave-brawlstars-channel` | Hide the Brawl Stars channel |
 
+MiniSago can also follow a member into their current voice channel with
+`/join-vc` and disconnect with `/leave-vc`. It joins self-deafened and does not
+capture or play audio.
+
 ### Posts useful community updates
 
 MiniSago can publish a daily TOEFL vocabulary card and monitor selected Gamer

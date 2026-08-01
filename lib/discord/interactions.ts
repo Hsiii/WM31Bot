@@ -1,7 +1,9 @@
 import {
   JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME,
+  JOIN_VC_COMMAND_NAME,
   JOIN_WORDLE_CHANNEL_COMMAND_NAME,
   LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
+  LEAVE_VC_COMMAND_NAME,
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "./constants";
 import { createDiscordRequest } from "./chatbot";
@@ -19,6 +21,7 @@ import {
   getRoleMemberSummary,
 } from "./roles";
 import { verifyDiscordRequest } from "./verify";
+import { joinMemberVoiceChannel, leaveVoiceChannel } from "./voice";
 
 type DiscordInteraction = {
   type: number;
@@ -307,6 +310,42 @@ export async function handleDiscordInteractionRequest(request: Request) {
       logRoleUpdateError(error);
       return jsonResponse(buildEphemeralResponse(ROLE_UPDATE_ERROR_MESSAGE));
     }
+  }
+
+  if (
+    commandName === JOIN_VC_COMMAND_NAME ||
+    commandName === LEAVE_VC_COMMAND_NAME
+  ) {
+    if (!interaction.guild_id || !userId) {
+      return jsonResponse(
+        buildEphemeralResponse("我剛剛認不出你的伺服器身分 再試一次"),
+      );
+    }
+
+    const result =
+      commandName === JOIN_VC_COMMAND_NAME
+        ? joinMemberVoiceChannel(interaction.guild_id, userId)
+        : leaveVoiceChannel(interaction.guild_id);
+
+    if (result.status === "member_not_in_voice") {
+      return jsonResponse(
+        buildEphemeralResponse("你要先加入一個語音頻道 我才找得到你"),
+      );
+    }
+
+    if (result.status === "gateway_unavailable") {
+      return jsonResponse(
+        buildEphemeralResponse("我現在連不上語音頻道 晚點再試一次"),
+      );
+    }
+
+    return jsonResponse(
+      buildEphemeralResponse(
+        result.status === "joined"
+          ? "來了 我會安靜待在這裡"
+          : "我先離開語音頻道了",
+      ),
+    );
   }
 
   const wordleRole = getWordleRole(config.managedRoles);
