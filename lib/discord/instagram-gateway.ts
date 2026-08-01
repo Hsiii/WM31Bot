@@ -23,7 +23,8 @@ import {
   registerVoiceGateway,
   VoiceStateTracker,
   type DiscordVoiceState,
-  type VoiceChannelActionResult,
+  type JoinVoiceChannelResult,
+  type LeaveVoiceChannelResult,
   type VoiceGateway,
 } from "./voice";
 
@@ -212,7 +213,7 @@ class InstagramGatewayClient implements VoiceGateway {
   joinMemberVoiceChannel(
     guildId: string,
     userId: string,
-  ): VoiceChannelActionResult {
+  ): JoinVoiceChannelResult {
     const channelId = this.voiceStates.getChannelId(guildId, userId);
 
     if (!channelId) {
@@ -226,7 +227,7 @@ class InstagramGatewayClient implements VoiceGateway {
     return { status: "joined", channelId };
   }
 
-  leaveVoiceChannel(guildId: string): VoiceChannelActionResult {
+  leaveVoiceChannel(guildId: string): LeaveVoiceChannelResult {
     if (!this.updateVoiceState(guildId, null)) {
       return { status: "gateway_unavailable" };
     }

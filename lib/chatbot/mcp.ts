@@ -185,6 +185,13 @@ export type ChatbotMcpSessionHandlers = {
     }>
   >;
   cancelReminder?: (reminderId: string) => Promise<boolean>;
+  joinVoiceChannel?: () =>
+    | { status: "joined"; channelId: string }
+    | { status: "member_not_in_voice" }
+    | { status: "gateway_unavailable" };
+  leaveVoiceChannel?: () =>
+    | { status: "left" }
+    | { status: "gateway_unavailable" };
 };
 
 type ChatbotMcpSession = {
@@ -430,6 +437,63 @@ function createServer(session: ChatbotMcpSession) {
           const reacted = await session.handlers.addReaction!(emoji);
           session.reacted ||= reacted;
           return toolResult({ status: "complete", reacted });
+        } catch (error) {
+          return unavailable(error);
+        }
+      },
+    );
+  }
+
+  if (session.handlers.joinVoiceChannel && session.handlers.leaveVoiceChannel) {
+    const voiceAnnotations = {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    } as const;
+
+    server.registerTool(
+      "join_voice_channel",
+      {
+        description:
+          "Join the current requester's current Discord voice channel. The requester and guild are host-bound; there are no member, channel, or guild arguments. Call only when the requester asks MiniSago to join voice chat. MiniSago joins muted and deafened without capturing or playing audio.",
+        inputSchema: {},
+        annotations: voiceAnnotations,
+      },
+      async () => {
+        try {
+          const result = session.handlers.joinVoiceChannel!();
+          return toolResult(
+            result.status === "joined"
+              ? {
+                  status: "complete",
+                  action: "joined",
+                  channelId: result.channelId,
+                }
+              : result,
+          );
+        } catch (error) {
+          return unavailable(error);
+        }
+      },
+    );
+
+    server.registerTool(
+      "leave_voice_channel",
+      {
+        description:
+          "Disconnect MiniSago from the current request's Discord guild voice channel. The guild is host-bound and cannot be supplied through arguments. Call only when the requester asks MiniSago to leave voice chat.",
+        inputSchema: {},
+        annotations: voiceAnnotations,
+      },
+      async () => {
+        try {
+          const result = session.handlers.leaveVoiceChannel!();
+          return toolResult(
+            result.status === "left"
+              ? { status: "complete", action: "left" }
+              : result,
+          );
         } catch (error) {
           return unavailable(error);
         }

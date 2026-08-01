@@ -65,12 +65,21 @@ export type VoiceChannelActionResult =
   | { status: "member_not_in_voice" }
   | { status: "gateway_unavailable" };
 
+export type JoinVoiceChannelResult = Exclude<
+  VoiceChannelActionResult,
+  { status: "left" }
+>;
+export type LeaveVoiceChannelResult = Extract<
+  VoiceChannelActionResult,
+  { status: "left" } | { status: "gateway_unavailable" }
+>;
+
 export interface VoiceGateway {
   joinMemberVoiceChannel(
     guildId: string,
     userId: string,
-  ): VoiceChannelActionResult;
-  leaveVoiceChannel(guildId: string): VoiceChannelActionResult;
+  ): JoinVoiceChannelResult;
+  leaveVoiceChannel(guildId: string): LeaveVoiceChannelResult;
 }
 
 let activeVoiceGateway: VoiceGateway | null = null;
@@ -79,7 +88,10 @@ export function registerVoiceGateway(gateway: VoiceGateway | null) {
   activeVoiceGateway = gateway;
 }
 
-export function joinMemberVoiceChannel(guildId: string, userId: string) {
+export function joinMemberVoiceChannel(
+  guildId: string,
+  userId: string,
+): JoinVoiceChannelResult {
   return (
     activeVoiceGateway?.joinMemberVoiceChannel(guildId, userId) ?? {
       status: "gateway_unavailable" as const,
@@ -87,7 +99,7 @@ export function joinMemberVoiceChannel(guildId: string, userId: string) {
   );
 }
 
-export function leaveVoiceChannel(guildId: string) {
+export function leaveVoiceChannel(guildId: string): LeaveVoiceChannelResult {
   return (
     activeVoiceGateway?.leaveVoiceChannel(guildId) ?? {
       status: "gateway_unavailable" as const,

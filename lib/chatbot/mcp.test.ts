@@ -276,6 +276,54 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes host-bound voice channel actions", async () => {
+    let joined = 0;
+    let left = 0;
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      joinVoiceChannel: () => {
+        joined += 1;
+        return { status: "joined" as const, channelId: "voice-1" };
+      },
+      leaveVoiceChannel: () => {
+        left += 1;
+        return { status: "left" as const };
+      },
+    });
+    const client = await connect(session.token);
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "join_voice_channel",
+    );
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "leave_voice_channel",
+    );
+
+    const joinResult = await client.callTool({
+      name: "join_voice_channel",
+      arguments: {},
+    });
+    expect(joinResult.structuredContent).toEqual({
+      status: "complete",
+      action: "joined",
+      channelId: "voice-1",
+    });
+
+    const leaveResult = await client.callTool({
+      name: "leave_voice_channel",
+      arguments: {},
+    });
+    expect(leaveResult.structuredContent).toEqual({
+      status: "complete",
+      action: "left",
+    });
+    expect({ joined, left }).toEqual({ joined: 1, left: 1 });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("creates, lists, and cancels bearer-bound reminders", async () => {
     const created: unknown[] = [];
     const cancelled: string[] = [];
