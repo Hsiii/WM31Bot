@@ -14,6 +14,7 @@ export type DeveloperWorkspace = {
   directory: string;
   environment: Record<string, string>;
   sandboxReadPaths: string[];
+  sandboxWritePaths: string[];
   cleanup: () => Promise<void>;
 };
 
@@ -219,6 +220,7 @@ export async function prepareDeveloperWorkspace(
     directory,
     environment,
     sandboxReadPaths: [binDirectory, resolve(options.githubConfigDir)],
+    sandboxWritePaths: [resolve(directory, ".git")],
     cleanup: () => rm(jobRoot, { recursive: true, force: true }),
   };
 }

@@ -66,13 +66,14 @@ describe("Codex chatbot runner", () => {
           "/home/bun/.config/gh",
           "/workspace/worktrees/job-1/bin",
         ],
+        ["/workspace/worktrees/job-1/Hsiii/mini-sago/.git"],
         "linux",
       ),
     ).toBe(
-      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read",":workspace_roots"={"."="write"}}',
+      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read","/workspace/worktrees/job-1/Hsiii/mini-sago/.git"="write",":workspace_roots"={"."="write"}}',
     );
     expect(
-      developerFilesystemPermissions(["/Library/MiniSago"], "darwin"),
+      developerFilesystemPermissions(["/Library/MiniSago"], [], "darwin"),
     ).toBe(
       '{":minimal"="read","/Library/MiniSago"="read",":workspace_roots"={"."="write"}}',
     );
