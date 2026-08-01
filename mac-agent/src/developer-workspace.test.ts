@@ -65,6 +65,9 @@ describe("developer workspace", () => {
     expect(workspace.sandboxReadPaths[0]).toEndWith("/worktrees/job-123/bin");
     expect(workspace.sandboxReadPaths[1]).toBe("/secrets/github");
     expect(workspace.sandboxReadPaths).not.toContain(workspace.directory);
+    expect(workspace.sandboxWritePaths).toEqual([
+      join(workspace.directory, ".git"),
+    ]);
     await workspace.cleanup();
   });
 

@@ -252,6 +252,9 @@ The VM pulls published images rather than cloning this repository. Production
 configuration lives under `/srv/sago-cloud/secrets`. Only the core container
 joins `sago_cloud_edge` under the `bot-core` alias. Worker Codex state, GitHub
 CLI state, repositories, and worktrees remain in external persistent volumes.
+Developer jobs receive write access to only their cloned repository and its Git
+metadata, so approved code jobs can commit and push without exposing another
+job's checkout.
 The bot's monitor and webhook state remains in
 `sago_cloud_bot-core-state`, using the `/app/state` paths documented in
 [Configuration](configuration.md#persistent-state).

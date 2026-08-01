@@ -56,13 +56,20 @@ type CodexRunOptions = {
 
 export function developerFilesystemPermissions(
   readPaths: string[],
+  writePaths: string[] = [],
   platform: NodeJS.Platform = process.platform,
 ) {
   const runtimeReadPaths = platform === "linux" ? ["/proc"] : [];
   const directReads = [...new Set([...runtimeReadPaths, ...readPaths])]
     .map((path) => `${JSON.stringify(path)}="read"`)
     .join(",");
-  return `{":minimal"="read",${directReads},":workspace_roots"={"."="write"}}`;
+  const directWrites = [...new Set(writePaths)]
+    .map((path) => `${JSON.stringify(path)}="write"`)
+    .join(",");
+  const directPermissions = [directReads, directWrites]
+    .filter(Boolean)
+    .join(",");
+  return `{":minimal"="read",${directPermissions},":workspace_roots"={"."="write"}}`;
 }
 
 export function codexProfileForJob(
@@ -430,6 +437,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "--config",
         `permissions.${permissionName}.filesystem=${developerFilesystemPermissions(
           developerWorkspace?.sandboxReadPaths ?? [],
+          developerWorkspace?.sandboxWritePaths ?? [],
         )}`,
         "--config",
         `permissions.${permissionName}.network.enabled=true`,
