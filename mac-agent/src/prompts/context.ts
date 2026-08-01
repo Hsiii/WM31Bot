@@ -46,7 +46,6 @@ function requestMessageContext(job: ChatbotJob) {
     ...(message.authorAliases?.length
       ? { authorAliases: message.authorAliases }
       : {}),
-    timestamp: message.timestamp,
     ...(message.attachments.length > 0
       ? { attachments: message.attachments.map(promptAttachment) }
       : {}),

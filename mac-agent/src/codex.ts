@@ -54,6 +54,17 @@ type CodexRunOptions = {
   signal?: AbortSignal;
 };
 
+export function developerFilesystemPermissions(
+  readPaths: string[],
+  platform: NodeJS.Platform = process.platform,
+) {
+  const runtimeReadPaths = platform === "linux" ? ["/proc"] : [];
+  const directReads = [...new Set([...runtimeReadPaths, ...readPaths])]
+    .map((path) => `${JSON.stringify(path)}="read"`)
+    .join(",");
+  return `{":minimal"="read",${directReads},":workspace_roots"={"."="write"}}`;
+}
+
 export function codexProfileForJob(
   job: ChatbotJob,
   accessConfig: ChatbotAccessConfig,
@@ -417,7 +428,9 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       const permissionName = "minisago-dev";
       codexArguments.push(
         "--config",
-        `permissions.${permissionName}.filesystem={":minimal"="read",":workspace_roots"={"."="write"}}`,
+        `permissions.${permissionName}.filesystem=${developerFilesystemPermissions(
+          developerWorkspace?.sandboxReadPaths ?? [],
+        )}`,
         "--config",
         `permissions.${permissionName}.network.enabled=true`,
       );

@@ -108,8 +108,12 @@ disposable checkout; the container remains the outer boundary on Oracle.
 The Linux worker uses Codex's Bubblewrap sandbox. Production must allow only
 the namespace and mount syscalls Bubblewrap needs and load the dedicated worker
 AppArmor profile; the worker process itself remains unprivileged.
-Provider and production credentials are not mounted. Ordinary chat stages have
-a two-minute timeout; final owner development answers may run for 15 minutes.
+Production credentials are not mounted. Owner development sandboxes receive
+read-only access to the dedicated repo-scoped GitHub CLI state, immutable
+per-job GitHub command guards, and Linux `/proc` for Bun; only the selected
+checkout is writable. Ordinary chat receives none of that access. Ordinary chat
+stages have a two-minute timeout; final owner development answers may run for
+15 minutes.
 
 ## Oracle worker
 
