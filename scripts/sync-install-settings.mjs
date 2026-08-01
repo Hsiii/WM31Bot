@@ -19,6 +19,7 @@ const requiredGuildPermissionFlags = [
   ["MANAGE_THREADS", 1n << 34n],
   ["CREATE_PUBLIC_THREADS", 1n << 35n],
   ["SEND_MESSAGES_IN_THREADS", 1n << 38n],
+  ["CREATE_GUILD_EXPRESSIONS", 1n << 43n],
 ];
 
 const guildInstallScopes = ["applications.commands", "bot"];

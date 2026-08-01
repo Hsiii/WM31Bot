@@ -52,7 +52,7 @@ access.
 8. Configure a worker secret on both sides, then connect either the Oracle
    worker or Mac helper.
 
-The synced permission bitfield is `326686026816`, containing:
+The synced permission bitfield is `9122779049024`, containing:
 
 - Add Reactions
 - View Channels
@@ -63,13 +63,17 @@ The synced permission bitfield is `326686026816`, containing:
 - Manage Threads
 - Create Public Threads
 - Send Messages in Threads
+- Create Expressions
 
 Manage Roles is needed only for configured-guild role access. Manage Messages
 pins PR review requests, and the thread permissions support review discussions.
 Add Reactions is used only when ambient reactions are enabled. MiniSago does
-not require Manage Webhooks. Application defaults affect new installs only;
-update the existing bot role and channel overrides manually. For role
-assignment, the bot's highest role must remain above every self-assignable role.
+not require Manage Webhooks. Create Expressions lets the owner ask MiniSago to
+copy an emote from the current guild into another guild the bot has joined.
+Application defaults affect new installs only; grant Create Expressions to the
+existing bot role in every destination guild and update channel overrides
+manually. For role assignment, the bot's highest role must remain above every
+self-assignable role.
 
 Only one Gateway-enabled deployment may use a bot token. Set
 `DISCORD_GATEWAY_DISABLED=true` for local HTTP development while production is
