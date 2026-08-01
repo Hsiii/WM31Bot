@@ -14,6 +14,10 @@ import {
   type AmbientReactionPolicy,
 } from "./social-reactions";
 import { DiscordReactionBroker } from "./reactions";
+import {
+  QuickReplyNudgeTracker,
+  QUICK_REPLY_TARGET_USER_ID,
+} from "./quick-reply-nudge";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -156,6 +160,7 @@ class InstagramGatewayClient {
   private ambientReactions: AmbientReactionController;
   private channelTasks = new ChannelTaskQueue();
   private conversations = new ChatbotConversationTracker();
+  private quickReplyNudges = new QuickReplyNudgeTracker();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
@@ -382,6 +387,23 @@ class InstagramGatewayClient {
   }
 
   private async handleMessageCreate(message: DiscordMessageCreate) {
+    const shouldNudgeQuickReply = this.quickReplyNudges.observe(message);
+
+    if (shouldNudgeQuickReply) {
+      try {
+        await this.replyToMessage(
+          message,
+          `<@${QUICK_REPLY_TARGET_USER_ID}> 今天已經秒回超過三次了 去做點有意義的事啦`,
+          [QUICK_REPLY_TARGET_USER_ID],
+        );
+      } catch (error) {
+        console.error(
+          `Failed to send quick reply nudge for ${message.id}:`,
+          error,
+        );
+      }
+    }
+
     if (this.botUserId) {
       try {
         const handled = await handleChatbotMention({
@@ -463,7 +485,11 @@ class InstagramGatewayClient {
     return message.author?.id !== this.botUserId;
   }
 
-  private async replyToMessage(message: DiscordMessageCreate, content: string) {
+  private async replyToMessage(
+    message: DiscordMessageCreate,
+    content: string,
+    mentionedUserIds: string[] = [],
+  ) {
     await this.discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
       body: {
@@ -474,6 +500,7 @@ class InstagramGatewayClient {
         },
         allowed_mentions: {
           parse: [],
+          users: mentionedUserIds,
           replied_user: false,
         },
       },
