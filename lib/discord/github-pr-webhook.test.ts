@@ -49,6 +49,7 @@ function pullRequestPayload(action: string, merged = false) {
       draft: false,
       merged,
       user: { login: "Hsiii" },
+      merged_by: merged ? { login: "Danielllllllllllllll" } : null,
     },
   };
 }
@@ -279,6 +280,17 @@ describe("GitHub PR webhook", () => {
             },
           },
           {
+            url: "https://discord.com/api/v10/channels/thread-42/messages",
+            method: "POST",
+            body: {
+              content: `Merged by <@${DANIEL_ID}>, closing.`,
+              allowed_mentions: {
+                parse: [],
+                users: [DANIEL_ID],
+              },
+            },
+          },
+          {
             url: "https://discord.com/api/v10/channels/thread-42",
             method: "PATCH",
             body: { archived: true },
@@ -292,6 +304,9 @@ describe("GitHub PR webhook", () => {
         expect(
           state.threads["hsiii/health-check-system#42"]
             .approvalNotificationSent,
+        ).toBe(true);
+        expect(
+          state.threads["hsiii/health-check-system#42"].mergeNotificationSent,
         ).toBe(true);
       } finally {
         globalThis.fetch = originalFetch;

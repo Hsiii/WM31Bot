@@ -31,6 +31,9 @@ type PullRequestPayload = {
     user?: {
       login?: string;
     };
+    merged_by?: {
+      login?: string;
+    } | null;
   };
   review?: {
     state?: string;
@@ -44,6 +47,7 @@ type ThreadRecord = {
   authorLogin: string;
   reviewRequestSent: boolean;
   approvalNotificationSent?: boolean;
+  mergeNotificationSent?: boolean;
   archived: boolean;
 };
 
@@ -239,6 +243,7 @@ function getPullRequestDetails(payload: PullRequestPayload) {
     url: pullRequest.html_url,
     authorLogin: pullRequest.user.login,
     merged: pullRequest.merged === true,
+    mergedByLogin: pullRequest.merged_by?.login,
   };
 }
 
@@ -397,6 +402,31 @@ async function archiveReviewThread(
 
   if (!record || record.archived) {
     return "not-found" as const;
+  }
+
+  const mergerDiscordId =
+    details.mergedByLogin && isTeamLogin(details.mergedByLogin)
+      ? TEAM[details.mergedByLogin]
+      : undefined;
+
+  if (!record.mergeNotificationSent && mergerDiscordId) {
+    await discordRequest(
+      config.botToken,
+      `/channels/${record.threadId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          content: `Merged by <@${mergerDiscordId}>, closing.`,
+          allowed_mentions: {
+            parse: [],
+            users: [mergerDiscordId],
+          },
+        }),
+      },
+    );
+
+    record.mergeNotificationSent = true;
+    await writeState(config.stateFile, state);
   }
 
   await discordRequest(config.botToken, `/channels/${record.threadId}`, {
