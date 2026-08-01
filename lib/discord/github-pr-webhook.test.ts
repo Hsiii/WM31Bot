@@ -38,14 +38,14 @@ function webhookRequest(
   });
 }
 
-function pullRequestPayload(action: string, merged = false) {
+function pullRequestPayload(action: string, merged = false, number = 42) {
   return {
     action,
     repository: { full_name: "Hsiii/health-check-system" },
     pull_request: {
-      number: 42,
+      number,
       title: "Make health checks clearer",
-      html_url: "https://github.com/Hsiii/health-check-system/pull/42",
+      html_url: `https://github.com/Hsiii/health-check-system/pull/${number}`,
       draft: false,
       merged,
       user: { login: "Hsiii" },
@@ -129,7 +129,7 @@ describe("GitHub PR webhook", () => {
   });
 
   test.serial(
-    "creates one public thread, adds participants, pins the review, pings the author on approval, and archives it on merge",
+    "creates review threads, sends lifecycle notifications, and archives them whenever the PR closes",
     async () => {
       const secret = "integration-test-secret";
       const stateDirectory = await mkdtemp(join(tmpdir(), "minisago-pr-test-"));
@@ -311,6 +311,51 @@ describe("GitHub PR webhook", () => {
         expect(
           state.threads["hsiii/health-check-system#42"].mergeNotificationSent,
         ).toBe(true);
+
+        calls.length = 0;
+
+        const secondReadyResponse = await handleGithubWebhookRequest(
+          webhookRequest(
+            pullRequestPayload("ready_for_review", false, 43),
+            secret,
+          ),
+        );
+        expect(await secondReadyResponse.json()).toEqual({
+          ok: true,
+          result: "created",
+        });
+
+        const closedWithoutMergeResponse = await handleGithubWebhookRequest(
+          webhookRequest(pullRequestPayload("closed", false, 43), secret),
+        );
+        expect(await closedWithoutMergeResponse.json()).toEqual({
+          ok: true,
+          result: "archived",
+        });
+        expect(calls.at(-1)).toEqual({
+          url: "https://discord.com/api/v10/channels/thread-42",
+          method: "PATCH",
+          body: { archived: true },
+        });
+        expect(
+          calls.some(
+            (call) =>
+              call.method === "POST" &&
+              typeof call.body === "object" &&
+              call.body !== null &&
+              "content" in call.body &&
+              String(call.body.content).startsWith("Merged by "),
+          ),
+        ).toBe(false);
+
+        const closedState = JSON.parse(await readFile(stateFile, "utf8"));
+        expect(
+          closedState.threads["hsiii/health-check-system#43"].archived,
+        ).toBe(true);
+        expect(
+          closedState.threads["hsiii/health-check-system#43"]
+            .mergeNotificationSent,
+        ).toBeUndefined();
       } finally {
         globalThis.fetch = originalFetch;
         restoreEnvironmentVariable("GITHUB_WEBHOOK_SECRET", originalSecret);
