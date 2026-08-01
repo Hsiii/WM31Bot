@@ -194,6 +194,7 @@ export class MacAgentBridge {
       available: workers.filter((worker) => worker.available).length,
       capacity: workers.reduce((total, worker) => total + worker.capacity, 0),
       active: this.pendingJobs.size,
+      mac: this.getStatus(["mac"]),
     };
   }
 

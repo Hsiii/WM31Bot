@@ -177,7 +177,7 @@ guarantee.
 
 | Endpoint                   | Purpose                                                                   |
 | -------------------------- | ------------------------------------------------------------------------- |
-| `GET /api/health`          | Configuration health and aggregate worker availability/capacity           |
+| `GET /api/health`          | Configuration health, aggregate worker capacity, and Mac availability     |
 | `GET /api/mac-agent/ws`    | Authenticated worker WebSocket; returns `404` when the bridge is disabled |
 | `POST /api/interactions`   | Discord slash commands and components                                     |
 | `POST /api/github/webhook` | Verified GitHub pull-request events                                       |
