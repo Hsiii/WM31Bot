@@ -5,6 +5,7 @@ const ADMINISTRATOR = 1n << 3n;
 const MAX_EMOJI_BYTES = 256 * 1024;
 const CUSTOM_EMOJI = /^<(a?):([A-Za-z0-9_]{2,32}):(\d{17,20})>$/u;
 const EMOJI_NAME = /^[A-Za-z0-9_]{2,32}$/u;
+const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
 
 type DiscordGuild = {
   id: string;
@@ -12,10 +13,11 @@ type DiscordGuild = {
   permissions: string;
 };
 
-type DiscordEmoji = {
+export type SharedGuildEmoji = {
   id: string;
   name: string;
   animated?: boolean;
+  available?: boolean;
 };
 
 type EmojiFetch = (input: string | URL | Request) => Promise<Response>;
@@ -63,49 +65,82 @@ function resolveGuild(guilds: SharedEmojiGuild[], value: string) {
   return matches[0]!;
 }
 
-function parseCustomEmoji(value: string) {
-  const match = value.trim().match(CUSTOM_EMOJI);
-  if (!match) {
-    throw new Error(
-      "Use the custom emoji itself, such as <:sago:123456789012345678>.",
-    );
-  }
+export async function listGuildEmojis({
+  guild,
+  discordRequest,
+}: {
+  guild: string;
+  discordRequest: DiscordRequest;
+}) {
+  const resolvedGuild = resolveGuild(
+    await listSharedEmojiGuilds(discordRequest),
+    guild,
+  );
+  const emojis = await discordRequest<SharedGuildEmoji[]>(
+    `/guilds/${resolvedGuild.id}/emojis`,
+  );
   return {
-    animated: match[1] === "a",
-    name: match[2]!,
-    id: match[3]!,
+    guild: resolvedGuild,
+    emojis: emojis
+      .map(({ id, name, animated = false, available = true }) => ({
+        id,
+        name,
+        animated,
+        available,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
   };
 }
 
+function resolveEmoji(emojis: SharedGuildEmoji[], value: string) {
+  const query = value.trim();
+  const mention = query.match(CUSTOM_EMOJI);
+  const id =
+    mention?.[3] ?? (DISCORD_SNOWFLAKE.test(query) ? query : undefined);
+  const name =
+    mention?.[2] ?? (!id && EMOJI_NAME.test(query) ? query : undefined);
+  if (!id && !name) {
+    throw new Error(
+      "Use an exact emoji name, ID, or custom emoji such as <:sago:123456789012345678>.",
+    );
+  }
+  const matches = emojis.filter((emoji) =>
+    id
+      ? emoji.id === id
+      : emoji.name.toLocaleLowerCase() === name!.toLocaleLowerCase(),
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      matches.length > 1
+        ? `More than one source emoji is named ${name}; use the emoji ID.`
+        : `No source emoji matched ${query}. Use list_guild_emojis first.`,
+    );
+  }
+  if (matches[0]!.available === false) {
+    throw new Error(`The source emoji ${matches[0]!.name} is unavailable.`);
+  }
+  return matches[0]!;
+}
+
 export async function copyGuildEmoji({
-  sourceGuildId,
+  sourceGuild,
   destinationGuild,
   emoji,
   name,
   discordRequest,
   fetchEmoji = fetch,
 }: {
-  sourceGuildId: string;
+  sourceGuild: string;
   destinationGuild: string;
   emoji: string;
   name?: string;
   discordRequest: DiscordRequest;
   fetchEmoji?: EmojiFetch;
 }) {
-  const parsedEmoji = parseCustomEmoji(emoji);
-  const destinationName = name?.trim() || parsedEmoji.name;
-  if (!EMOJI_NAME.test(destinationName)) {
-    throw new Error(
-      "Emoji names must be 2-32 letters, numbers, or underscores.",
-    );
-  }
-
   const guilds = await listSharedEmojiGuilds(discordRequest);
-  if (!guilds.some((guild) => guild.id === sourceGuildId)) {
-    throw new Error("Sago is no longer in the source guild.");
-  }
+  const source = resolveGuild(guilds, sourceGuild);
   const destination = resolveGuild(guilds, destinationGuild);
-  if (destination.id === sourceGuildId) {
+  if (destination.id === source.id) {
     throw new Error("Choose a different destination guild.");
   }
   if (!destination.canCreateExpressions) {
@@ -114,17 +149,18 @@ export async function copyGuildEmoji({
     );
   }
 
-  const sourceEmojis = await discordRequest<DiscordEmoji[]>(
-    `/guilds/${sourceGuildId}/emojis`,
+  const sourceEmojis = await discordRequest<SharedGuildEmoji[]>(
+    `/guilds/${source.id}/emojis`,
   );
-  const sourceEmoji = sourceEmojis.find((item) => item.id === parsedEmoji.id);
-  if (!sourceEmoji) {
+  const sourceEmoji = resolveEmoji(sourceEmojis, emoji);
+  const destinationName = name?.trim() || sourceEmoji.name;
+  if (!EMOJI_NAME.test(destinationName)) {
     throw new Error(
-      "That emoji does not belong to the guild this request came from.",
+      "Emoji names must be 2-32 letters, numbers, or underscores.",
     );
   }
 
-  const animated = sourceEmoji.animated ?? parsedEmoji.animated;
+  const animated = sourceEmoji.animated ?? false;
   const imageResponse = await fetchEmoji(
     `https://cdn.discordapp.com/emojis/${sourceEmoji.id}.webp?size=128${animated ? "&animated=true" : ""}`,
   );
@@ -136,7 +172,7 @@ export async function copyGuildEmoji({
     throw new Error("The copied emoji is larger than Discord's 256 KiB limit.");
   }
 
-  const created = await discordRequest<DiscordEmoji>(
+  const created = await discordRequest<SharedGuildEmoji>(
     `/guilds/${destination.id}/emojis`,
     {
       method: "POST",
@@ -151,6 +187,7 @@ export async function copyGuildEmoji({
     id: created.id,
     name: created.name,
     animated: created.animated ?? animated,
+    sourceGuild: source,
     guild: destination,
   };
 }

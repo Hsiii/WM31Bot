@@ -194,14 +194,35 @@ describe("MiniSago MCP server", () => {
           id: "987654321098765432",
           name: "Target",
           canCreateExpressions: true,
+          current: true,
         },
       ],
+      listGuildEmojis: async (guild) => ({
+        guild: {
+          id: "123456789012345678",
+          name: guild,
+          canCreateExpressions: false,
+        },
+        emojis: [
+          {
+            id: "234567890123456789",
+            name: "wave",
+            animated: false,
+            available: true,
+          },
+        ],
+      }),
       copyGuildEmoji: async (input) => {
         copies.push(input);
         return {
           id: "876543210987654321",
           name: input.name ?? "wave",
           animated: false,
+          sourceGuild: {
+            id: "123456789012345678",
+            name: "Source",
+            canCreateExpressions: false,
+          },
           guild: {
             id: "987654321098765432",
             name: "Target",
@@ -216,12 +237,24 @@ describe("MiniSago MCP server", () => {
     expect(tools.tools.map((tool) => tool.name)).toContain(
       "list_shared_guilds",
     );
+    expect(tools.tools.map((tool) => tool.name)).toContain("list_guild_emojis");
     expect(tools.tools.map((tool) => tool.name)).toContain("copy_guild_emoji");
+
+    const inventory = await client.callTool({
+      name: "list_guild_emojis",
+      arguments: { guild: "Source" },
+    });
+    expect(inventory.structuredContent).toMatchObject({
+      status: "complete",
+      guild: { name: "Source" },
+      emojis: [{ name: "wave" }],
+    });
 
     const result = await client.callTool({
       name: "copy_guild_emoji",
       arguments: {
         emoji: "<:wave:123456789012345678>",
+        sourceGuild: "Source",
         destinationGuild: "Target",
         name: "hello",
       },
@@ -233,6 +266,7 @@ describe("MiniSago MCP server", () => {
     expect(copies).toEqual([
       {
         emoji: "<:wave:123456789012345678>",
+        sourceGuild: "Source",
         destinationGuild: "Target",
         name: "hello",
       },
