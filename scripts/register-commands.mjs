@@ -32,6 +32,16 @@ const commands = [
     description: "離開 Brawl Stars 頻道",
     dm_permission: false,
   },
+  {
+    name: "join-vc",
+    description: "讓 Mini Sago 加入你所在的語音頻道",
+    dm_permission: false,
+  },
+  {
+    name: "leave-vc",
+    description: "讓 Mini Sago 離開語音頻道",
+    dm_permission: false,
+  },
 ];
 
 const response = await fetch(url, {

@@ -27,6 +27,7 @@ import {
   listSharedEmojiGuilds,
 } from "./emojis";
 import { getChatbotReminderScheduler } from "./reminders";
+import { joinMemberVoiceChannel, leaveVoiceChannel } from "./voice";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
@@ -1409,6 +1410,13 @@ export async function handleChatbotMention({
                   message.channel_id,
                   reminderId,
                 ),
+            }
+          : {}),
+        ...(message.guild_id
+          ? {
+              joinVoiceChannel: () =>
+                joinMemberVoiceChannel(message.guild_id!, requesterUserId),
+              leaveVoiceChannel: () => leaveVoiceChannel(message.guild_id!),
             }
           : {}),
       });

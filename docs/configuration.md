@@ -111,6 +111,11 @@ Mention answers use the same host-owned reaction broker and emoji inventory.
 One answer inference can choose a reply, a reaction bound to the triggering
 message, or both; it does not require a second reaction-planning model call.
 
+Guild mention sessions expose host-bound voice tools. They can join only the
+real requester's current voice channel in the current guild, or disconnect
+MiniSago from that guild; model arguments cannot select another member, channel,
+or guild. These tools are not exposed in direct messages.
+
 Authorized chatbot users can create one-time timers or recurring five-field
 cron reminders through the same host-bound MCP session. Reminder identity and
 destination are bound to the real requester and current channel; model
