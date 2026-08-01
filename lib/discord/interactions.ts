@@ -4,7 +4,7 @@ import {
   LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "./constants";
-import { createDiscordRequest, takeChatbotMutationApproval } from "./chatbot";
+import { createDiscordRequest } from "./chatbot";
 import { getBrawlStarsRole, getDiscordConfig, getWordleRole } from "./env";
 import {
   buildChannelAccessPanel,
@@ -273,43 +273,6 @@ export async function handleDiscordInteractionRequest(request: Request) {
   }
 
   const userId = getUserId(interaction);
-  if (interaction.type === 3) {
-    const approval = takeChatbotMutationApproval({
-      customId,
-      userId,
-      discordRequest: createDiscordRequest(config.botToken),
-      accessConfig: config.chatbotAccess,
-    });
-    if (approval?.status === "forbidden") {
-      return jsonResponse(
-        buildEphemeralResponse("這個寫入確認只有曦本人可以按"),
-      );
-    }
-    if (approval?.status === "expired") {
-      return jsonResponse({
-        type: 7,
-        data: {
-          content: "這次寫入確認已經過期了 請重新提出要求",
-          components: [],
-        },
-      });
-    }
-    if (approval?.status === "accepted") {
-      setTimeout(() => {
-        void approval.run().catch((error) => {
-          console.error("Approved chatbot mutation failed:", error);
-        });
-      }, 0);
-      return jsonResponse({
-        type: 7,
-        data: {
-          content: approval.content,
-          components: [],
-        },
-      });
-    }
-  }
-
   if (!isGuildAllowed(interaction.guild_id, config.guildId)) {
     return jsonResponse({
       type: 4,

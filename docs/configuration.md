@@ -21,7 +21,7 @@ live in [operations.md](operations.md).
 | `DISCORD_BOT_TOKEN`                    | Yes       | Discord REST and Gateway authentication                                 |
 | `DISCORD_GUILD_ID`                     | No        | Guild allowed to use configured-guild features; defaults to WM31        |
 | `DISCORD_GATEWAY_DISABLED`             | No        | Set to `true` for HTTP-only instances                                   |
-| `MINISAGO_CHATBOT_OWNER_USER_ID`       | Yes       | Sole owner allowed to route privileged work and approve mutations       |
+| `MINISAGO_CHATBOT_OWNER_USER_ID`       | Yes       | Sole owner allowed to route privileged work and mutations               |
 | `MINISAGO_CHATBOT_GUILD_IDS`           | No        | Comma-separated guilds whose members may use chatbot features           |
 | `MINISAGO_CHATBOT_CHANNEL_IDS`         | No        | Comma-separated channel exceptions; blank allows none                   |
 | `MINISAGO_AMBIENT_REACTIONS_ENABLED`   | No        | Set to `true` to let MiniSago consider occasional reactions             |
@@ -195,14 +195,14 @@ repository contents, issues, and pull-request write access, with read access to
 checks and Actions when needed. Do not grant administration, secrets,
 environments, deployments, organization, or unrelated-repository access.
 
-The router may propose an `issue`, `code`, or `deploy` mutation only from the
-owner's current request. It does not grant permission. MiniSago posts a
-single-use confirmation button that expires after ten minutes and accepts only
-Hsi's Discord account; pressing it binds the selected repository and scope to
-the resumed job. Per-job wrappers enforce that scope, require draft pull
-requests, and reject merge, ready, protected-branch, and force-push operations
-through normal command paths. GitHub rulesets must also block direct and force
-pushes to protected branches; Hsi remains responsible for merging. Repository
+The router runs only for the configured owner and may select an `issue`, `code`,
+or `deploy` mutation from the owner's current request. That selection directly
+binds the repository and scope to the job; clear short follow-ups may continue
+a single mutation identified by referenced or nearby conversation. Per-job
+wrappers enforce the selected scope, require draft pull requests, and reject
+merge, ready, protected-branch, and force-push operations through normal
+command paths. GitHub rulesets must also block direct and force pushes to
+protected branches; Hsi remains responsible for merging. Repository
 content and command output remain untrusted data.
 Credential and ruleset setup is tracked in
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12).

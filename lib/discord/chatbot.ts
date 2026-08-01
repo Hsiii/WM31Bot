@@ -141,14 +141,6 @@ export type DiscordRequest = <T>(
   options?: { method?: string; body?: unknown },
 ) => Promise<T>;
 
-export type ApprovedMutation = {
-  requestMessageId: string;
-  mode: "dev";
-  target: ChatbotExecutionTarget;
-  mutationScope: ChatbotMutationScope;
-  repository: string;
-};
-
 type ActiveConversation = {
   requesterUserId: string;
   expiresAt: number;
@@ -260,93 +252,7 @@ export async function executeChatbotAnswerDecision({
   return { reply: decision.reply, reacted };
 }
 
-type PendingMutation = {
-  message: ChatbotMention;
-  botUserId: string;
-  approval: ApprovedMutation;
-  expiresAt: number;
-};
-
-const MUTATION_APPROVAL_PREFIX = "minisago:mutation:";
-const MUTATION_APPROVAL_TTL_MS = 10 * 60_000;
-const MAX_PENDING_MUTATIONS = 100;
-const pendingMutations = new Map<string, PendingMutation>();
-
 export type ChatbotMention = DiscordMessage;
-
-function prunePendingMutations(now = Date.now()) {
-  for (const [id, pending] of pendingMutations) {
-    if (pending.expiresAt <= now) pendingMutations.delete(id);
-  }
-  while (pendingMutations.size >= MAX_PENDING_MUTATIONS) {
-    const oldest = pendingMutations.keys().next().value;
-    if (!oldest) break;
-    pendingMutations.delete(oldest);
-  }
-}
-
-function mutationApprovalContent(approval: ApprovedMutation) {
-  const action = {
-    code: "修改程式碼並建立草稿 PR",
-    issue: "修改 GitHub issue",
-    deploy: "執行部署工作",
-  }[approval.mutationScope];
-  return `我理解成要在 \`${approval.repository}\` ${action}\n按下面的按鈕才會真的給這次工作寫入權限`;
-}
-
-export function registerMutationApproval(
-  message: ChatbotMention,
-  botUserId: string,
-  approval: ApprovedMutation,
-) {
-  prunePendingMutations();
-  const id = randomUUID();
-  pendingMutations.set(id, {
-    message,
-    botUserId,
-    approval,
-    expiresAt: Date.now() + MUTATION_APPROVAL_TTL_MS,
-  });
-  return `${MUTATION_APPROVAL_PREFIX}${id}`;
-}
-
-export function takeChatbotMutationApproval({
-  customId,
-  userId,
-  discordRequest,
-  accessConfig,
-}: {
-  customId?: string;
-  userId?: string;
-  discordRequest: DiscordRequest;
-  accessConfig: ChatbotAccessConfig;
-}):
-  | null
-  | { status: "forbidden" | "expired" }
-  | { status: "accepted"; content: string; run: () => Promise<boolean> } {
-  if (!customId?.startsWith(MUTATION_APPROVAL_PREFIX)) return null;
-  const id = customId.slice(MUTATION_APPROVAL_PREFIX.length);
-  const pending = pendingMutations.get(id);
-  if (userId !== accessConfig.ownerUserId) return { status: "forbidden" };
-  if (!pending || pending.expiresAt <= Date.now()) {
-    if (pending) pendingMutations.delete(id);
-    return { status: "expired" };
-  }
-
-  pendingMutations.delete(id);
-  return {
-    status: "accepted",
-    content: `已允許這次在 \`${pending.approval.repository}\` 的 ${pending.approval.mutationScope} 工作`,
-    run: () =>
-      handleChatbotMention({
-        message: pending.message,
-        botUserId: pending.botUserId,
-        discordRequest,
-        approvedMutation: pending.approval,
-        accessConfig,
-      }),
-  };
-}
 
 function authorAliases(message: DiscordMessage) {
   return [
@@ -1111,33 +1017,6 @@ export async function postChatbotResponse(
   }
 }
 
-export async function postMutationApproval(
-  message: DiscordMessage,
-  approval: ApprovedMutation,
-  customId: string,
-  discordRequest: DiscordRequest,
-) {
-  await discordRequest(`/channels/${message.channel_id}/messages`, {
-    method: "POST",
-    body: {
-      ...replyBody(message, mutationApprovalContent(approval)),
-      components: [
-        {
-          type: 1,
-          components: [
-            {
-              type: 2,
-              style: 3,
-              label: "允許這次寫入",
-              custom_id: customId,
-            },
-          ],
-        },
-      ],
-    },
-  });
-}
-
 async function withTyping<T>(
   channelId: string,
   discordRequest: DiscordRequest,
@@ -1163,7 +1042,6 @@ export async function handleChatbotMention({
   message,
   botUserId,
   discordRequest,
-  approvedMutation,
   accessConfig,
   reactionBroker,
   conversationTracker,
@@ -1171,7 +1049,6 @@ export async function handleChatbotMention({
   message: ChatbotMention;
   botUserId: string;
   discordRequest: DiscordRequest;
-  approvedMutation?: ApprovedMutation;
   accessConfig: ChatbotAccessConfig;
   reactionBroker?: DiscordReactionBroker;
   conversationTracker?: ChatbotConversationTracker;
@@ -1231,9 +1108,7 @@ export async function handleChatbotMention({
   }
 
   const { workflow } = acquired;
-  let result:
-    | MacAgentJobResult
-    | { ok: true; content: ""; awaitingApproval: true };
+  let result: MacAgentJobResult;
   let mcpSession: ReturnType<typeof registerChatbotMcpSession> | undefined;
   let mcpSnapshot: ChatbotMcpSessionSnapshot = {
     reacted: false,
@@ -1262,43 +1137,33 @@ export async function handleChatbotMention({
       let selectedRepository: string | undefined;
 
       if (requesterUserId === accessConfig.ownerUserId) {
-        if (
-          approvedMutation &&
-          approvedMutation.requestMessageId === message.id
-        ) {
-          executionMode = approvedMutation.mode;
-          executionTarget = approvedMutation.target;
-          mutationScope = approvedMutation.mutationScope;
-          selectedRepository = approvedMutation.repository;
-        } else {
-          const routeJob: ChatbotJob = {
-            id: randomUUID(),
-            requesterUserId,
-            purpose: "execution_route",
-            channelId: message.channel_id,
-            requestMessageId: message.id,
-            request,
-            requestMessage,
-            messages,
-            availableRepositories: workflow.availableRepositories,
-            ...(workflow.chatbotRepository
-              ? { chatbotRepository: workflow.chatbotRepository }
-              : {}),
-          };
-          const routeDispatch = workflow.dispatch(routeJob);
-          let route = parseExecutionRoute("", workflow.availableRepositories);
-          if (routeDispatch.status === "accepted") {
-            const routeResult = await routeDispatch.result;
-            route = parseExecutionRoute(
-              routeResult.ok ? routeResult.content : "",
-              workflow.availableRepositories,
-            );
-          }
-          executionMode = route.mode;
-          executionTarget = route.target;
-          mutationScope = route.mutationScope;
-          selectedRepository = route.repository;
+        const routeJob: ChatbotJob = {
+          id: randomUUID(),
+          requesterUserId,
+          purpose: "execution_route",
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages,
+          availableRepositories: workflow.availableRepositories,
+          ...(workflow.chatbotRepository
+            ? { chatbotRepository: workflow.chatbotRepository }
+            : {}),
+        };
+        const routeDispatch = workflow.dispatch(routeJob);
+        let route = parseExecutionRoute("", workflow.availableRepositories);
+        if (routeDispatch.status === "accepted") {
+          const routeResult = await routeDispatch.result;
+          route = parseExecutionRoute(
+            routeResult.ok ? routeResult.content : "",
+            workflow.availableRepositories,
+          );
         }
+        executionMode = route.mode;
+        executionTarget = route.target;
+        mutationScope = route.mutationScope;
+        selectedRepository = route.repository;
 
         const missingRepository = missingDeveloperRepositoryResponse(
           executionMode,
@@ -1307,31 +1172,6 @@ export async function handleChatbotMention({
         );
         if (missingRepository) {
           return { ok: true as const, content: missingRepository };
-        }
-        if (mutationScope && !approvedMutation && selectedRepository) {
-          const approval: ApprovedMutation = {
-            requestMessageId: message.id,
-            mode: "dev",
-            target: executionTarget,
-            mutationScope,
-            repository: selectedRepository,
-          };
-          const customId = registerMutationApproval(
-            message,
-            botUserId,
-            approval,
-          );
-          await postMutationApproval(
-            message,
-            approval,
-            customId,
-            discordRequest,
-          );
-          return {
-            ok: true as const,
-            content: "" as const,
-            awaitingApproval: true as const,
-          };
         }
         const workerRoute = workflow.route(
           [
@@ -1610,8 +1450,6 @@ export async function handleChatbotMention({
     }
     workflow.release();
   }
-  if ("awaitingApproval" in result) return true;
-
   let reacted = mcpSnapshot.reacted;
   let reply: string | null = null;
   if (result.ok) {
