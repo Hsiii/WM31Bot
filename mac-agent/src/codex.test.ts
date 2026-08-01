@@ -11,6 +11,7 @@ import {
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
+  canUseMacFiles as canUseMacFilesWithConfig,
   canUseDeveloperTools as canUseDeveloperToolsWithConfig,
   codexFailureMessage,
   codexEnvironment,
@@ -19,6 +20,7 @@ import {
   developerFilesystemPermissions,
   EMOJI_COPY_MCP_APPROVAL_CONFIG,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
+  MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
@@ -37,6 +39,8 @@ const assertChatbotJobAllowed = (job: ChatbotJob) =>
   assertChatbotJobAllowedWithConfig(job, ACCESS_CONFIG);
 const canUseDeveloperTools = (job: ChatbotJob) =>
   canUseDeveloperToolsWithConfig(job, ACCESS_CONFIG);
+const canUseMacFiles = (job: ChatbotJob) =>
+  canUseMacFilesWithConfig(job, ACCESS_CONFIG);
 const codexProfileForJob = (job: ChatbotJob) =>
   codexProfileForJobWithConfig(job, ACCESS_CONFIG);
 
@@ -206,6 +210,28 @@ describe("Codex chatbot runner", () => {
     expect(prompt).not.toContain("<available_tools_json>");
     expect(outputSchemaForJob(answerJob)).toBe(ANSWER_OUTPUT_SCHEMA);
     expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
+  });
+
+  test("gives only owner Mac answers the bounded file output", () => {
+    const macJob: ChatbotJob = {
+      ...job,
+      requesterUserId: ACCESS_CONFIG.ownerUserId,
+      purpose: "answer",
+      executionMode: "chat",
+      executionTarget: "mac",
+    };
+    const roots = ["/Users/hsi/Documents", "/Users/hsi/Downloads"];
+    const prompt = buildCodexPrompt(macJob, [], [], undefined, roots);
+
+    expect(canUseMacFiles(macJob)).toBe(true);
+    expect(canUseMacFiles({ ...macJob, requesterUserId: "someone-else" })).toBe(
+      false,
+    );
+    expect(prompt).toContain("explicitly routed to Hsi's Mac");
+    expect(prompt).toContain("Use find with one or more allowed roots");
+    expect(prompt).toContain(JSON.stringify(roots));
+    expect(outputSchemaForJob(macJob)).toBe(MAC_FILE_ANSWER_OUTPUT_SCHEMA);
+    expect(MAC_FILE_ANSWER_OUTPUT_SCHEMA.properties.files.maxItems).toBe(1);
   });
 
   test("reports structured Codex failures before stderr warnings", () => {
@@ -536,6 +562,16 @@ describe("Codex chatbot runner", () => {
     expect(profile).toContain(
       '(allow process-exec (literal "/Applications/ChatGPT \\"Beta\\"/Contents/Resources/codex"))',
     );
+  });
+
+  test("can allow only bounded file-search executables in the outer sandbox", () => {
+    const profile = buildSeatbeltProfile("/Applications/ChatGPT.app/codex", [
+      "/bin/zsh",
+      "/usr/bin/find",
+    ]);
+
+    expect(profile).toContain('(allow process-exec (literal "/bin/zsh"))');
+    expect(profile).toContain('(allow process-exec (literal "/usr/bin/find"))');
   });
 
   test("keeps the Codex launcher and Bun Node shim on the restricted path", () => {

@@ -143,6 +143,14 @@ describe("Mac agent bridge", () => {
         jobId: job.id,
         ok: true,
         content: "A short summary",
+        files: [
+          {
+            filename: "notes.txt",
+            contentType: "text/plain",
+            size: 5,
+            data: Buffer.from("hello").toString("base64"),
+          },
+        ],
       }),
     );
 
@@ -153,6 +161,14 @@ describe("Mac agent bridge", () => {
     expect(await dispatch.result).toEqual({
       ok: true,
       content: "A short summary",
+      files: [
+        {
+          filename: "notes.txt",
+          contentType: "text/plain",
+          size: 5,
+          data: Buffer.from("hello").toString("base64"),
+        },
+      ],
     });
     expect(bridge.getStatus()).toBe("available");
   });

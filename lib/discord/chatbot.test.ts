@@ -496,6 +496,45 @@ describe("Discord chatbot", () => {
     ]);
   });
 
+  test("uploads a Mac file with the first Discord response", async () => {
+    let uploaded: FormData | undefined;
+    const message = {
+      id: "request-file",
+      channel_id: "channel-1",
+      content: `<@${BOT_ID}> send the notes file`,
+      timestamp: "2026-07-20T11:00:00.000Z",
+      author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+    };
+
+    await postChatbotResponse(
+      message,
+      "found it",
+      async (path, options) => {
+        if (path.endsWith("?limit=1")) return [message] as never;
+        uploaded = options?.formData;
+        return undefined as never;
+      },
+      [
+        {
+          filename: "notes.txt",
+          contentType: "text/plain",
+          size: 5,
+          data: Buffer.from("hello").toString("base64"),
+        },
+      ],
+    );
+
+    expect(uploaded).toBeDefined();
+    expect(JSON.parse(String(uploaded!.get("payload_json")))).toEqual({
+      content: "found it",
+      allowed_mentions: { parse: [] },
+    });
+    const file = uploaded!.get("files[0]") as File;
+    expect(file.name).toBe("notes.txt");
+    expect(file.type).toStartWith("text/plain");
+    expect(await file.text()).toBe("hello");
+  });
+
   test("accepts only human context messages other than the request", () => {
     const base = {
       id: "message-1",

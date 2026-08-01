@@ -19,6 +19,7 @@ export {
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
+  MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
 } from "./prompts";
 
@@ -49,6 +50,7 @@ type CodexRunOptions = {
   githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
+  macFileRoots: string[];
   mcpUrl: string;
   workspaceRoot: string;
   chatbotAccess: ChatbotAccessConfig;
@@ -119,15 +121,36 @@ export function canUseDeveloperTools(
   );
 }
 
+export function canUseMacFiles(
+  job: ChatbotJob,
+  accessConfig: ChatbotAccessConfig,
+) {
+  return (
+    canUseChatbotCapability(job.requesterUserId, "mac", accessConfig) &&
+    job.executionTarget === "mac" &&
+    job.executionMode !== "dev" &&
+    job.purpose === "answer"
+  );
+}
+
 function escapeSeatbeltLiteral(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-export function buildSeatbeltProfile(codexPath: string) {
+export function buildSeatbeltProfile(
+  codexPath: string,
+  allowedExecutables: string[] = [],
+) {
+  const executableRules = [codexPath, ...allowedExecutables]
+    .map(
+      (path) =>
+        `(allow process-exec (literal "${escapeSeatbeltLiteral(path)}"))`,
+    )
+    .join("\n");
   return `(version 1)
 (allow default)
 (deny process-exec)
-(allow process-exec (literal "${escapeSeatbeltLiteral(codexPath)}"))`;
+${executableRules}`;
 }
 
 export function codexEnvironment(
@@ -227,6 +250,7 @@ export function parseFinalResponse(
   output: string,
   allowDeveloperTools = false,
   onMcpToolCall?: CodexRunOptions["onMcpToolCall"],
+  allowCommandExecution = allowDeveloperTools,
 ) {
   let finalResponse = "";
 
@@ -248,11 +272,10 @@ export function parseFinalResponse(
       };
     };
 
-    if (
-      !allowDeveloperTools &&
-      event.item?.type &&
-      ["command_execution", "file_change"].includes(event.item.type)
-    ) {
+    if (event.item?.type === "command_execution" && !allowCommandExecution) {
+      throw new Error("Codex attempted a disabled local tool.");
+    }
+    if (event.item?.type === "file_change" && !allowDeveloperTools) {
       throw new Error("Codex attempted a disabled local tool.");
     }
 
@@ -362,6 +385,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   assertChatbotJobAllowed(job, options.chatbotAccess);
   const profile = codexProfileForJob(job, options.chatbotAccess);
   const hasDeveloperAccess = canUseDeveloperTools(job, options.chatbotAccess);
+  const hasMacFileAccess = canUseMacFiles(job, options.chatbotAccess);
   const timeoutController = new AbortController();
   const timeout = setTimeout(
     () => timeoutController.abort(),
@@ -400,6 +424,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       prepared.textBlocks,
       prepared.ignored,
       hasDeveloperAccess ? buildGithubDeveloperPolicy(job) : undefined,
+      hasMacFileAccess ? options.macFileRoots : [],
     );
     const codexArguments = [
       options.codexPath,
@@ -422,7 +447,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       'web_search="live"',
       "--config",
-      hasDeveloperAccess
+      hasDeveloperAccess || hasMacFileAccess
         ? 'default_permissions="minisago-dev"'
         : 'default_permissions="minisago-chatbot"',
       "--config",
@@ -433,12 +458,14 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "allow_login_shell=false",
     ];
 
-    if (hasDeveloperAccess) {
+    if (hasDeveloperAccess || hasMacFileAccess) {
       const permissionName = "minisago-dev";
       codexArguments.push(
         "--config",
         `permissions.${permissionName}.filesystem=${developerFilesystemPermissions(
-          developerWorkspace?.sandboxReadPaths ?? [],
+          hasMacFileAccess
+            ? options.macFileRoots
+            : (developerWorkspace?.sandboxReadPaths ?? []),
           developerWorkspace?.sandboxWritePaths ?? [],
         )}`,
         "--config",
@@ -493,7 +520,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         : [
             "/usr/bin/sandbox-exec",
             "-p",
-            buildSeatbeltProfile(options.codexPath),
+            buildSeatbeltProfile(
+              options.codexPath,
+              hasMacFileAccess ? ["/bin/ls", "/bin/zsh", "/usr/bin/find"] : [],
+            ),
             ...codexArguments,
           ];
     const child = Bun.spawn(command, {
@@ -537,6 +567,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       stdout,
       hasDeveloperAccess,
       options.onMcpToolCall,
+      hasDeveloperAccess || hasMacFileAccess,
     );
   } finally {
     clearTimeout(timeout);
