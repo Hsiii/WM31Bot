@@ -24,6 +24,8 @@ export {
 
 const LOCAL_CHAT_TIMEOUT_MS = 110_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
+export const EMOJI_COPY_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.copy_guild_emoji.approval_mode="approve"';
 export const COMMUNITY_CHATBOT_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "high",
@@ -464,6 +466,8 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "mcp_servers.minisago.required=true",
         "--config",
         'mcp_servers.minisago.default_tools_approval_mode="auto"',
+        "--config",
+        EMOJI_COPY_MCP_APPROVAL_CONFIG,
         "--config",
         "mcp_servers.minisago.startup_timeout_sec=10",
         "--config",
