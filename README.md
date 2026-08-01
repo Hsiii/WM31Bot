@@ -150,7 +150,8 @@ reconnects after unlock without replaying missed requests.
 Install the Discord application with the `bot` and `applications.commands`
 scopes. It needs permission to view channels, read message history, send
 messages and thread replies, pin PR review requests, and manage only the
-configured opt-in roles. It does not need Manage Webhooks.
+configured opt-in roles. Grant Create Expressions in guilds where the owner may
+ask MiniSago to copy custom emoji. It does not need Manage Webhooks.
 
 Run only one Gateway-enabled instance per bot token. See
 [Configuration](docs/configuration.md) for environment settings and

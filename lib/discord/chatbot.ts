@@ -21,6 +21,7 @@ import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
 } from "./reactions";
+import { copyGuildEmoji, listSharedEmojiGuilds } from "./emojis";
 import { getChatbotReminderScheduler } from "./reminders";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -1506,6 +1507,21 @@ export async function handleChatbotMention({
         ...(reactionTool
           ? {
               addReactionDescription: `${reactionTool.description} Available values: ${JSON.stringify(reactionTool.metadata ?? {})}`,
+            }
+          : {}),
+        ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
+          ? {
+              listSharedGuilds: () => listSharedEmojiGuilds(discordRequest),
+              copyGuildEmoji: (input: {
+                emoji: string;
+                destinationGuild: string;
+                name?: string;
+              }) =>
+                copyGuildEmoji({
+                  ...input,
+                  sourceGuildId: message.guild_id!,
+                  discordRequest,
+                }),
             }
           : {}),
         ...(reminderScheduler

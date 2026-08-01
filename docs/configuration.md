@@ -87,6 +87,12 @@ when the owner is missing or malformed; empty guild and channel lists grant no
 community access. The hosted service and every worker must use the same owner
 ID.
 
+The owner can mention MiniSago in any guild the bot has joined, even when that
+guild is not in the community allowlist. In a guild mention, the owner can ask
+MiniSago to copy an explicitly referenced custom emoji from that guild into
+another shared guild. The destination bot role must have Discord's Create
+Expressions permission; this operation is never exposed to community users.
+
 Ambient reactions are opt-in and use the same guild/channel community
 boundaries. Fresh human messages first enter an in-memory notification buffer
 without calling a model. MiniSago occasionally schedules one delayed attention

@@ -185,6 +185,63 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes owner-bound cross-guild emoji tools", async () => {
+    const copies: unknown[] = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      listSharedGuilds: async () => [
+        {
+          id: "987654321098765432",
+          name: "Target",
+          canCreateExpressions: true,
+        },
+      ],
+      copyGuildEmoji: async (input) => {
+        copies.push(input);
+        return {
+          id: "876543210987654321",
+          name: input.name ?? "wave",
+          animated: false,
+          guild: {
+            id: "987654321098765432",
+            name: "Target",
+            canCreateExpressions: true,
+          },
+        };
+      },
+    });
+    const client = await connect(session.token);
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "list_shared_guilds",
+    );
+    expect(tools.tools.map((tool) => tool.name)).toContain("copy_guild_emoji");
+
+    const result = await client.callTool({
+      name: "copy_guild_emoji",
+      arguments: {
+        emoji: "<:wave:123456789012345678>",
+        destinationGuild: "Target",
+        name: "hello",
+      },
+    });
+    expect(result.structuredContent).toMatchObject({
+      status: "complete",
+      emoji: { name: "hello", guild: { name: "Target" } },
+    });
+    expect(copies).toEqual([
+      {
+        emoji: "<:wave:123456789012345678>",
+        destinationGuild: "Target",
+        name: "hello",
+      },
+    ]);
+
+    await client.close();
+    session.revoke();
+  });
+
   test("creates, lists, and cancels bearer-bound reminders", async () => {
     const created: unknown[] = [];
     const cancelled: string[] = [];

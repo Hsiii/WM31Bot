@@ -122,6 +122,27 @@ export type ChatbotMcpSessionHandlers = {
   }) => Promise<ChatbotMcpContextResult>;
   addReaction?: (emoji: string) => Promise<boolean>;
   addReactionDescription?: string;
+  listSharedGuilds?: () => Promise<
+    Array<{
+      id: string;
+      name: string;
+      canCreateExpressions: boolean;
+    }>
+  >;
+  copyGuildEmoji?: (input: {
+    emoji: string;
+    destinationGuild: string;
+    name?: string;
+  }) => Promise<{
+    id: string;
+    name: string;
+    animated: boolean;
+    guild: {
+      id: string;
+      name: string;
+      canCreateExpressions: boolean;
+    };
+  }>;
   createReminder?: (input: {
     content: string;
     runAt?: string;
@@ -391,6 +412,61 @@ function createServer(session: ChatbotMcpSession) {
           return toolResult({ status: "complete", reacted });
         } catch (error) {
           return unavailable(error);
+        }
+      },
+    );
+  }
+
+  if (session.handlers.listSharedGuilds && session.handlers.copyGuildEmoji) {
+    server.registerTool(
+      "list_shared_guilds",
+      {
+        description:
+          "List every Discord guild Sago is currently in. Use this to resolve the exact destination before copying an emoji. canCreateExpressions reports whether Sago can add an emoji there.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () => {
+        try {
+          return toolResult({
+            status: "complete",
+            guilds: await session.handlers.listSharedGuilds!(),
+          });
+        } catch (error) {
+          return unavailable(error);
+        }
+      },
+    );
+
+    server.registerTool(
+      "copy_guild_emoji",
+      {
+        description:
+          "Copy an explicitly referenced custom emoji from the current Discord guild into another guild Sago is in. Call list_shared_guilds first, and only call this when the requester clearly asks to add or copy the emoji.",
+        inputSchema: {
+          emoji: z.string().trim().min(1).max(100),
+          destinationGuild: z.string().trim().min(1).max(100),
+          name: z.string().trim().min(2).max(32).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            emoji: await session.handlers.copyGuildEmoji!(input),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error ? error.message : "Could not copy emoji.",
+          });
         }
       },
     );
