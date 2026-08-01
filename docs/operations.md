@@ -69,7 +69,7 @@ Manage Roles is needed only for configured-guild role access. Manage Messages
 pins PR review requests, and the thread permissions support review discussions.
 Add Reactions is used only when ambient reactions are enabled. MiniSago does
 not require Manage Webhooks. Create Expressions lets the owner ask MiniSago to
-copy an emote from the current guild into another guild the bot has joined.
+copy an emote between any two guilds the bot has joined.
 Application defaults affect new installs only; grant Create Expressions to the
 existing bot role in every destination guild and update channel overrides
 manually. For role assignment, the bot's highest role must remain above every

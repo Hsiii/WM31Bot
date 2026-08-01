@@ -127,16 +127,36 @@ export type ChatbotMcpSessionHandlers = {
       id: string;
       name: string;
       canCreateExpressions: boolean;
+      current: boolean;
     }>
   >;
+  listGuildEmojis?: (guild: string) => Promise<{
+    guild: {
+      id: string;
+      name: string;
+      canCreateExpressions: boolean;
+    };
+    emojis: Array<{
+      id: string;
+      name: string;
+      animated: boolean;
+      available: boolean;
+    }>;
+  }>;
   copyGuildEmoji?: (input: {
     emoji: string;
+    sourceGuild: string;
     destinationGuild: string;
     name?: string;
   }) => Promise<{
     id: string;
     name: string;
     animated: boolean;
+    sourceGuild: {
+      id: string;
+      name: string;
+      canCreateExpressions: boolean;
+    };
     guild: {
       id: string;
       name: string;
@@ -417,12 +437,16 @@ function createServer(session: ChatbotMcpSession) {
     );
   }
 
-  if (session.handlers.listSharedGuilds && session.handlers.copyGuildEmoji) {
+  if (
+    session.handlers.listSharedGuilds &&
+    session.handlers.listGuildEmojis &&
+    session.handlers.copyGuildEmoji
+  ) {
     server.registerTool(
       "list_shared_guilds",
       {
         description:
-          "List every Discord guild Sago is currently in. Use this to resolve the exact destination before copying an emoji. canCreateExpressions reports whether Sago can add an emoji there.",
+          "List every Discord guild Sago is currently in. Use this to resolve exact source and destination guilds before copying an emoji. current marks the guild where the request was sent; canCreateExpressions reports whether Sago can add an emoji there.",
         inputSchema: {},
         annotations: readAnnotations,
       },
@@ -439,12 +463,41 @@ function createServer(session: ChatbotMcpSession) {
     );
 
     server.registerTool(
+      "list_guild_emojis",
+      {
+        description:
+          "List the custom emojis in one exact shared guild. Use this when the requester names an emoji instead of including its custom emoji value.",
+        inputSchema: {
+          guild: z.string().trim().min(1).max(100),
+        },
+        annotations: readAnnotations,
+      },
+      async ({ guild }) => {
+        try {
+          return toolResult({
+            status: "complete",
+            ...(await session.handlers.listGuildEmojis!(guild)),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not list guild emojis.",
+          });
+        }
+      },
+    );
+
+    server.registerTool(
       "copy_guild_emoji",
       {
         description:
-          "Copy an explicitly referenced custom emoji from the current Discord guild into another guild Sago is in. Call list_shared_guilds first, and only call this when the requester clearly asks to add or copy the emoji.",
+          "Copy a custom emoji between any two different guilds Sago is in, regardless of which guild the request came from. Call list_shared_guilds first. emoji accepts an exact name, ID, or custom emoji value. Only call this when the requester clearly asks to add or copy the emoji. If it returns invalid, report that error accurately; never call it cancelled.",
         inputSchema: {
           emoji: z.string().trim().min(1).max(100),
+          sourceGuild: z.string().trim().min(1).max(100),
           destinationGuild: z.string().trim().min(1).max(100),
           name: z.string().trim().min(2).max(32).optional(),
         },

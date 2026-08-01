@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DiscordRequest } from "./chatbot";
-import { copyGuildEmoji, listSharedEmojiGuilds } from "./emojis";
+import {
+  copyGuildEmoji,
+  listGuildEmojis,
+  listSharedEmojiGuilds,
+} from "./emojis";
 
 const CREATE_EXPRESSIONS = (1n << 43n).toString();
 
@@ -21,7 +25,39 @@ describe("cross-guild emoji tools", () => {
     ]);
   });
 
-  test("copies an emoji from the current guild into an exact shared guild", async () => {
+  test("lists emojis by an exact shared guild name", async () => {
+    const result = await listGuildEmojis({
+      guild: "Source",
+      discordRequest: async (path) =>
+        (path === "/users/@me/guilds"
+          ? [{ id: "source", name: "Source", permissions: "0" }]
+          : [
+              {
+                id: "123456789012345678",
+                name: "wave",
+                animated: false,
+              },
+            ]) as never,
+    });
+
+    expect(result).toEqual({
+      guild: {
+        id: "source",
+        name: "Source",
+        canCreateExpressions: false,
+      },
+      emojis: [
+        {
+          id: "123456789012345678",
+          name: "wave",
+          animated: false,
+          available: true,
+        },
+      ],
+    });
+  });
+
+  test("copies an emoji by name between any two exact shared guilds", async () => {
     const requests: Array<{ path: string; body?: unknown }> = [];
     const discordRequest: DiscordRequest = async (path, options) => {
       requests.push({ path, body: options?.body });
@@ -44,9 +80,9 @@ describe("cross-guild emoji tools", () => {
     };
 
     const result = await copyGuildEmoji({
-      sourceGuildId: "source",
+      sourceGuild: "Source",
       destinationGuild: "Target",
-      emoji: "<:wave:123456789012345678>",
+      emoji: "WAVE",
       name: "hello",
       discordRequest,
       fetchEmoji: async (url) => {
@@ -60,6 +96,7 @@ describe("cross-guild emoji tools", () => {
     expect(result).toMatchObject({
       id: "987654321098765432",
       name: "hello",
+      sourceGuild: { id: "source", name: "Source" },
       guild: { id: "target", name: "Target" },
     });
     expect(requests.at(-1)).toEqual({
@@ -74,7 +111,7 @@ describe("cross-guild emoji tools", () => {
   test("rejects a destination where Sago cannot create expressions", async () => {
     await expect(
       copyGuildEmoji({
-        sourceGuildId: "source",
+        sourceGuild: "Source",
         destinationGuild: "Target",
         emoji: "<:wave:123456789012345678>",
         discordRequest: async () =>
