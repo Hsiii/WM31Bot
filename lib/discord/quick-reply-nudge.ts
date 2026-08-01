@@ -1,4 +1,5 @@
 const QUICK_REPLY_WINDOW_MS = 30_000;
+const TARGET_IDLE_WINDOW_MS = 60_000;
 const QUICK_REPLY_LIMIT = 3;
 
 type ObservedMessage = {
@@ -34,6 +35,7 @@ const taipeiDate = new Intl.DateTimeFormat("en-CA", {
 export class QuickReplyNudgeTracker {
   private readonly recentByChannel = new Map<string, RecentMessage>();
   private readonly dailyCounts = new Map<string, DailyCount>();
+  private lastTargetMessageAt: number | null = null;
 
   constructor(
     private readonly targetUserId = QUICK_REPLY_TARGET_USER_ID,
@@ -56,6 +58,14 @@ export class QuickReplyNudgeTracker {
       timestampMs,
     });
 
+    const previousTargetMessageAt = this.lastTargetMessageAt;
+    if (authorId === this.targetUserId) {
+      this.lastTargetMessageAt = Math.max(
+        previousTargetMessageAt ?? timestampMs,
+        timestampMs,
+      );
+    }
+
     if (
       !isHuman ||
       authorId !== this.targetUserId ||
@@ -67,6 +77,13 @@ export class QuickReplyNudgeTracker {
 
     const elapsedMs = timestampMs - previous.timestampMs;
     if (elapsedMs < 0 || elapsedMs > QUICK_REPLY_WINDOW_MS) return false;
+
+    if (
+      previousTargetMessageAt !== null &&
+      timestampMs - previousTargetMessageAt < TARGET_IDLE_WINDOW_MS
+    ) {
+      return false;
+    }
 
     const day = this.dateKey(timestampMs);
     const daily = this.dailyCounts.get(day) ?? { count: 0, nudged: false };

@@ -20,15 +20,15 @@ describe("quick reply nudge", () => {
   test("nudges once when the fourth reply arrives within 30 seconds", () => {
     const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
 
-    for (const seconds of [0, 20, 40, 60]) {
+    for (const seconds of [0, 70, 140, 210]) {
       expect(tracker.observe(message("friend", seconds))).toBe(false);
       expect(tracker.observe(message(TARGET_ID, seconds + 10))).toBe(
-        seconds === 60,
+        seconds === 210,
       );
     }
 
-    expect(tracker.observe(message("friend", 80))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 81))).toBe(false);
+    expect(tracker.observe(message("friend", 280))).toBe(false);
+    expect(tracker.observe(message(TARGET_ID, 281))).toBe(false);
   });
 
   test("does not count late replies or consecutive target messages", () => {
@@ -47,6 +47,28 @@ describe("quick reply nudge", () => {
     expect(tracker.observe(message(TARGET_ID, 10))).toBe(false);
   });
 
+  test("does not count when the target spoke during the previous minute", () => {
+    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
+
+    expect(tracker.observe(message(TARGET_ID, 0))).toBe(false);
+    expect(tracker.observe(message("friend", 10))).toBe(false);
+    expect(tracker.observe(message(TARGET_ID, 20))).toBe(false);
+  });
+
+  test("tracks target activity across channels", () => {
+    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
+
+    expect(tracker.observe(message(TARGET_ID, 0, { channelId: "one" }))).toBe(
+      false,
+    );
+    expect(tracker.observe(message("friend", 50, { channelId: "two" }))).toBe(
+      false,
+    );
+    expect(tracker.observe(message(TARGET_ID, 55, { channelId: "two" }))).toBe(
+      false,
+    );
+  });
+
   test("keeps channel context separate and resets the daily threshold", () => {
     let day = "2026-08-01";
     const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => day);
@@ -59,14 +81,14 @@ describe("quick reply nudge", () => {
     );
 
     for (let index = 0; index < 4; index += 1) {
-      expect(tracker.observe(message("friend", index * 10))).toBe(false);
-      expect(tracker.observe(message(TARGET_ID, index * 10 + 1))).toBe(
+      expect(tracker.observe(message("friend", index * 70 + 70))).toBe(false);
+      expect(tracker.observe(message(TARGET_ID, index * 70 + 71))).toBe(
         index === 3,
       );
     }
 
     day = "2026-08-02";
-    expect(tracker.observe(message("friend", 50))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 51))).toBe(false);
+    expect(tracker.observe(message("friend", 350))).toBe(false);
+    expect(tracker.observe(message(TARGET_ID, 351))).toBe(false);
   });
 });
