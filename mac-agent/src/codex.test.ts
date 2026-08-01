@@ -16,6 +16,7 @@ import {
   codexEnvironment,
   codexProfileForJob as codexProfileForJobWithConfig,
   COMMUNITY_CHATBOT_PROFILE,
+  developerFilesystemPermissions,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
@@ -57,6 +58,26 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
+  test("gives developer tools their read-only sandbox dependencies", () => {
+    expect(
+      developerFilesystemPermissions(
+        [
+          "/workspace/worktrees/job-1/bin",
+          "/home/bun/.config/gh",
+          "/workspace/worktrees/job-1/bin",
+        ],
+        "linux",
+      ),
+    ).toBe(
+      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read",":workspace_roots"={"."="write"}}',
+    );
+    expect(
+      developerFilesystemPermissions(["/Library/MiniSago"], "darwin"),
+    ).toBe(
+      '{":minimal"="read","/Library/MiniSago"="read",":workspace_roots"={"."="write"}}',
+    );
+  });
+
   test("uses Luna for chat and routing, then Sol medium for owner dev work", () => {
     expect(COMMUNITY_CHATBOT_PROFILE).toEqual({
       model: "gpt-5.6-luna",
