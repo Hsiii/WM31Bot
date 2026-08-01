@@ -432,7 +432,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(28);
+    expect(PROMPT_VERSION).toBe(29);
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("use the reminder tools");
@@ -452,6 +452,9 @@ describe("Codex chatbot runner", () => {
     expect(prompt).not.toContain("dry punchline");
     expect(prompt).toContain("gentle teasing only when it fits");
     expect(prompt).toContain("proportionate reactions");
+    expect(prompt).toContain(
+      "Never use laugh-cry emojis in replies or reactions",
+    );
     expect(prompt).toContain("have a real lean");
     expect(prompt).toContain("暈 or 暈船 means catching feelings");
     expect(prompt).toContain(
