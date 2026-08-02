@@ -314,7 +314,7 @@ function createServer(session: ChatbotMcpSession) {
       "get_codex_usage",
       {
         description:
-          "Read the Codex usage percentages and exact reset times for the worker answering this request. Use when someone asks how much capacity Sago has left or when it resets. This tool is read-only and cannot consume reset credits or change the account.",
+          "Read the Codex usage percentages and exact reset times for the worker answering this request. Use for questions about Sago's tokens, quota, usage, remaining capacity, reset time, token 還有多少, or 額度. This tool is read-only and cannot consume reset credits or change the account.",
         inputSchema: {},
         annotations: readAnnotations,
       },
