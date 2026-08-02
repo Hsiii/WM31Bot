@@ -11,7 +11,6 @@ and [Workers](workers.md).
 | `GET /api/health`          | Configuration, aggregate worker capacity, and Mac status |
 | `GET /api/mac-agent/ws`    | Authenticated worker WebSocket                           |
 | `POST /api/chatbot/mcp`    | Bearer-bound MCP requests from active answer jobs        |
-| `POST /api/interactions`   | Discord slash commands and components                    |
 | `POST /api/github/webhook` | Verified GitHub pull-request events                      |
 
 Expose the HTTP routes through HTTPS and preserve WebSocket upgrade headers for
@@ -28,8 +27,7 @@ bun run dev
 ```
 
 Use `DISCORD_GATEWAY_DISABLED=true` whenever another deployment already owns
-the bot token. Register commands, publish the channel panel, and install workers
-using the dedicated setup guides.
+the bot token. Install workers using the dedicated setup guides.
 
 Before committing changes, run:
 
@@ -192,6 +190,5 @@ This removes its secret, compiled monitor, logs, traces, and isolated GitHub
 login without changing normal `~/.codex` or `~/.config/gh` state.
 
 For a full deployment removal, stop core and worker containers, remove the
-Discord interaction endpoint and GitHub webhook, then deliberately archive or
-delete persistent state and credentials according to the operator's retention
-requirements.
+GitHub webhook, then deliberately archive or delete persistent state and
+credentials according to the operator's retention requirements.

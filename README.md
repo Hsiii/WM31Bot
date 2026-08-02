@@ -12,8 +12,8 @@ updates.**
 - Answers mentions using conversation context, attachments, public web search,
   and accessible Discord history.
 - Accepts one unmentioned follow-up from the same person within 90 seconds.
-- Creates reminders and joins a requester's voice channel silently.
-- Lets members opt into configured Wordle and Brawl Stars channels.
+- Creates reminders and joins a requester's voice channel silently through
+  chat.
 - Publishes TOEFL vocabulary and selected Gamer forum and X updates.
 - Maintains Discord review threads for GitHub pull requests.
 - Optionally reacts to new community messages.
@@ -33,26 +33,14 @@ GitHub mutations, custom emoji copying, sending messages on someone's behalf,
 and access to Hsi's Mac are owner-only. Chat requests require an available
 Codex worker and are not queued.
 
-## Commands
-
-| Command                     | Purpose                                               |
-| --------------------------- | ----------------------------------------------------- |
-| `/join-wordle-channel`      | Open the Wordle channel                               |
-| `/leave-wordle-channel`     | Hide the Wordle channel                               |
-| `/join-brawlstars-channel`  | Open the Brawl Stars channel                          |
-| `/leave-brawlstars-channel` | Hide the Brawl Stars channel                          |
-| `/join-vc`                  | Follow the requester into their current voice channel |
-| `/leave-vc`                 | Disconnect from voice                                 |
-
 ## Availability
 
-| Feature                 | Availability                                      |
-| ----------------------- | ------------------------------------------------- |
-| Instagram link replies  | Every visible server and channel                  |
-| Chatbot                 | Selected guilds/channels and the owner elsewhere  |
-| Optional channel access | Configured WM31 server only                       |
-| Vocabulary and feeds    | Their configured server and channel               |
-| Pull-request threads    | The configured repository and Discord destination |
+| Feature                | Availability                                      |
+| ---------------------- | ------------------------------------------------- |
+| Instagram link replies | Every visible server and channel                  |
+| Chatbot                | Selected guilds/channels and the owner elsewhere  |
+| Vocabulary and feeds   | Their configured server and channel               |
+| Pull-request threads   | The configured repository and Discord destination |
 
 ## Run MiniSago
 

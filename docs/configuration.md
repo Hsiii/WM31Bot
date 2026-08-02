@@ -15,7 +15,6 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | Name                                   | Required  | Purpose                                                 |
 | -------------------------------------- | --------- | ------------------------------------------------------- |
 | `DISCORD_APPLICATION_ID`               | Yes       | Discord application ID                                  |
-| `DISCORD_PUBLIC_KEY`                   | Yes       | Verify interaction signatures                           |
 | `DISCORD_BOT_TOKEN`                    | Yes       | Discord REST and Gateway authentication                 |
 | `DISCORD_GUILD_ID`                     | No        | Guild for configured-guild features; defaults to WM31   |
 | `DISCORD_GATEWAY_DISABLED`             | No        | Use `true` for HTTP-only instances                      |
@@ -28,8 +27,6 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | `MINISAGO_REMINDER_STATE_FILE`         | No        | Persistent reminder state                               |
 | `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticate the fixed Mac worker profile               |
 | `MINISAGO_WORKER_BRIDGE_SECRET`        | Chatbot   | Authenticate the fixed Oracle worker profile            |
-| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`    | No        | Default destination for `bun run publish:panel`         |
-| `SELF_ASSIGNABLE_ROLES`                | No        | JSON role definitions; fallback targets WM31            |
 | `GITHUB_WEBHOOK_SECRET`                | PR bridge | Verify GitHub's `X-Hub-Signature-256`                   |
 | `GITHUB_PR_THREAD_CHANNEL_ID`          | No        | Discord destination for PR review threads               |
 | `GITHUB_PR_THREAD_STATE_FILE`          | No        | Persistent PR-to-thread mapping                         |
@@ -89,9 +86,7 @@ Do not place these files on the container's ephemeral filesystem.
 
 The repository still contains these Hsi-specific boundaries:
 
-- configured-guild fallback `1282936453134815275`;
-- WM31 Wordle role `1451976411152781466`;
-- WM31 Brawl Stars role `1450774352386719775`; and
+- configured-guild fallback `1282936453134815275`; and
 - PR review repository and reviewer mapping for `Hsiii/health-check-system`.
 
 A general self-host must change these source-level defaults or disable the
