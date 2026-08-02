@@ -1,7 +1,7 @@
 # Discord Setup
 
-This guide configures the Discord application, Gateway, interactions, commands,
-and permissions. Configure workers separately using [Workers](workers.md).
+This guide configures the Discord application, Gateway, and permissions.
+Configure workers separately using [Workers](workers.md).
 
 ## Create and configure the application
 
@@ -10,21 +10,16 @@ and permissions. Configure workers separately using [Workers](workers.md).
    Discord closes the Gateway with code `4014` and message features cannot read
    content.
 3. Set **Installation → Install Link** to **Discord Provided Link**.
-4. Copy `.env.example` to `.env.local` and provide the application ID, public
-   key, bot token, owner ID, and intended guild/channel access.
+4. Copy `.env.example` to `.env.local` and provide the application ID, bot
+   token, owner ID, and intended guild/channel access.
 5. Run `bun run sync:install` to update the application's Default Install
-   Settings.
-6. Point the Interactions Endpoint URL to
-   `<public-origin>/api/interactions`. Production uses
-   `https://bot.hsichen.dev/api/interactions`.
-
-Install with the `bot` and `applications.commands` scopes. Application defaults
-affect new installs only; update existing bot roles and channel overrides
-manually.
+   Settings and clear any stale global or configured-guild slash commands.
+   Install with the `bot` scope. Application defaults affect new installs only;
+   update existing bot roles and channel overrides manually.
 
 ## Permissions
 
-The synchronized permission bitfield is `9122780097600`:
+The synchronized permission bitfield is `9122511662144`:
 
 - Add Reactions
 - View Channels
@@ -32,38 +27,16 @@ The synchronized permission bitfield is `9122780097600`:
 - Manage Messages
 - Read Message History
 - Connect
-- Manage Roles
 - Manage Threads
 - Create Public Threads
 - Send Messages in Threads
 - Create Expressions
 
-Manage Roles is needed only for configured-guild channel access. The bot's
-highest role must remain above every self-assignable role. Manage Messages pins
-PR review requests; thread permissions support review discussions. Add
-Reactions supports answer and ambient reactions. Connect supports `/join-vc`.
-Create Expressions is needed in every destination guild where the owner may
-copy emoji. MiniSago does not need Manage Webhooks.
-
-## Commands and channel panel
-
-Register commands against the configured guild:
-
-```bash
-bun run register:commands
-```
-
-The runtime rejects configured-guild commands elsewhere even if Discord has a
-stale global registration.
-
-Publish or refresh the optional-channel panel with:
-
-```bash
-bun run publish:panel -- <channel-id>
-```
-
-The panel and role commands operate only in `DISCORD_GUILD_ID` and only on the
-configured managed roles.
+Manage Messages pins PR review requests; thread permissions support review
+discussions. Add Reactions supports answer and ambient reactions. Connect lets
+the host-bound MCP tools join and leave voice channels. Create Expressions is
+needed in every destination guild where the owner may copy emoji. MiniSago does
+not need Manage Webhooks.
 
 ## Gateway ownership
 

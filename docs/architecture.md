@@ -9,7 +9,7 @@ Codex runs on authenticated workers that connect outbound to the service.
 ```mermaid
 flowchart LR
     U["Discord user"] --> D["Discord Gateway / REST"]
-    D --> H["Hosted service<br/>authorization, context, interactions"]
+    D --> H["Hosted service<br/>authorization, context, actions"]
     H --> W["Reserved outbound<br/>WebSocket workflow"]
     W --> O["Oracle worker<br/>chat, dev"]
     W -. "fallback or Mac-only" .-> M["Mac helper<br/>chat, dev, mac"]
@@ -29,7 +29,7 @@ local Mac resources.
 
 The Bun service handles:
 
-- Discord Gateway events, REST calls, interactions, and GitHub webhooks;
+- Discord Gateway events, REST calls, and GitHub webhooks;
 - chatbot authorization and requester-visible channel filtering;
 - nearby context, history search, member aliases, and bounded Discord actions;
 - worker authentication, reservation, routing, timeouts, and result delivery;

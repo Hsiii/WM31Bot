@@ -14,7 +14,6 @@ import {
   handleGithubWebhookRequest,
   isGithubWebhookConfigured,
 } from "../lib/discord/github-pr-webhook";
-import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
 import { startXPostMonitor } from "../lib/discord/x-post-monitor";
 import {
@@ -35,14 +34,12 @@ function buildHealthResponse() {
       ok: true,
       configured: {
         applicationId: summary.hasApplicationId,
-        publicKey: summary.hasPublicKey,
         botToken: summary.hasBotToken,
         guildId: summary.hasGuildId,
         githubWebhook: isGithubWebhookConfigured(),
         macBridge: macAgentBridge.isConfigured(),
       },
       workers: macAgentBridge.getWorkerSummary(),
-      roleCount: summary.roleCount,
     });
   } catch (error) {
     console.error("Invalid health check configuration:", error);
@@ -69,10 +66,6 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
 
   if (pathname === "/api/chatbot/mcp") {
     return handleChatbotMcpRequest(request);
-  }
-
-  if (request.method === "POST" && pathname === "/api/interactions") {
-    return handleDiscordInteractionRequest(request);
   }
 
   if (request.method === "POST" && pathname === "/api/github/webhook") {

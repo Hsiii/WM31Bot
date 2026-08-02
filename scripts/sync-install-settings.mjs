@@ -1,5 +1,6 @@
 const applicationId = process.env.DISCORD_APPLICATION_ID;
 const botToken = process.env.DISCORD_BOT_TOKEN;
+const guildId = process.env.DISCORD_GUILD_ID?.trim();
 
 if (!applicationId || !botToken) {
   console.error("DISCORD_APPLICATION_ID and DISCORD_BOT_TOKEN are required.");
@@ -16,14 +17,13 @@ const requiredGuildPermissionFlags = [
   ["MANAGE_MESSAGES", 1n << 13n],
   ["READ_MESSAGE_HISTORY", 1n << 16n],
   ["CONNECT", 1n << 20n],
-  ["MANAGE_ROLES", 1n << 28n],
   ["MANAGE_THREADS", 1n << 34n],
   ["CREATE_PUBLIC_THREADS", 1n << 35n],
   ["SEND_MESSAGES_IN_THREADS", 1n << 38n],
   ["CREATE_GUILD_EXPRESSIONS", 1n << 43n],
 ];
 
-const guildInstallScopes = ["applications.commands", "bot"];
+const guildInstallScopes = ["bot"];
 const guildInstallPermissions = requiredGuildPermissionFlags
   .reduce((permissions, [, flag]) => permissions | flag, 0n)
   .toString();
@@ -77,6 +77,22 @@ await discordApi("/applications/@me", {
   }),
 });
 
+const commandPaths = [
+  `/applications/${applicationId}/commands`,
+  ...(guildId
+    ? [`/applications/${applicationId}/guilds/${guildId}/commands`]
+    : []),
+];
+
+await Promise.all(
+  commandPaths.map((path) =>
+    discordApi(path, {
+      method: "PUT",
+      body: "[]",
+    }),
+  ),
+);
+
 const permissionNames = requiredGuildPermissionFlags
   .map(([name]) => name)
   .join(", ");
@@ -87,6 +103,9 @@ inviteUrl.searchParams.set("permissions", guildInstallPermissions);
 inviteUrl.searchParams.set("integration_type", GUILD_INSTALL);
 
 console.log("Updated Discord Guild Install default settings.");
+console.log(
+  `Cleared slash commands globally${guildId ? ` and for guild ${guildId}` : ""}.`,
+);
 console.log(`Scopes: ${guildInstallScopes.join(", ")}`);
 console.log(`Permissions: ${guildInstallPermissions} (${permissionNames})`);
 console.log(`Direct guild install URL: ${inviteUrl.toString()}`);
