@@ -47,9 +47,10 @@ MiniSago can:
 Mention answers start with nearby conversation context. When that is
 insufficient, the answer model can use MiniSago's short-lived MCP tools to read
 more channel history, search only channels the requester can access, resolve
-member aliases, inspect a previous answer's observable trace, or add one
-validated reaction. Simple questions skip the former context-planning model
-call.
+member aliases, or inspect a previous answer's observable trace through one
+consolidated context tool. Simple questions skip the former context-planning
+model call. Reactions are returned with the final structured answer and
+validated by the hosted Discord broker.
 
 Anyone who can chat with Sago can also ask for her Codex usage percentage and
 reset time before starting something expensive. The read-only MCP tool reads the

@@ -97,6 +97,8 @@ opaque bearer tokens created for an active chatbot workflow. Each token is
 bound in memory to the real requester and Discord permission context, expires
 after 16 minutes, and is revoked when the workflow finishes. MCP arguments
 cannot select a requester, guild, channel, worker capability, or mutation scope.
+History, guild search, and member aliases share one `resolve_context` tool so a
+model can request the necessary evidence in one bounded parallel operation.
 
 The read-only `get_codex_usage` tool asks the worker reserved by a workflow to
 query its local authenticated Codex app-server. The bridge validates the bounded
