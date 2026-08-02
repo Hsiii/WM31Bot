@@ -207,6 +207,7 @@ describe("MiniSago MCP server", () => {
     const usageTool = tools.tools.find(
       (tool) => tool.name === "get_codex_usage",
     );
+    expect(usageTool?.description).toContain("token 還有多少");
     expect(usageTool?.annotations).toMatchObject({
       readOnlyHint: true,
       destructiveHint: false,

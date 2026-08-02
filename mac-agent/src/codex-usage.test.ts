@@ -3,9 +3,24 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { parseCodexUsageResponse, readCodexUsage } from "./codex-usage";
+import {
+  codexUsageEnvironment,
+  parseCodexUsageResponse,
+  readCodexUsage,
+} from "./codex-usage";
 
 describe("Codex usage reader", () => {
+  test("uses the shared Codex runtime path with the Bun Node shim", () => {
+    const environment = codexUsageEnvironment(
+      "/tmp/codex-home",
+      "/usr/local/bin/codex",
+    );
+
+    expect(environment.PATH.split(":")).toContain(
+      "/usr/local/bun-node-fallback-bin",
+    );
+  });
+
   test("parses, clamps, labels, and sorts usage windows", () => {
     expect(
       parseCodexUsageResponse(

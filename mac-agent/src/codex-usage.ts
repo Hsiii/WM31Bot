@@ -1,35 +1,13 @@
-import { dirname } from "node:path";
-
 import type {
   CodexUsageSnapshot,
   CodexUsageWindow,
 } from "../../lib/chatbot/protocol";
+import { codexEnvironment } from "./codex";
 
 const USAGE_READ_TIMEOUT_MS = 5_000;
 
-function usageEnvironment(codexHome: string, codexPath: string) {
-  const environment: Record<string, string> = {
-    CODEX_HOME: codexHome,
-    PATH: `${dirname(codexPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,
-    TERM: "dumb",
-    NO_COLOR: "1",
-  };
-  for (const name of [
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "LOGNAME",
-    "NO_PROXY",
-    "HTTPS_PROXY",
-    "HTTP_PROXY",
-    "SSL_CERT_FILE",
-    "TMPDIR",
-    "USER",
-  ]) {
-    const value = process.env[name];
-    if (value) environment[name] = value;
-  }
-  return environment;
+export function codexUsageEnvironment(codexHome: string, codexPath: string) {
+  return codexEnvironment(codexHome, codexPath);
 }
 
 function percentage(value: unknown) {
@@ -103,7 +81,7 @@ export async function readCodexUsage(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
-    env: usageEnvironment(options.codexHome, options.codexPath),
+    env: codexUsageEnvironment(options.codexHome, options.codexPath),
   });
   const reader = child.stdout.getReader();
   const decoder = new TextDecoder();
