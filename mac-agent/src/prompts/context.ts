@@ -1,4 +1,4 @@
-import type { ChatbotJob, ChatbotMessage } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob, ChatbotMessage } from "../../../src/chatbot/protocol";
 
 function block(name: string, value: unknown) {
   const content = typeof value === "string" ? value : JSON.stringify(value);

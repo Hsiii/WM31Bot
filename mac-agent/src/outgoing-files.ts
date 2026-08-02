@@ -1,7 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 
-import type { ChatbotOutgoingFile } from "../../lib/chatbot/protocol";
+import type { ChatbotOutgoingFile } from "../../src/chatbot/protocol";
 
 const MAX_OUTGOING_FILE_BYTES = 8 * 1024 * 1024;
 

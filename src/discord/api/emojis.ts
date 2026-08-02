@@ -1,4 +1,4 @@
-import type { DiscordRequest } from "./chatbot";
+import type { DiscordRequest } from "../gateway/chatbot";
 
 const CREATE_GUILD_EXPRESSIONS = 1n << 43n;
 const ADMINISTRATOR = 1n << 3n;

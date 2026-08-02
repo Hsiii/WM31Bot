@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotAccessConfig } from "../../lib/chatbot/access";
+import type { ChatbotAccessConfig } from "../../src/chatbot/access";
 import type {
   ChatbotJob,
   ChatbotMcpTraceCall,
-} from "../../lib/chatbot/protocol";
+} from "../../src/chatbot/protocol";
 import {
   ANSWER_OUTPUT_SCHEMA,
   assertChatbotJobAllowed as assertChatbotJobAllowedWithConfig,

@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../../src/chatbot/protocol";
 import {
   ANSWER_OUTPUT_SCHEMA,
   buildAnswerPrompt,

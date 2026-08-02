@@ -1,5 +1,4 @@
-import { getInstagramReplyUrls } from "./instagram-links";
-import { getTwitterReplyUrls } from "./twitter-links";
+import { getInstagramReplyUrls, getTwitterReplyUrls } from "./social-links";
 import {
   ChatbotConversationTracker,
   createDiscordRequest,
@@ -8,13 +7,13 @@ import {
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
-} from "../chatbot/access";
+} from "../../chatbot/access";
 import {
   AmbientReactionController,
   getAmbientReactionPolicy,
   type AmbientReactionPolicy,
 } from "./social-reactions";
-import { DiscordReactionBroker } from "./reactions";
+import { DiscordReactionBroker } from "../api/reactions";
 import {
   QuickReplyNudgeTracker,
   QUICK_REPLY_TARGET_USER_ID,
@@ -27,7 +26,7 @@ import {
   type JoinVoiceChannelResult,
   type LeaveVoiceChannelResult,
   type VoiceGateway,
-} from "./voice";
+} from "../api/voice";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";

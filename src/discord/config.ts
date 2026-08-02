@@ -1,5 +1,7 @@
 import { getChatbotAccessConfig } from "../chatbot/access";
 
+export const TARGET_GUILD_ID = "1282936453134815275";
+
 export function getPublicDiscordSummary() {
   const chatbotAccess = getChatbotAccessConfig();
 

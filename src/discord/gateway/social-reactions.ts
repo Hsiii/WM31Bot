@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotAccessConfig } from "../chatbot/access";
+import type { ChatbotAccessConfig } from "../../chatbot/access";
 import {
   macAgentBridge,
   type DispatchResult,
   type MacAgentJobResult,
-} from "../chatbot/bridge";
-import type { ChatbotJob, ChatbotMessage } from "../chatbot/protocol";
+} from "../../chatbot/bridge";
+import type { ChatbotJob, ChatbotMessage } from "../../chatbot/protocol";
 import {
   getNearbyHumanMessages,
   isChatbotAuthorized,
@@ -17,7 +17,7 @@ import {
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
-} from "./reactions";
+} from "../api/reactions";
 
 const HOUR_MS = 60 * 60_000;
 

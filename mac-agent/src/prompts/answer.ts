@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../../src/chatbot/protocol";
 import { answerContext } from "./context";
 
 export const PROMPT_VERSION = 30;

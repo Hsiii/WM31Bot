@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../src/chatbot/protocol";
 import { ChatbotTraceStore } from "./trace-store";
 
 const directories: string[] = [];
