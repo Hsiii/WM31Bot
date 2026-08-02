@@ -1,26 +1,26 @@
 import type { Server } from "bun";
 
 import { getChatbotAccessConfig } from "./chatbot/access";
-import { getPublicDiscordSummary } from "../lib/discord/env";
+import { getPublicDiscordSummary } from "./discord/config";
 import {
   macAgentBridge,
   macAgentWebSocketHandler,
   type MacAgentSocketData,
 } from "./chatbot/bridge";
 import { handleChatbotMcpRequest } from "./chatbot/mcp";
-import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
-import { startInstagramGateway } from "../lib/discord/instagram-gateway";
+import { startGamerForumMonitor } from "./discord/jobs/gamer-forum-monitor";
+import { startInstagramGateway } from "./discord/gateway/gateway";
 import {
   handleGithubWebhookRequest,
   isGithubWebhookConfigured,
-} from "../lib/discord/github-pr-webhook";
-import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
-import { startXPostMonitor } from "../lib/discord/x-post-monitor";
+} from "./discord/jobs/github-pr-webhook";
+import { startToeflVocabScheduler } from "./discord/jobs/toefl-vocab";
+import { startXPostMonitor } from "./discord/jobs/x-post-monitor";
 import {
   configureChatbotReminderScheduler,
   type Reminder,
-} from "../lib/discord/reminders";
-import { createDiscordRequest } from "../lib/discord/chatbot";
+} from "./discord/jobs/reminders";
+import { createDiscordRequest } from "./discord/gateway/chatbot";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });

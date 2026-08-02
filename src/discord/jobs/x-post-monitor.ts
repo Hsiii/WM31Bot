@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { TARGET_GUILD_ID } from "./constants";
+import { TARGET_GUILD_ID } from "../config";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_HANDLE = "thsottiaux";

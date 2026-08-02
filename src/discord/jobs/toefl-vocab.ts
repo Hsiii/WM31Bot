@@ -1,8 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import vocabData from "../../data/toefl-vocab.json";
-import { TARGET_GUILD_ID } from "./constants";
+import vocabData from "./toefl-vocab.json";
+import { TARGET_GUILD_ID } from "../config";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_DAILY_TIME = "08:00";

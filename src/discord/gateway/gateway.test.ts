@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ChannelTaskQueue } from "./instagram-gateway";
+import { ChannelTaskQueue } from "./gateway";
 
 describe("Discord gateway channel scheduling", () => {
   test("runs messages from one channel in arrival order", async () => {

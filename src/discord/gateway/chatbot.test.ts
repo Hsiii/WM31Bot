@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotAccessConfig } from "../../src/chatbot/access";
+import type { ChatbotAccessConfig } from "../../chatbot/access";
 import {
   ChatbotConversationTracker,
   canMemberSearchChannel,

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotAccessConfig } from "../../src/chatbot/access";
-import { macAgentBridge, type MacAgentJobResult } from "../../src/chatbot/bridge";
-import { CHATBOT_CONTEXT_LIMITS } from "../../src/chatbot/context-limits";
+import type { ChatbotAccessConfig } from "../../chatbot/access";
+import { macAgentBridge, type MacAgentJobResult } from "../../chatbot/bridge";
+import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
 import {
   registerChatbotMcpSession,
   type ChatbotMcpSessionSnapshot,
-} from "../../src/chatbot/mcp";
+} from "../../chatbot/mcp";
 import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
@@ -17,21 +17,21 @@ import type {
   ChatbotMemberResult,
   ChatbotMessage,
   ChatbotTraceContext,
-} from "../../src/chatbot/protocol";
+} from "../../chatbot/protocol";
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
-} from "./reactions";
+} from "../api/reactions";
 import {
   addGuildEmojiFromAttachment,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
   selectEmojiImageAttachment,
-} from "./emojis";
-import { getChatbotReminderScheduler } from "./reminders";
-import { sendChannelMessage } from "./channel-messages";
-import { joinMemberVoiceChannel, leaveVoiceChannel } from "./voice";
+} from "../api/emojis";
+import { getChatbotReminderScheduler } from "../jobs/reminders";
+import { sendChannelMessage } from "../api/channel-messages";
+import { joinMemberVoiceChannel, leaveVoiceChannel } from "../api/voice";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
