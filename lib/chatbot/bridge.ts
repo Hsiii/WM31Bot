@@ -186,10 +186,7 @@ function repositoryKey(repository: string) {
   return repository.toLocaleLowerCase("en-US");
 }
 
-function supports(
-  worker: Worker,
-  capabilities: ChatbotWorkerCapability[],
-) {
+function supports(worker: Worker, capabilities: ChatbotWorkerCapability[]) {
   return worker.profile === "mac" || !capabilities.includes("mac");
 }
 
