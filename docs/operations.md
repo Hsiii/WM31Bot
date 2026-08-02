@@ -1,251 +1,49 @@
 # Operations
 
-This runbook records setup outside the repository, credential handling,
-production topology, privacy guarantees, and recovery details. Commands and
-mechanical defaults remain discoverable in `package.json`, the environment
-examples, Compose, and deployment scripts. The user-facing overview lives in
-[README.md](../README.md).
-
-## Deployment structure
-
-```mermaid
-flowchart LR
-    U["Discord user"] --> D["Discord Gateway / REST"]
-    D --> H["Hosted MiniSago<br/>authorization, context, interactions"]
-    H --> W["Reserved outbound<br/>WebSocket workflow"]
-    W --> O["Oracle worker<br/>chat, dev"]
-    W -. "fallback or Mac-only work" .-> M["Mac helper<br/>chat, dev, mac"]
-    O --> C["Codex<br/>Luna chat / Sol development"]
-    M --> C
-    H --> S[("Persistent monitor<br/>and webhook state")]
-    O --> V[("Codex, GitHub, repository,<br/>and trace volumes")]
-```
-
-The hosted service owns Discord access, authorization, context retrieval,
-scheduled posts, and webhook handling. Workers make authenticated outbound
-connections to it; no worker port should be public. Each Discord workflow stays
-on one reserved worker until its routing, planning, and answer stages finish.
-Oracle is the preferred always-on worker, while the unlocked Mac is a
-lower-priority fallback and the only worker allowed to advertise local Mac
-access.
-
-## Discord setup
-
-1. Run `bun install`, copy `.env.example` to `.env.local`, and provide the
-   Discord application ID, public key, and bot token.
-2. In the Discord Developer Portal, enable Bot -> Privileged Gateway Intents ->
-   Message Content. Without it, Discord closes the Gateway with code `4014` and
-   cannot deliver message content for link replies or chatbot context.
-3. Keep Installation -> Install Link set to `Discord Provided Link`, then run
-   `bun run sync:install`. Discord uses the application's Default Install
-   Settings for the bot profile's Add App flow; README invite text does not
-   control it.
-4. Run `bun run register:commands` with `DISCORD_GUILD_ID` set. The runtime
-   rejects configured-guild commands elsewhere even if they are registered
-   globally.
-5. Optionally run `bun run publish:panel -- <channel-id>` for configured-guild
-   role access and configure any scheduled monitors in `.env.local`.
-6. Run `bun run dev` locally, or deploy the hosted service.
-7. Point the Interactions Endpoint URL at
-   `<public-origin>/api/interactions`. The current production origin is
-   `https://bot.hsichen.dev`.
-8. Configure a worker secret on both sides, then connect either the Oracle
-   worker or Mac helper.
-
-The synced permission bitfield is `9122780097600`, containing:
-
-- Add Reactions
-- View Channels
-- Send Messages
-- Manage Messages
-- Read Message History
-- Connect
-- Manage Roles
-- Manage Threads
-- Create Public Threads
-- Send Messages in Threads
-- Create Expressions
-
-Manage Roles is needed only for configured-guild role access. Manage Messages
-pins PR review requests, and the thread permissions support review discussions.
-Add Reactions is used only when ambient reactions are enabled. MiniSago does
-not require Manage Webhooks. Create Expressions lets the owner ask MiniSago to
-copy an emote between any two guilds the bot has joined.
-Connect lets `/join-vc` place MiniSago in the requesting member's current voice
-channel. Existing installs may need this permission enabled on the bot role and
-target channel before the command can join.
-Application defaults affect new installs only; grant Create Expressions to the
-existing bot role in every destination guild and update channel overrides
-manually. For role assignment, the bot's highest role must remain above every
-self-assignable role.
-
-Only one Gateway-enabled deployment may use a bot token. Set
-`DISCORD_GATEWAY_DISABLED=true` for local HTTP development while production is
-connected. If Instagram messages are deleted or reappear under a user's display
-name, stop the retired webhook-based deployment and remove its webhook under
-Server Settings -> Integrations -> Webhooks.
-
-## Worker architecture and privacy
-
-The hosted service is a context broker; Codex runs behind an authenticated
-outbound WebSocket connection. There is no public worker endpoint or durable
-job queue. A workflow reserves one worker for routing, any MCP-backed evidence
-resolution, and the final answer, then releases it.
-
-The service exposes one Streamable HTTP MCP route for workers. It accepts only
-opaque bearer tokens created for an active chatbot workflow. Each token is
-bound in memory to the real requester and Discord permission context, expires
-after 16 minutes, and is revoked when the workflow finishes. MCP arguments
-cannot select a requester, guild, channel, worker capability, or mutation scope.
-History, guild search, and member aliases share one `resolve_context` tool so a
-model can request the necessary evidence in one bounded parallel operation.
-
-The read-only `get_codex_usage` tool asks the worker reserved by a workflow to
-query its local authenticated Codex app-server. The bridge validates the bounded
-usage snapshot before the MCP server returns percentages and reset times. No
-account mutation or reset-credit operation is exposed.
-
-Guild searches are restricted to channels where the requester has View Channel
-and Read Message History. If role data is unavailable, search falls back to the
-current channel. Member roles, join dates, presence, and reaction-member lists
-are not sent to Codex.
-
-Each Codex run is ephemeral. Answer jobs receive the selected message context
-and at most 10 supported image, PDF, or text attachments, 20 MB each and 40 MB
-total. Routing and ambient jobs never download attachments. Downloads accept
-only Discord HTTPS CDN hosts, stop when the request is cancelled, and are
-deleted afterward. Normal Codex configuration, memories, user-configured MCP
-servers, plugins, and private browser sessions are unavailable. Answer jobs
-receive only MiniSago's curated MCP tools.
-
-Chat runs in an isolated workspace with restricted permissions. Owner
-development enables commands and network access only inside a selected
-disposable checkout; the container remains the outer boundary on Oracle.
-The Linux worker uses Codex's Bubblewrap sandbox. Production must allow only
-the namespace and mount syscalls Bubblewrap needs and load the dedicated worker
-AppArmor profile; the worker process itself remains unprivileged.
-Production credentials are not mounted. Owner development sandboxes receive
-read-only access to the dedicated repo-scoped GitHub CLI state, immutable
-per-job GitHub command guards, and Linux `/proc` for Bun; only the selected
-checkout is writable. Ordinary chat receives none of that access. Ordinary chat
-stages have a two-minute timeout; final owner development answers may run for
-15 minutes.
-
-## Oracle worker
-
-Use an OCI Ampere A1 Compute VM rather than Container Instances because the
-worker requires persistent Docker volumes. Confirm current capacity, pricing,
-and reclamation policy in the OCI console and official documentation rather
-than relying on values copied into this repository.
-
-The intended split is:
-
-- Oracle runs one higher-priority `chat,dev` worker with separate Codex and
-  dedicated GitHub CLI volumes.
-- Mac advertises lower-priority `chat,dev,mac`, acts as fallback, and handles
-  work that explicitly needs local resources.
-
-On the Ubuntu AArch64 VM, install Docker Engine with the Compose plugin, clone
-the repository, and configure `.env.worker`:
-
-```bash
-cp .env.worker.example .env.worker
-chmod 600 .env.worker
-docker compose -f compose.worker.yaml build
-docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
-docker compose -f compose.worker.yaml up -d
-docker compose -f compose.worker.yaml logs -f worker
-```
-
-Set the exact repository allowlist in `MINISAGO_GITHUB_REPOSITORIES`. Put the
-repository that implements chatbot behavior in `MINISAGO_CHATBOT_REPOSITORY`
-when the allowlist has more than one entry. Repositories are cloned into a
-disposable worktree on first use and do not need to exist locally beforehand. Put the
-same 32-byte-or-longer secret in the worker's
-`MINISAGO_MAC_BRIDGE_SECRET` and the hosted broker's
-`MINISAGO_WORKER_BRIDGE_SECRET`. Device authentication must write only to the
-persistent Codex volume.
-
-Authenticate the dedicated GitHub login by passing its fine-grained token to
-`gh` over standard input. Never place the token in Discord, a Codex task,
-`.env.worker`, a shell argument, or the repository:
-
-```bash
-docker compose -f compose.worker.yaml run --rm worker gh auth login --hostname github.com --git-protocol https --with-token
-docker compose -f compose.worker.yaml up -d --force-recreate
-docker compose -f compose.worker.yaml exec worker gh auth status
-```
-
-The worker needs outbound HTTPS and WSS only. Do not publicly expose Docker,
-Codex, SSH, or workspace volumes. ChatGPT device authentication can require
-reauthentication and remains subject to plan limits; it is not an uptime
-guarantee.
+This runbook covers deployment, verification, logs, recovery, and removal.
+Initial Discord and worker installation live in [Discord setup](discord-setup.md)
+and [Workers](workers.md).
 
 ## Runtime endpoints
 
-| Endpoint                   | Purpose                                                                   |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `GET /api/health`          | Configuration health, aggregate worker capacity, and Mac availability     |
-| `GET /api/mac-agent/ws`    | Authenticated worker WebSocket; returns `404` when the bridge is disabled |
-| `POST /api/interactions`   | Discord slash commands and components                                     |
-| `POST /api/github/webhook` | Verified GitHub pull-request events                                       |
+| Endpoint                   | Purpose                                                  |
+| -------------------------- | -------------------------------------------------------- |
+| `GET /api/health`          | Configuration, aggregate worker capacity, and Mac status |
+| `GET /api/mac-agent/ws`    | Authenticated worker WebSocket                           |
+| `POST /api/chatbot/mcp`    | Bearer-bound MCP requests from active answer jobs        |
+| `POST /api/interactions`   | Discord slash commands and components                    |
+| `POST /api/github/webhook` | Verified GitHub pull-request events                      |
 
-Expose the HTTP endpoints through the hosted service. Preserve WebSocket
-upgrade headers for `/api/mac-agent/ws`; workers connect outbound to it.
+Expose the HTTP routes through HTTPS and preserve WebSocket upgrade headers for
+`/api/mac-agent/ws`. The worker WebSocket returns `404` when no bridge secret is
+configured.
 
-## Mac helper
+## Local operation
 
-Prerequisites are Bun, Xcode command-line tools including `swiftc`, an existing
-`~/.codex/auth.json`, and the same `MINISAGO_MAC_BRIDGE_SECRET` on the helper and
-hosted service. The edge must preserve WebSocket upgrades for
-`/api/mac-agent/ws`.
-
-Authenticate the isolated GitHub login, then install:
+Install and start the hosted service:
 
 ```bash
-GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github" gh auth login --hostname github.com --git-protocol https --with-token
-bun run mac-agent:install
-bun run mac-agent:status
+bun install
+bun run dev
 ```
 
-The per-user LaunchAgent `dev.hsichen.minisago-mac-agent` connects only while
-the session is unlocked, disconnects before sleep or lock, and reconnects after
-unlock. It starts automatically at login. Display sleep without a session lock
-does not disconnect it.
+Use `DISCORD_GATEWAY_DISABLED=true` whenever another deployment already owns
+the bot token. Register commands, publish the channel panel, and install workers
+using the dedicated setup guides.
 
-Metadata-only logs live under
-`~/Library/Application Support/MiniSago/logs`; they exclude prompts, Discord
-messages, answers, links, and attachment contents. Debug traces live at
-`~/Library/Application Support/MiniSago/traces.sqlite`. They may contain message
-context, sanitized attachment metadata, bounded MCP tool names and arguments,
-model output, errors, and timings, but never MCP bearer tokens, signed URL
-parameters, tool-result message bodies, or downloaded attachment bodies. They
-are owner-readable, expire after 14 days, and are pruned oldest-first above
-250 MB.
+Before committing changes, run:
 
-`bun run mac-agent:uninstall` removes the helper, its secret, compiled monitor,
-logs, traces, and isolated GitHub logins. It does not modify the normal
-`~/.codex` or `~/.config/gh` state.
+```bash
+bun run build
+bun run --cwd mac-agent build
+bun test
+bun run format:check
+```
 
-## GitHub review webhook
+## Container images
 
-In the configured GitHub repository -> Settings -> Webhooks, configure:
-
-- Payload URL: `<public-origin>/api/github/webhook`
-- Content type: `application/json`
-- Secret: the value of `GITHUB_WEBHOOK_SECRET`
-- Events: Pull requests only
-
-The production Discord destination is the `專案討論` channel
-`1521506395034226830` in guild `1521168712579682567`. MiniSago has been verified
-there for viewing, sending, reading history, creating public threads, sending in
-threads, and managing threads. The state file must persist so repeated webhook
-deliveries reuse threads and merged pull requests archive the correct thread.
-
-## Production deployment
-
-Every push to `main` publishes Linux AMD64 and ARM64 images with a moving `main`
-tag and immutable `sha-<commit>` tags:
+Every push to `main` publishes the core and worker images with moving `main`
+tags and immutable `sha-<commit>` tags:
 
 ```text
 ghcr.io/hsiii/minisago
@@ -253,38 +51,147 @@ ghcr.io/hsiii/minisago-worker
 ```
 
 For a general self-host, run the core image with the hosted-service variables,
-persist `/app/state`, expose container port `3000` through an HTTPS reverse
-proxy, and run at least one separately authenticated worker. Replace every
-`bot.hsichen.dev` example in the environment files with that public origin.
+persist `/app/state`, expose port `3000` through an HTTPS reverse proxy, and run
+at least one separately authenticated worker. Replace the
+`bot.hsichen.dev` examples with the deployment's public origin.
 
-The remaining deployment procedure is specific to Hsi's Sago Cloud:
+## Sago Cloud deployment
 
-Changes reach production through `main`. `bun run deploy` requires a clean local
-`main` matching `origin/main`, waits for that commit's published images, then
-asks the Sago Cloud operations checkout at `/srv/sago-cloud/operations` to
-deploy the core service and worker as one release.
+Production changes flow through `main`. The deployment command requires a clean
+local `main` exactly matching `origin/main`:
+
+```bash
+bun run deploy
+```
+
+The script waits for both images, then asks the operations checkout at
+`/srv/sago-cloud/operations` to deploy core and worker as one release. It
+connects through the local `sago-cloud` SSH alias over Tailscale and retries
+connection timeouts three times. Use `SAGO_CLOUD_HOST` only for a replacement
+host.
 
 The VM pulls published images rather than cloning this repository. Production
-configuration lives under `/srv/sago-cloud/secrets`. Only the core container
-joins `sago_cloud_edge` under the `bot-core` alias. Worker Codex state, GitHub
-CLI state, repositories, and worktrees remain in external persistent volumes.
-Developer jobs receive write access to only their cloned repository and its Git
-metadata, so approved code jobs can commit and push without exposing another
-job's checkout.
-The bot's monitor and webhook state remains in
-`sago_cloud_bot-core-state`, using the `/app/state` paths documented in
-[Configuration](configuration.md#persistent-state).
+secrets live under `/srv/sago-cloud/secrets`. Only the core container joins
+`sago_cloud_edge` under the `bot-core` alias. The following remain in external
+persistent volumes:
 
-The deployment connects through the local `sago-cloud` SSH alias over
-Tailscale and retries connection timeouts three times. If it still fails,
-confirm `ssh sago-cloud` succeeds and rerun. Use `SAGO_CLOUD_HOST` only when
-targeting a replacement host.
+- bot monitor, reminder, and webhook state;
+- worker Codex and GitHub CLI state;
+- worker traces; and
+- disposable repository/worktree storage.
 
-After deployment, verify:
+## Verification
+
+After deployment:
 
 ```bash
 curl https://bot.hsichen.dev/api/health
 ```
 
-The edge proxy must preserve WebSocket upgrade headers for
-`wss://bot.hsichen.dev/api/mac-agent/ws`.
+A healthy response has `ok: true`, required configuration flags set, and at
+least one available worker. `mac: offline` is normal while the Mac is locked,
+asleep, disconnected, or not running.
+
+Also verify the relevant behavior after risky changes:
+
+- mention MiniSago in an authorized channel;
+- confirm an owner development request routes to an advertised repository;
+- confirm worker logs show protocol authentication rather than reconnect loops;
+- deliver a GitHub webhook and ensure it reuses the mapped thread; and
+- check scheduled state files remain under `/app/state`.
+
+## Logs and traces
+
+Core logs cover Gateway lifecycle, monitors, webhooks, worker connections, and
+request failures. Worker logs intentionally contain metadata only.
+
+Mac logs and traces live under:
+
+```text
+~/Library/Application Support/MiniSago/logs
+~/Library/Application Support/MiniSago/traces.sqlite
+```
+
+Oracle stores equivalent state in its persistent worker volume. Traces expire
+after 14 days and prune above 250 MB. See [Security](security.md#retention-and-privacy)
+for their contents and exclusions.
+
+## Common recovery procedures
+
+### Worker unavailable
+
+1. Check `/api/health` for connected, available, capacity, active, and Mac
+   status.
+2. Inspect worker logs for authentication, protocol-version, Codex-login, or
+   reconnect failures.
+3. Verify the worker and hosted service use the matching profile secret.
+4. Confirm Codex authentication and account capacity.
+5. Restart only the affected worker after correcting configuration.
+
+Requests received while every compatible worker is unavailable are not queued;
+ask the requester to retry.
+
+### Mac helper unavailable
+
+```bash
+bun run mac-agent:status
+bun run mac-agent:install
+```
+
+Confirm the session is unlocked, the bridge URL is reachable, and the edge
+preserves WebSocket upgrades. Reinstalling refreshes the compiled session
+monitor and LaunchAgent configuration.
+
+### Oracle worker unavailable
+
+```bash
+docker compose -f compose.worker.yaml logs -f worker
+docker compose -f compose.worker.yaml exec worker codex login status
+docker compose -f compose.worker.yaml exec worker gh auth status
+docker compose -f compose.worker.yaml up -d --force-recreate
+```
+
+Confirm persistent volumes are mounted and outbound HTTPS/WSS works. The worker
+must not expose a public port.
+
+### Gateway rejected
+
+- Code `4004`: verify `DISCORD_BOT_TOKEN`.
+- Code `4013`: inspect requested Gateway intents.
+- Code `4014`: enable the Message Content privileged intent.
+- Duplicate or transformed messages: verify only one Gateway deployment owns
+  the bot token and remove retired webhooks.
+
+### Deployment connection failure
+
+Confirm `ssh sago-cloud` works and rerun `bun run deploy`. Do not bypass the
+clean-main or image-success checks.
+
+## Credential rotation
+
+Rotate one boundary at a time:
+
+1. Generate a new independent 32-byte-or-longer secret.
+2. Update the hosted and matching worker configuration.
+3. Restart that profile and confirm it authenticates.
+4. Remove the old secret.
+
+For GitHub credentials, authenticate the dedicated CLI state over standard
+input, verify `gh auth status`, then revoke the old credential. Never copy
+tokens into environment files or task text.
+
+## Removal
+
+Remove the Mac helper and all of its isolated state with:
+
+```bash
+bun run mac-agent:uninstall
+```
+
+This removes its secret, compiled monitor, logs, traces, and isolated GitHub
+login without changing normal `~/.codex` or `~/.config/gh` state.
+
+For a full deployment removal, stop core and worker containers, remove the
+Discord interaction endpoint and GitHub webhook, then deliberately archive or
+delete persistent state and credentials according to the operator's retention
+requirements.
