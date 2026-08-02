@@ -11,6 +11,7 @@ import {
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
+  CHATBOT_MODEL_VERBOSITY,
   CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
   canUseMacFiles as canUseMacFilesWithConfig,
   canUseDeveloperTools as canUseDeveloperToolsWithConfig,
@@ -96,6 +97,7 @@ describe("Codex chatbot runner", () => {
   });
 
   test("uses Luna for chat and routing, then Sol medium for owner dev work", () => {
+    expect(CHATBOT_MODEL_VERBOSITY).toBe("medium");
     expect(COMMUNITY_CHATBOT_PROFILE).toEqual({
       model: "gpt-5.6-luna",
       reasoningEffort: "high",
@@ -493,7 +495,16 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(32);
+    expect(PROMPT_VERSION).toBe(33);
+    expect(prompt).toContain("a lively Discord companion");
+    expect(prompt).toContain("She is silly, not incompetent");
+    expect(prompt).toContain("not merely to please whoever spoke");
+    expect(prompt).toContain("Cuteness comes from earnestness");
+    expect(prompt).toContain("generic assistant voice");
+    expect(prompt).toContain(
+      "Never trade technical precision for character voice",
+    );
+    expect(prompt).toContain("Let the moment choose the shape");
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("use the reminder tools");
@@ -512,10 +523,11 @@ describe("Codex chatbot runner", () => {
     );
     expect(prompt).toContain("Own mistakes directly");
     expect(prompt).toContain("Taiwanese university group chat");
-    expect(prompt).toContain("occasional playfulness");
     expect(prompt).not.toContain("dry punchline");
     expect(prompt).toContain("gentle teasing only when it fits");
-    expect(prompt).toContain("proportionate reactions");
+    expect(prompt).toContain("The Architect works rigorously and silently");
+    expect(prompt).toContain("exact technical term or instruction");
+    expect(prompt).toContain("competence never switches the character off");
     expect(prompt).toContain(
       "Never use laugh-cry emojis in replies or reactions",
     );
@@ -571,7 +583,7 @@ describe("Codex chatbot runner", () => {
     const prompt = buildCodexPrompt({ ...job, messages: [] }, [], []);
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
-    expect(instructions.length).toBeLessThan(5_200);
+    expect(instructions.length).toBeLessThan(6_200);
     expect(prompt).not.toContain("<available_reactions_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");
