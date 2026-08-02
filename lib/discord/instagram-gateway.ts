@@ -1,4 +1,5 @@
 import { getInstagramReplyUrls } from "./instagram-links";
+import { getTwitterReplyUrls } from "./twitter-links";
 import {
   ChatbotConversationTracker,
   createDiscordRequest,
@@ -500,26 +501,30 @@ class InstagramGatewayClient implements VoiceGateway {
       return;
     }
 
-    const replyUrls = getInstagramReplyUrls(message.content ?? "");
+    const content = message.content ?? "";
+    const replyUrls = [
+      ...getInstagramReplyUrls(content),
+      ...getTwitterReplyUrls(content),
+    ];
 
     if (replyUrls.length === 0) {
       return;
     }
 
-    const content = replyUrls.join("\n");
+    const replyContent = replyUrls.join("\n");
 
-    if (content.length > MESSAGE_CONTENT_LIMIT) {
+    if (replyContent.length > MESSAGE_CONTENT_LIMIT) {
       console.warn(
-        `Skipped Instagram reply for message ${message.id}: reply content exceeds ${MESSAGE_CONTENT_LIMIT} characters.`,
+        `Skipped social link reply for message ${message.id}: reply content exceeds ${MESSAGE_CONTENT_LIMIT} characters.`,
       );
       try {
         await this.replyToMessage(
           message,
-          "這則訊息裡的 Instagram 連結太多了 我一次回不完",
+          "這則訊息裡的社群連結太多了 我一次回不完",
         );
       } catch (error) {
         console.error(
-          `Failed to send Instagram length warning for message ${message.id}:`,
+          `Failed to send social link length warning for message ${message.id}:`,
           error,
         );
       }
@@ -527,10 +532,10 @@ class InstagramGatewayClient implements VoiceGateway {
     }
 
     try {
-      await this.replyToMessage(message, content);
+      await this.replyToMessage(message, replyContent);
     } catch (error) {
       console.error(
-        `Failed to reply to Instagram link for message ${message.id}:`,
+        `Failed to reply to social link for message ${message.id}:`,
         error,
       );
     }
