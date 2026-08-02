@@ -190,8 +190,8 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("exposes owner-bound cross-guild emoji tools", async () => {
-    const copies: unknown[] = [];
+  test("exposes the owner-bound guild emoji tool", async () => {
+    const additions: unknown[] = [];
     const session = registerChatbotMcpSession({
       ...handlers(),
       listSharedGuilds: async () => [
@@ -217,8 +217,8 @@ describe("MiniSago MCP server", () => {
           },
         ],
       }),
-      copyGuildEmoji: async (input) => {
-        copies.push(input);
+      addGuildEmoji: async (input) => {
+        additions.push(input);
         return {
           id: "876543210987654321",
           name: input.name ?? "wave",
@@ -243,7 +243,7 @@ describe("MiniSago MCP server", () => {
       "list_shared_guilds",
     );
     expect(tools.tools.map((tool) => tool.name)).toContain("list_guild_emojis");
-    expect(tools.tools.map((tool) => tool.name)).toContain("copy_guild_emoji");
+    expect(tools.tools.map((tool) => tool.name)).toContain("add_guild_emoji");
 
     const inventory = await client.callTool({
       name: "list_guild_emojis",
@@ -256,7 +256,7 @@ describe("MiniSago MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "copy_guild_emoji",
+      name: "add_guild_emoji",
       arguments: {
         emoji: "<:wave:123456789012345678>",
         sourceGuild: "Source",
@@ -268,7 +268,7 @@ describe("MiniSago MCP server", () => {
       status: "complete",
       emoji: { name: "hello", guild: { name: "Target" } },
     });
-    expect(copies).toEqual([
+    expect(additions).toEqual([
       {
         emoji: "<:wave:123456789012345678>",
         sourceGuild: "Source",
@@ -276,6 +276,12 @@ describe("MiniSago MCP server", () => {
         name: "hello",
       },
     ]);
+
+    await client.callTool({
+      name: "add_guild_emoji",
+      arguments: { name: "from_image" },
+    });
+    expect(additions.at(-1)).toEqual({ name: "from_image" });
 
     await client.close();
     session.revoke();

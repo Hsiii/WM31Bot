@@ -25,8 +25,8 @@ export {
 
 const LOCAL_CHAT_TIMEOUT_MS = 110_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
-export const EMOJI_COPY_MCP_APPROVAL_CONFIG =
-  'mcp_servers.minisago.tools.copy_guild_emoji.approval_mode="approve"';
+export const EMOJI_ADD_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"';
 export const COMMUNITY_CHATBOT_PROFILE = {
@@ -488,7 +488,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "--config",
         'mcp_servers.minisago.default_tools_approval_mode="auto"',
         "--config",
-        EMOJI_COPY_MCP_APPROVAL_CONFIG,
+        EMOJI_ADD_MCP_APPROVAL_CONFIG,
         "--config",
         CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
         "--config",

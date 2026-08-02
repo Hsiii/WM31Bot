@@ -11,7 +11,7 @@ permissions.
 | Conversation and public web research       | Yes       | Yes                      |
 | Permission-filtered Discord context        | Yes       | Yes                      |
 | Host-bound reminders and voice actions     | Yes       | Yes                      |
-| Cross-channel messaging and emoji copying  | No        | Yes                      |
+| Cross-channel messaging and emoji creation | No        | Yes                      |
 | Repository checkout and developer commands | No        | Yes                      |
 | GitHub mutation                            | No        | Owner-routed tasks only  |
 | Mac file search and upload                 | No        | Explicit Mac target only |
@@ -32,8 +32,9 @@ Member roles, join dates, presence, and reaction-member lists are not sent to
 Codex. Host-bound tools cannot use model arguments to substitute another
 requester, guild, member, or channel.
 
-The owner may copy an emoji between shared guilds only when the destination bot
-role has Create Expressions. Community users never receive this tool.
+The owner may copy an emoji between shared guilds or create one from an image
+attached directly to the request or its replied-to message. The destination bot
+role must have Create Expressions. Community users never receive this tool.
 
 ## Worker authentication and isolation
 
