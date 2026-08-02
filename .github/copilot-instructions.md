@@ -1,5 +1,0 @@
-- This repository is MiniSago, a Bun and TypeScript Discord bot deployed as a long-running Docker service.
-- Keep universal features cross-guild and isolate configured-guild behavior behind `DISCORD_GUILD_ID`.
-- Discord interactions arrive over HTTP, while universal message features use the Discord Gateway.
-- Keep role management config driven through environment variables unless persistent storage is explicitly requested.
-- Prefer minimal, focused changes.
