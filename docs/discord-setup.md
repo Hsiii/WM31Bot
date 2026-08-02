@@ -35,7 +35,7 @@ The synchronized permission bitfield is `9122511662144`:
 Manage Messages pins PR review requests; thread permissions support review
 discussions. Add Reactions supports answer and ambient reactions. Connect lets
 the host-bound MCP tools join and leave voice channels. Create Expressions is
-needed in every destination guild where the owner may copy emoji. MiniSago does
+needed in every destination guild where the owner may add emoji. MiniSago does
 not need Manage Webhooks.
 
 ## Gateway ownership

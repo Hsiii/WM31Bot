@@ -87,7 +87,7 @@ The consolidated `resolve_context` tool can request, in parallel:
 - bounded metadata about the previous answer.
 
 Other tools cover Codex usage, reminders, voice, owner channel messages, and
-owner emoji copying. Discord identity and destinations remain bound by the
+owner emoji creation. Discord identity and destinations remain bound by the
 host wherever possible.
 
 Reminder identity and destination are fixed to the requester and current

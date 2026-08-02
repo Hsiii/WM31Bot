@@ -29,7 +29,7 @@ without making a request.
 > similarly named role. A role mention does not start the chatbot.
 
 MiniSago searches only channels the requester can access. Repository changes,
-GitHub mutations, custom emoji copying, sending messages on someone's behalf,
+GitHub mutations, custom emoji creation, sending messages on someone's behalf,
 and access to Hsi's Mac are owner-only. Chat requests require an available
 Codex worker and are not queued.
 

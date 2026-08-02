@@ -137,16 +137,17 @@ export type ChatbotMcpSessionHandlers = {
       available: boolean;
     }>;
   }>;
-  copyGuildEmoji?: (input: {
-    emoji: string;
-    sourceGuild: string;
-    destinationGuild: string;
+  addGuildEmoji?: (input: {
+    emoji?: string;
+    sourceGuild?: string;
+    destinationGuild?: string;
     name?: string;
+    attachment?: string;
   }) => Promise<{
     id: string;
     name: string;
     animated: boolean;
-    sourceGuild: {
+    sourceGuild?: {
       id: string;
       name: string;
       canCreateExpressions: boolean;
@@ -459,13 +460,13 @@ function createServer(session: ChatbotMcpSession) {
   if (
     session.handlers.listSharedGuilds &&
     session.handlers.listGuildEmojis &&
-    session.handlers.copyGuildEmoji
+    session.handlers.addGuildEmoji
   ) {
     server.registerTool(
       "list_shared_guilds",
       {
         description:
-          "List every Discord guild Sago is currently in. Use this to resolve exact source and destination guilds before copying an emoji. current marks the guild where the request was sent; canCreateExpressions reports whether Sago can add an emoji there.",
+          "List every Discord guild Sago is currently in. Use this to resolve exact source and destination guilds when adding an emoji outside the current server. current marks the guild where the request was sent; canCreateExpressions reports whether Sago can add an emoji there.",
         inputSchema: {},
         annotations: readAnnotations,
       },
@@ -510,15 +511,16 @@ function createServer(session: ChatbotMcpSession) {
     );
 
     server.registerTool(
-      "copy_guild_emoji",
+      "add_guild_emoji",
       {
         description:
-          "Copy a custom emoji between any two different guilds Sago is in, regardless of which guild the request came from. Call list_shared_guilds first. emoji accepts an exact name, ID, or custom emoji value. Only call this when the requester clearly asks to add or copy the emoji. If it returns invalid, report that error accurately; never call it cancelled.",
+          "Add a custom emoji to a Discord server. For an image attached to the request or its replied-to message, omit sourceGuild and emoji; use attachment only to select an exact filename when multiple images exist. For an existing custom emoji, provide both sourceGuild and emoji. destinationGuild defaults to the current server. Only call this when the requester clearly asks to add or copy the emoji. If it returns invalid, report that error accurately; never call it cancelled.",
         inputSchema: {
-          emoji: z.string().trim().min(1).max(100),
-          sourceGuild: z.string().trim().min(1).max(100),
-          destinationGuild: z.string().trim().min(1).max(100),
+          emoji: z.string().trim().min(1).max(100).optional(),
+          sourceGuild: z.string().trim().min(1).max(100).optional(),
+          destinationGuild: z.string().trim().min(1).max(100).optional(),
           name: z.string().trim().min(2).max(32).optional(),
+          attachment: z.string().trim().min(1).max(255).optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -531,13 +533,13 @@ function createServer(session: ChatbotMcpSession) {
         try {
           return toolResult({
             status: "complete",
-            emoji: await session.handlers.copyGuildEmoji!(input),
+            emoji: await session.handlers.addGuildEmoji!(input),
           });
         } catch (error) {
           return toolResult({
             status: "invalid",
             error:
-              error instanceof Error ? error.message : "Could not copy emoji.",
+              error instanceof Error ? error.message : "Could not add emoji.",
           });
         }
       },

@@ -3,9 +3,19 @@ import type { DiscordRequest } from "./chatbot";
 const CREATE_GUILD_EXPRESSIONS = 1n << 43n;
 const ADMINISTRATOR = 1n << 3n;
 const MAX_EMOJI_BYTES = 256 * 1024;
+const DISCORD_CDN_HOSTS = new Set([
+  "cdn.discordapp.com",
+  "media.discordapp.net",
+]);
 const CUSTOM_EMOJI = /^<(a?):([A-Za-z0-9_]{2,32}):(\d{17,20})>$/u;
 const EMOJI_NAME = /^[A-Za-z0-9_]{2,32}$/u;
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
+const IMAGE_CONTENT_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 type DiscordGuild = {
   id: string;
@@ -21,6 +31,13 @@ export type SharedGuildEmoji = {
 };
 
 type EmojiFetch = (input: string | URL | Request) => Promise<Response>;
+
+export type EmojiImageAttachment = {
+  id: string;
+  filename: string;
+  contentType?: string;
+  url: string;
+};
 
 export type SharedEmojiGuild = {
   id: string;
@@ -120,6 +137,133 @@ function resolveEmoji(emojis: SharedGuildEmoji[], value: string) {
     throw new Error(`The source emoji ${matches[0]!.name} is unavailable.`);
   }
   return matches[0]!;
+}
+
+function attachmentContentType(attachment: EmojiImageAttachment) {
+  const declared = attachment.contentType?.toLocaleLowerCase();
+  if (declared && IMAGE_CONTENT_TYPES.has(declared)) return declared;
+
+  const extension = attachment.filename.split(".").at(-1)?.toLocaleLowerCase();
+  return extension === "jpg" || extension === "jpeg"
+    ? "image/jpeg"
+    : extension && IMAGE_CONTENT_TYPES.has(`image/${extension}`)
+      ? `image/${extension}`
+      : undefined;
+}
+
+export function selectEmojiImageAttachment({
+  attachments,
+  referencedAttachments = [],
+  selector,
+}: {
+  attachments: EmojiImageAttachment[];
+  referencedAttachments?: EmojiImageAttachment[];
+  selector?: string;
+}) {
+  const images = [...attachments, ...referencedAttachments].filter(
+    (attachment) => attachmentContentType(attachment) !== undefined,
+  );
+  if (selector) {
+    const query = selector.trim().toLocaleLowerCase();
+    const matches = images.filter(
+      (attachment) =>
+        attachment.id === selector ||
+        attachment.filename.toLocaleLowerCase() === query,
+    );
+    if (matches.length === 1) return matches[0]!;
+    throw new Error(
+      matches.length > 1
+        ? `More than one attached image is named ${selector}.`
+        : `No attached image matched ${selector}.`,
+    );
+  }
+  if (images.length !== 1) {
+    throw new Error(
+      images.length === 0
+        ? "Attach an image or reply to a message containing one."
+        : "More than one image is attached; specify the exact filename.",
+    );
+  }
+  return images[0]!;
+}
+
+function defaultEmojiName(filename: string) {
+  const stem = filename.replace(/\.[^.]*$/u, "");
+  const normalized = stem
+    .replace(/[^A-Za-z0-9_]+/gu, "_")
+    .replace(/^_+|_+$/gu, "")
+    .slice(0, 32);
+  return normalized.length === 1 ? `${normalized}_` : normalized;
+}
+
+export async function addGuildEmojiFromAttachment({
+  destinationGuild,
+  attachment,
+  name,
+  discordRequest,
+  fetchEmoji = fetch,
+}: {
+  destinationGuild: string;
+  attachment: EmojiImageAttachment;
+  name?: string;
+  discordRequest: DiscordRequest;
+  fetchEmoji?: EmojiFetch;
+}) {
+  const destination = resolveGuild(
+    await listSharedEmojiGuilds(discordRequest),
+    destinationGuild,
+  );
+  if (!destination.canCreateExpressions) {
+    throw new Error(
+      `Sago needs the Create Expressions permission in ${destination.name}.`,
+    );
+  }
+
+  const destinationName = name?.trim() || defaultEmojiName(attachment.filename);
+  if (!EMOJI_NAME.test(destinationName)) {
+    throw new Error(
+      "Give the emoji a 2-32 character name using letters, numbers, or underscores.",
+    );
+  }
+  const contentType = attachmentContentType(attachment);
+  if (!contentType) {
+    throw new Error("Discord emoji images must be PNG, JPEG, GIF, or WebP.");
+  }
+  const imageUrl = new URL(attachment.url);
+  if (
+    imageUrl.protocol !== "https:" ||
+    !DISCORD_CDN_HOSTS.has(imageUrl.hostname)
+  ) {
+    throw new Error("The image must be a Discord attachment.");
+  }
+
+  const imageResponse = await fetchEmoji(imageUrl);
+  if (!imageResponse.ok) {
+    throw new Error("Discord could not download the attached image.");
+  }
+  const image = new Uint8Array(await imageResponse.arrayBuffer());
+  if (image.byteLength > MAX_EMOJI_BYTES) {
+    throw new Error(
+      "The attached image is larger than Discord's 256 KiB limit.",
+    );
+  }
+
+  const created = await discordRequest<SharedGuildEmoji>(
+    `/guilds/${destination.id}/emojis`,
+    {
+      method: "POST",
+      body: {
+        name: destinationName,
+        image: `data:${contentType};base64,${Buffer.from(image).toString("base64")}`,
+      },
+    },
+  );
+  return {
+    id: created.id,
+    name: created.name,
+    animated: created.animated ?? contentType === "image/gif",
+    guild: destination,
+  };
 }
 
 export async function copyGuildEmoji({

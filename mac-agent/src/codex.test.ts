@@ -19,7 +19,7 @@ import {
   codexProfileForJob as codexProfileForJobWithConfig,
   COMMUNITY_CHATBOT_PROFILE,
   developerFilesystemPermissions,
-  EMOJI_COPY_MCP_APPROVAL_CONFIG,
+  EMOJI_ADD_MCP_APPROVAL_CONFIG,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   outputSchemaForJob,
@@ -66,8 +66,8 @@ const job: ChatbotJob = {
 
 describe("Codex chatbot runner", () => {
   test("pre-approves owner-bound MCP mutations", () => {
-    expect(EMOJI_COPY_MCP_APPROVAL_CONFIG).toBe(
-      'mcp_servers.minisago.tools.copy_guild_emoji.approval_mode="approve"',
+    expect(EMOJI_ADD_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"',
     );
     expect(CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"',

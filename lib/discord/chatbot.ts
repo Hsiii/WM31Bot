@@ -23,9 +23,11 @@ import {
   type DiscordReactionCapabilities,
 } from "./reactions";
 import {
+  addGuildEmojiFromAttachment,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
+  selectEmojiImageAttachment,
 } from "./emojis";
 import { getChatbotReminderScheduler } from "./reminders";
 import { sendChannelMessage } from "./channel-messages";
@@ -1362,16 +1364,42 @@ export async function handleChatbotMention({
                 })),
               listGuildEmojis: (guild: string) =>
                 listGuildEmojis({ guild, discordRequest }),
-              copyGuildEmoji: (input: {
-                emoji: string;
-                sourceGuild: string;
-                destinationGuild: string;
+              addGuildEmoji: (input: {
+                emoji?: string;
+                sourceGuild?: string;
+                destinationGuild?: string;
                 name?: string;
-              }) =>
-                copyGuildEmoji({
-                  ...input,
+                attachment?: string;
+              }) => {
+                const destinationGuild =
+                  input.destinationGuild ?? message.guild_id!;
+                if (input.emoji || input.sourceGuild) {
+                  if (!input.emoji || !input.sourceGuild) {
+                    throw new Error(
+                      "Provide both sourceGuild and emoji when copying an existing emoji.",
+                    );
+                  }
+                  return copyGuildEmoji({
+                    emoji: input.emoji,
+                    sourceGuild: input.sourceGuild,
+                    destinationGuild,
+                    name: input.name,
+                    discordRequest,
+                  });
+                }
+                const attachment = selectEmojiImageAttachment({
+                  attachments: requestMessage.attachments,
+                  referencedAttachments:
+                    requestMessage.referencedMessage?.attachments,
+                  selector: input.attachment,
+                });
+                return addGuildEmojiFromAttachment({
+                  destinationGuild,
+                  attachment,
+                  name: input.name,
                   discordRequest,
-                }),
+                });
+              },
             }
           : {}),
         ...(requesterUserId === accessConfig.ownerUserId
