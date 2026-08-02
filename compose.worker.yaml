@@ -8,7 +8,6 @@ services:
     env_file: .env.worker
     environment:
       MINISAGO_WORKER_ID: oracle
-      MINISAGO_WORKER_CAPABILITIES: chat,dev
     volumes:
       - minisago-codex:/home/bun/.codex
       - minisago-github:/home/bun/.config/gh

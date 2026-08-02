@@ -61,8 +61,6 @@ scheduled-monitor variable names.
 | `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Advertised capacity, from 1 to 16                                                          |
 | `MINISAGO_HEADLESS`              | Linux    | Keeps a non-macOS worker connected without a session monitor                               |
 | `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                                                     |
-| `MINISAGO_WORKER_CAPABILITIES`   | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                      |
-| `MINISAGO_WORKER_PRIORITY`       | No       | Scheduler priority from 0 to 1000                                                          |
 | `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                                                         |
 | `MINISAGO_CHATBOT_REPOSITORY`    | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed    |
 | `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner Discord ID configured on the hosted service                                     |
@@ -147,18 +145,19 @@ production is connected.
 
 The hosted broker has separate worker profiles:
 
-- `MINISAGO_WORKER_BRIDGE_SECRET` authenticates the server-owned `oracle`
-  `chat,dev` worker; and
-- `MINISAGO_MAC_BRIDGE_SECRET` authenticates a worker advertising `mac`.
+- `MINISAGO_WORKER_BRIDGE_SECRET` authenticates the preferred server-owned
+  `oracle` worker with fixed `chat,dev` capabilities; and
+- `MINISAGO_MAC_BRIDGE_SECRET` authenticates a fallback worker with fixed
+  `chat,dev,mac` capabilities.
 
 Use independent random secrets of at least 32 bytes. The broker binds the cloud
-secret to its server-owned identity and capabilities, and accepts the Mac secret
-only from a worker advertising `mac`.
+secret to its server-owned identity and capabilities. The authenticated profile,
+not worker-supplied configuration, determines capabilities and priority.
 
-Workers advertise capacity, capabilities, and priority. The broker selects the
-highest-priority compatible worker, falls back when it is unavailable or full,
-and keeps all stages of a workflow on the selected worker. Only requests that
-explicitly need a resource on Hsi's Mac may target `mac`.
+Workers advertise capacity and repository availability. The broker prefers
+Oracle, falls back to the Mac when Oracle is unavailable or full, and keeps all
+stages of a workflow on the selected worker. Only requests that explicitly need
+a resource on Hsi's Mac may target `mac`.
 
 Community and owner chat jobs run on GPT-5.6 Luna with high reasoning. Owner
 requests first use Luna with low reasoning to select `chat` or `dev`; development

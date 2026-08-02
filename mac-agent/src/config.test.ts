@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  defaultWorkerCapabilities,
   macFileRoots,
   validateBridgeUrl,
   validateMcpUrl,
@@ -9,11 +8,6 @@ import {
 } from "./config";
 
 describe("worker configuration", () => {
-  test("advertises enforced dev profiles independently from the Mac target", () => {
-    expect(defaultWorkerCapabilities(true)).toBe("chat,dev");
-    expect(defaultWorkerCapabilities(false)).toBe("chat,dev,mac");
-  });
-
   test("limits default Mac file access to common user folders", () => {
     expect(macFileRoots(undefined, "/Users/hsi")).toContain(
       "/Users/hsi/Documents",

@@ -128,12 +128,10 @@ export class MacAgentClient {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: this.config.bridgeSecret,
         workerId: this.config.workerId,
-        capabilities: this.config.workerCapabilities,
         repositories: this.config.githubRepositories,
         ...(this.config.chatbotRepository
           ? { chatbotRepository: this.config.chatbotRepository }
           : {}),
-        priority: this.config.workerPriority,
       });
     });
     socket.addEventListener("message", (event) => {

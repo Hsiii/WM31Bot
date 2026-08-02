@@ -179,14 +179,6 @@ async function install() {
       process.env.MINISAGO_WORKER_ID?.trim() || "hsi-mac",
     ),
     envLine(
-      "MINISAGO_WORKER_CAPABILITIES",
-      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() || "chat,dev,mac",
-    ),
-    envLine(
-      "MINISAGO_WORKER_PRIORITY",
-      process.env.MINISAGO_WORKER_PRIORITY?.trim() || "50",
-    ),
-    envLine(
       "MINISAGO_MAC_FILE_ROOTS",
       process.env.MINISAGO_MAC_FILE_ROOTS?.trim() || "",
     ),
