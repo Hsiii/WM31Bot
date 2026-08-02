@@ -241,6 +241,8 @@ export class MacAgentClient {
               const answer = await runCodexJob(job, {
                 ...this.config,
                 onMcpToolCall: (call) => toolCalls.push(call),
+                onPromptCompiled: (prompt) =>
+                  this.traceStore.recordPrompt(job.id, prompt),
                 signal: controller.signal,
               });
               this.traceStore.finish(job.id, answer, Date.now(), toolCalls);

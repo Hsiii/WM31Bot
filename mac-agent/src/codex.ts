@@ -8,10 +8,11 @@ import {
 import type {
   ChatbotJob,
   ChatbotMcpTraceCall,
+  ChatbotPromptTelemetry,
 } from "../../src/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
-import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
+import { buildPromptPlan, outputSchemaForJob } from "./prompts";
 
 export {
   ANSWER_OUTPUT_SCHEMA,
@@ -57,6 +58,7 @@ type CodexRunOptions = {
   workspaceRoot: string;
   chatbotAccess: ChatbotAccessConfig;
   onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
+  onPromptCompiled?: (telemetry: ChatbotPromptTelemetry) => void;
   signal?: AbortSignal;
 };
 
@@ -413,13 +415,17 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       });
     }
     const outputSchema = outputSchemaForJob(job);
-    const prompt = buildCodexPrompt(
+    const prompt = buildPromptPlan(
       job,
       prepared.textBlocks,
       prepared.ignored,
       hasDeveloperAccess ? buildGithubDeveloperPolicy(job) : undefined,
       hasMacFileAccess ? options.macFileRoots : [],
     );
+    options.onPromptCompiled?.({
+      ...prompt.telemetry,
+      versions: prompt.versions,
+    });
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -450,6 +456,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "features.memories=false",
       "--config",
       "allow_login_shell=false",
+      "--config",
+      "project_doc_max_bytes=0",
+      "--config",
+      `developer_instructions=${JSON.stringify(prompt.developerInstructions)}`,
     ];
 
     if (hasDeveloperAccess || hasMacFileAccess) {
@@ -508,7 +518,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       codexArguments.push("--image", imagePath);
     }
 
-    codexArguments.push("-");
+    codexArguments.push(prompt.taskInstruction);
 
     const command = usesOuterSeatbelt(hasDeveloperAccess, hasMacFileAccess)
       ? [
@@ -543,7 +553,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     });
     const stop = () => child.kill();
     timeoutController.signal.addEventListener("abort", stop, { once: true });
-    child.stdin.write(prompt);
+    child.stdin.write(prompt.context);
     child.stdin.end();
 
     const [stdout, stderr, exitCode] = await Promise.all([

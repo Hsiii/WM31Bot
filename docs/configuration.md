@@ -66,6 +66,10 @@ Worker URLs must use TLS outside local or container-local hosts. Bridge secrets
 must contain at least 32 bytes. The owner ID is validated as a Discord snowflake
 on both sides.
 
+The prompt harness has one production path rather than a runtime rollout flag.
+Its authority layers and context budgets are versioned in code, covered by
+tests, and rolled back through the corresponding atomic Git commit if needed.
+
 Set `MINISAGO_CHATBOT_REPOSITORY` when a worker advertises multiple repositories
 so requests to change MiniSago itself do not rely on name inference.
 
