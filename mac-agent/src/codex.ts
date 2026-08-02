@@ -46,6 +46,7 @@ export const SOCIAL_ACTION_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "low",
 } as const;
+export const CHATBOT_MODEL_VERBOSITY = "medium";
 
 type CodexRunOptions = {
   codexHome: string;
@@ -441,7 +442,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       `model_reasoning_effort="${profile.reasoningEffort}"`,
       "--config",
-      'model_verbosity="low"',
+      `model_verbosity="${CHATBOT_MODEL_VERBOSITY}"`,
       "--config",
       'approval_policy="never"',
       "--config",
