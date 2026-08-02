@@ -6,15 +6,15 @@ permissions.
 
 ## Capability boundary
 
-| Capability                                 | Community | Owner                        |
-| ------------------------------------------ | --------- | ---------------------------- |
-| Conversation and public web research       | Yes       | Yes                          |
-| Permission-filtered Discord context        | Yes       | Yes                          |
-| Host-bound reminders and voice actions     | Yes       | Yes                          |
-| Cross-channel messaging and emoji copying  | No        | Yes                          |
-| Repository checkout and developer commands | No        | Yes                          |
-| GitHub mutation                            | No        | Explicitly routed scope only |
-| Mac file search and upload                 | No        | Explicit Mac target only     |
+| Capability                                 | Community | Owner                    |
+| ------------------------------------------ | --------- | ------------------------ |
+| Conversation and public web research       | Yes       | Yes                      |
+| Permission-filtered Discord context        | Yes       | Yes                      |
+| Host-bound reminders and voice actions     | Yes       | Yes                      |
+| Cross-channel messaging and emoji copying  | No        | Yes                      |
+| Repository checkout and developer commands | No        | Yes                      |
+| GitHub mutation                            | No        | Owner-routed tasks only  |
+| Mac file search and upload                 | No        | Explicit Mac target only |
 
 The hosted service checks requester identity before dispatch. The worker checks
 the declared capabilities again before Codex runs. Authorization never depends
@@ -74,7 +74,9 @@ uses a dedicated persistent `gh` login with a fine-grained credential limited
 to the configured repository allowlist. Tokens must never be placed in Discord,
 tasks, environment files, shell arguments, or repository content.
 
-The owner router may bind an explicit request to `issue`, `code`, or `deploy`.
+The owner router assigns `issue`, `code`, or `deploy` from the requested task.
+Implementation requests receive `code` scope without requiring the owner to
+separately request each implementation mechanic, push, or draft pull request.
 Per-job `gh` and `git` wrappers enforce that scope:
 
 - read-only jobs cannot mutate GitHub;
