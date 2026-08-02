@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../../src/chatbot/protocol";
 import { requestContext } from "./context";
 
 export const EXECUTION_ROUTE_OUTPUT_SCHEMA = {

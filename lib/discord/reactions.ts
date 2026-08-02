@@ -1,4 +1,4 @@
-import type { ChatbotToolCapability } from "../chatbot/protocol";
+import type { ChatbotToolCapability } from "../../src/chatbot/protocol";
 import type { DiscordRequest } from "./chatbot";
 import {
   canAddDiscordReactions,

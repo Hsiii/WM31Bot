@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotJob } from "../chatbot/protocol";
+import type { ChatbotJob } from "../../src/chatbot/protocol";
 import type { DiscordRequest } from "./chatbot";
 import {
   AmbientReactionController,

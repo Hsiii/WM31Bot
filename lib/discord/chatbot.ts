@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotAccessConfig } from "../chatbot/access";
-import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
-import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
+import type { ChatbotAccessConfig } from "../../src/chatbot/access";
+import { macAgentBridge, type MacAgentJobResult } from "../../src/chatbot/bridge";
+import { CHATBOT_CONTEXT_LIMITS } from "../../src/chatbot/context-limits";
 import {
   registerChatbotMcpSession,
   type ChatbotMcpSessionSnapshot,
-} from "../chatbot/mcp";
+} from "../../src/chatbot/mcp";
 import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
@@ -17,7 +17,7 @@ import type {
   ChatbotMemberResult,
   ChatbotMessage,
   ChatbotTraceContext,
-} from "../chatbot/protocol";
+} from "../../src/chatbot/protocol";
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,

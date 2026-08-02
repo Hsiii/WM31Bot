@@ -1,13 +1,13 @@
 import type { Server } from "bun";
 
-import { getChatbotAccessConfig } from "../lib/chatbot/access";
+import { getChatbotAccessConfig } from "./chatbot/access";
 import { getPublicDiscordSummary } from "../lib/discord/env";
 import {
   macAgentBridge,
   macAgentWebSocketHandler,
   type MacAgentSocketData,
-} from "../lib/chatbot/bridge";
-import { handleChatbotMcpRequest } from "../lib/chatbot/mcp";
+} from "./chatbot/bridge";
+import { handleChatbotMcpRequest } from "./chatbot/mcp";
 import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import {

@@ -1,7 +1,7 @@
 import { chmod, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../src/chatbot/protocol";
 
 type DeveloperWorkspaceOptions = {
   githubConfigDir: string;

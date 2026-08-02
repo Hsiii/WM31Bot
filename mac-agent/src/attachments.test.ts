@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../src/chatbot/protocol";
 import { attachmentLimits, prepareAttachments } from "./attachments";
 
 describe("chatbot attachment limits", () => {

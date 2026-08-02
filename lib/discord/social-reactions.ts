@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotAccessConfig } from "../chatbot/access";
+import type { ChatbotAccessConfig } from "../../src/chatbot/access";
 import {
   macAgentBridge,
   type DispatchResult,
   type MacAgentJobResult,
-} from "../chatbot/bridge";
-import type { ChatbotJob, ChatbotMessage } from "../chatbot/protocol";
+} from "../../src/chatbot/bridge";
+import type { ChatbotJob, ChatbotMessage } from "../../src/chatbot/protocol";
 import {
   getNearbyHumanMessages,
   isChatbotAuthorized,

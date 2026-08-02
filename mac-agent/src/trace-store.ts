@@ -6,7 +6,7 @@ import { Database } from "bun:sqlite";
 import type {
   ChatbotJob,
   ChatbotTraceContext,
-} from "../../lib/chatbot/protocol";
+} from "../../src/chatbot/protocol";
 
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1_000;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1_000;

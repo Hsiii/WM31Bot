@@ -4,11 +4,11 @@ import {
   chatbotAccessTier,
   canUseChatbotCapability,
   type ChatbotAccessConfig,
-} from "../../lib/chatbot/access";
+} from "../../src/chatbot/access";
 import type {
   ChatbotJob,
   ChatbotMcpTraceCall,
-} from "../../lib/chatbot/protocol";
+} from "../../src/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 import { buildCodexPrompt, outputSchemaForJob } from "./prompts";

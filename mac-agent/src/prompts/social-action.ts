@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../../src/chatbot/protocol";
 
 export const SOCIAL_ACTION_OUTPUT_SCHEMA = {
   type: "object",

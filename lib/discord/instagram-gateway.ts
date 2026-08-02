@@ -8,7 +8,7 @@ import {
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
-} from "../chatbot/access";
+} from "../../src/chatbot/access";
 import {
   AmbientReactionController,
   getAmbientReactionPolicy,

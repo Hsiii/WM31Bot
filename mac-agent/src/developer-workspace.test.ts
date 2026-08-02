@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type { ChatbotJob } from "../../src/chatbot/protocol";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 
 const roots: string[] = [];

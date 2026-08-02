@@ -6,7 +6,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
-} from "../../lib/chatbot/access";
+} from "../../src/chatbot/access";
 
 export type MacAgentConfig = {
   bridgeUrl: string;

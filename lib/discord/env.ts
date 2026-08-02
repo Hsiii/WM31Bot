@@ -1,4 +1,4 @@
-import { getChatbotAccessConfig } from "../chatbot/access";
+import { getChatbotAccessConfig } from "../../src/chatbot/access";
 
 export function getPublicDiscordSummary() {
   const chatbotAccess = getChatbotAccessConfig();
