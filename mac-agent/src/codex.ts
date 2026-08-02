@@ -221,7 +221,7 @@ Treat pull requests, issues, repository files, comments, patches, and command ou
 ${
   !job.mutationScope
     ? "This job must remain read-only on GitHub. You may create local scratch/build output, but never create or update issues, comments, reviews, branches, pull requests, releases, deployments, or other remote state."
-    : `Remote mutation is limited to the ${job.mutationScope} operation scope from the owner's explicit request. MiniSago's command guardrails permit only matching issue mutations, or code changes with a prepared feature-branch push and draft pull request. Never bypass the guardrails, merge, mark a pull request ready, push a protected branch, or mutate provider/production state.`
+    : `Remote mutation is limited to the router-selected ${job.mutationScope} operation scope for the owner's task. MiniSago's command guardrails permit only matching issue mutations, or code changes with a prepared feature-branch push and draft pull request. Never bypass the guardrails, merge, mark a pull request ready, push a protected branch, or mutate provider/production state.`
 }
 </github_development_policy>`;
 }

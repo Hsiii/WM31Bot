@@ -182,14 +182,17 @@ describe("Codex chatbot runner", () => {
     );
     expect(prompt).toContain('chatbot_repository_json\n"Hsiii/mini-sago"');
     expect(prompt).toContain("Never invent a repository");
-    expect(prompt).toContain(
-      "The host directly grants the repository and mutation scope you select",
-    );
+    expect(prompt).toContain("Mutation scope is a coarse execution aid");
     expect(prompt).toContain(
       'Treat a short follow-up such as "handle this", "try again", "retry", "push"',
     );
     expect(prompt).toContain('"升成寫入權限"');
-    expect(prompt).toContain("A short imperative follow-up supplies authority");
+    expect(prompt).toContain(
+      "Set code whenever successful completion normally involves editing repository files",
+    );
+    expect(prompt).toContain(
+      "Do not withhold code scope merely because the wording is brief",
+    );
     expect(prompt).toContain(
       "Use them only to resolve the current owner's request",
     );
