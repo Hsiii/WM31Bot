@@ -3,7 +3,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-import { handleChatbotMcpRequest, registerChatbotMcpSession } from "./mcp";
+import {
+  budgetResolvedContext,
+  handleChatbotMcpRequest,
+  registerChatbotMcpSession,
+} from "./mcp";
 
 const servers: Array<ReturnType<typeof Bun.serve>> = [];
 
@@ -71,6 +75,29 @@ async function connect(token: string) {
 }
 
 describe("MiniSago MCP server", () => {
+  test("budgets resolved history and search with explicit omissions", () => {
+    const messages = Array.from({ length: 30 }, (_, index) => ({
+      id: String(index),
+      author: "Member",
+      timestamp: "2026-08-02T00:00:00.000Z",
+      content: `${index}:${"x".repeat(4_000)}`,
+      attachments: [],
+    }));
+    const result = budgetResolvedContext({
+      history: { status: "complete", messages },
+      search: { status: "complete", results: messages },
+      members: { status: "not_requested", results: [] },
+      previousTrace: { status: "not_requested" },
+    });
+
+    expect(JSON.stringify(result).length).toBeLessThan(50_000);
+    expect(result.contextOmissions).toMatchObject([
+      { section: "resolved_history", reason: "section_budget" },
+      { section: "resolved_search", reason: "section_budget" },
+    ]);
+    expect(result.history.messages.at(-1)?.id).toBe("29");
+  });
+
   test("requires an active bearer-bound chatbot session", async () => {
     const response = await fetch(`${startServer()}/api/chatbot/mcp`, {
       method: "POST",

@@ -99,4 +99,31 @@ describe("chatbot trace store", () => {
     expect(traces.previousTrace("channel-1", "request-2")).toBeUndefined();
     traces.close();
   });
+
+  test("records bounded prompt compilation metadata", () => {
+    const traces = store();
+    const answer = job({});
+    traces.start(answer, 1_000);
+    traces.recordPrompt(answer.id, {
+      promptVersion: 31,
+      versions: { policy: 2, task: 3, context: 4 },
+      purpose: "answer",
+      developerCharacters: 100,
+      taskCharacters: 20,
+      contextCharacters: 300,
+    });
+    traces.finish(answer.id, "The answer", 2_000);
+
+    expect(traces.previousTrace("channel-1", "request-2")).toMatchObject({
+      promptVersion: 31,
+      prompt: {
+        promptVersion: 31,
+        versions: { policy: 2, task: 3, context: 4 },
+        developerCharacters: 100,
+        taskCharacters: 20,
+        contextCharacters: 300,
+      },
+    });
+    traces.close();
+  });
 });

@@ -5,6 +5,11 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 
 import { CHATBOT_CONTEXT_LIMITS } from "./context-limits";
+import {
+  budgetMessages,
+  CHATBOT_CONTEXT_BUDGETS,
+  type ContextOmission,
+} from "./context-policy";
 import type {
   ChatbotMemberResult,
   ChatbotMessage,
@@ -103,7 +108,43 @@ export type ChatbotMcpContextResult = {
     status: "not_requested" | ChatbotMcpStatus;
     trace?: ChatbotTraceContext;
   };
+  contextOmissions?: ContextOmission[];
 };
+
+export function budgetResolvedContext(
+  result: ChatbotMcpContextResult,
+): ChatbotMcpContextResult {
+  const budget = CHATBOT_CONTEXT_BUDGETS.resolvedContextCharacters;
+  const history = budgetMessages(
+    result.history.messages,
+    Math.floor(budget / 2),
+  );
+  const fixedCharacters = JSON.stringify({
+    ...result,
+    history: { ...result.history, messages: [] },
+    search: { ...result.search, results: [] },
+  }).length;
+  const historyCharacters = JSON.stringify(history.messages).length;
+  const search = budgetMessages(
+    result.search.results,
+    Math.max(2, budget - fixedCharacters - historyCharacters),
+  );
+  const omissions: ContextOmission[] = [
+    ...(history.omission
+      ? [{ ...history.omission, section: "resolved_history" }]
+      : []),
+    ...(search.omission
+      ? [{ ...search.omission, section: "resolved_search" }]
+      : []),
+  ];
+
+  return {
+    ...result,
+    history: { ...result.history, messages: history.messages },
+    search: { ...result.search, results: search.messages },
+    ...(omissions.length ? { contextOmissions: omissions } : {}),
+  };
+}
 
 export type ChatbotMcpSessionHandlers = {
   getPreviousTrace: () => Promise<{
@@ -345,7 +386,9 @@ function createServer(session: ChatbotMcpSession) {
     },
     async (input) => {
       try {
-        const result = await session.handlers.resolveContext(input);
+        const result = budgetResolvedContext(
+          await session.handlers.resolveContext(input),
+        );
         if (result.search.status === "unavailable") {
           session.searchUnavailable = true;
         }

@@ -1,4 +1,12 @@
 import type { ChatbotJob, ChatbotMessage } from "../../../src/chatbot/protocol";
+import {
+  budgetJsonItems,
+  budgetMessages,
+  budgetTextItems,
+  CHATBOT_CONTEXT_BUDGETS,
+  type ContextOmission,
+  truncateContextText,
+} from "../../../src/chatbot/context-policy";
 
 function block(name: string, value: unknown) {
   const content = typeof value === "string" ? value : JSON.stringify(value);
@@ -60,14 +68,31 @@ export function requestContext(
   job: ChatbotJob,
   messageBlock = "discord_messages_json",
 ) {
-  const sections = [block("current_request", job.request)];
+  const omissions: ContextOmission[] = [];
+  const request = truncateContextText(
+    job.request,
+    CHATBOT_CONTEXT_BUDGETS.currentRequestCharacters,
+  );
+  if (request.length < job.request.length) {
+    omissions.push({
+      section: "current_request",
+      omittedItems: 0,
+      omittedCharacters: job.request.length - request.length,
+      reason: "item_limit",
+    });
+  }
+  const sections = [block("current_request", request)];
   const currentMessage = requestMessageContext(job);
 
   if (currentMessage) {
     sections.push(block("current_message_context_json", currentMessage));
   }
 
-  sections.push(block(messageBlock, job.messages.map(promptMessage)));
+  const budgeted = budgetMessages(job.messages);
+  if (budgeted.omission) omissions.push(budgeted.omission);
+  sections.push(block(messageBlock, budgeted.messages.map(promptMessage)));
+  if (omissions.length)
+    sections.push(block("context_omissions_json", omissions));
   return sections.join("\n\n");
 }
 
@@ -77,17 +102,62 @@ export function answerContext(
   ignoredAttachments: string[],
 ) {
   const sections = [requestContext(job)];
+  const omissions: ContextOmission[] = [];
+  const omissionReserve = 2_000;
+  const remainingCharacters = () =>
+    Math.max(
+      0,
+      CHATBOT_CONTEXT_BUDGETS.initialContextCharacters -
+        sections.join("\n\n").length -
+        omissionReserve,
+    );
 
   if (job.availableTools?.length) {
-    sections.push(block("available_reactions_json", job.availableTools));
+    const tools = budgetJsonItems(
+      "available_reactions",
+      job.availableTools,
+      Math.min(
+        CHATBOT_CONTEXT_BUDGETS.availableToolsCharacters,
+        remainingCharacters(),
+      ),
+    );
+    if (tools.items.length) {
+      sections.push(block("available_reactions_json", tools.items));
+    }
+    if (tools.omission) omissions.push(tools.omission);
   }
 
-  if (attachmentText.length > 0) {
-    sections.push(block("extracted_attachments", attachmentText.join("\n\n")));
+  const attachments = budgetTextItems(
+    "extracted_attachments",
+    attachmentText,
+    Math.min(
+      CHATBOT_CONTEXT_BUDGETS.extractedAttachmentsCharacters,
+      remainingCharacters(),
+    ),
+  );
+  if (attachments.items.length > 0) {
+    sections.push(
+      block("extracted_attachments", attachments.items.join("\n\n")),
+    );
   }
 
-  if (ignoredAttachments.length > 0) {
-    sections.push(block("ignored_attachments", ignoredAttachments.join("\n")));
+  if (attachments.omission) omissions.push(attachments.omission);
+
+  const ignored = budgetTextItems(
+    "ignored_attachments",
+    ignoredAttachments,
+    Math.min(
+      CHATBOT_CONTEXT_BUDGETS.ignoredAttachmentsCharacters,
+      remainingCharacters(),
+    ),
+  );
+  if (ignored.items.length > 0) {
+    sections.push(block("ignored_attachments", ignored.items.join("\n")));
+  }
+  if (ignored.omission) omissions.push(ignored.omission);
+
+  if (omissions.length) {
+    sections.push(block("context_omissions_json", omissions));
   }
 
   return sections.join("\n\n");

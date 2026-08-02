@@ -493,7 +493,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(30);
+    expect(PROMPT_VERSION).toBe(31);
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("use the reminder tools");
@@ -517,16 +517,7 @@ describe("Codex chatbot runner", () => {
       "Never use laugh-cry emojis in replies or reactions",
     );
     expect(prompt).toContain("have a real lean");
-    expect(prompt).toContain("暈 or 暈船 means catching feelings");
-    expect(prompt).toContain(
-      '不揪 is usually the playful complaint "you didn\'t invite me?"',
-    );
-    expect(prompt).toContain("被塑膠 means being ignored");
-    expect(prompt).toContain("各各=各付各的");
-    expect(prompt).toContain("這感我付=這段感情感覺只有我在付出");
-    expect(prompt).toContain(
-      "Treat unfamiliar or fast-changing slang as uncertain",
-    );
+    expect(prompt).not.toContain("暈 or 暈船 means catching feelings");
     expect(prompt).toContain("Chinese replies must use one punctuation style");
     expect(prompt).toContain("Casual: no commas or periods (，、。,.)");
     expect(prompt).toContain("Use spaces and line breaks for pauses");
@@ -570,6 +561,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("get_previous_trace");
     expect(prompt).toContain("never private reasoning");
     expect(prompt).not.toContain("validated_identity_resolution");
+    expect(prompt).toContain("暈 or 暈船 means catching feelings");
   });
 
   test("keeps the fixed answer instructions compact and omits empty context", () => {

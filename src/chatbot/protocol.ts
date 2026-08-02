@@ -62,6 +62,19 @@ export type ChatbotMcpTraceCall = {
   status?: string;
 };
 
+export type ChatbotPromptTelemetry = {
+  promptVersion: number;
+  versions: {
+    policy: number;
+    task: number;
+    context: number;
+  };
+  purpose: NonNullable<ChatbotJob["purpose"]>;
+  developerCharacters: number;
+  taskCharacters: number;
+  contextCharacters: number;
+};
+
 export type ChatbotTraceContext = {
   historyCount?: number;
   contextMessageCount: number;
@@ -72,6 +85,7 @@ export type ChatbotTraceContext = {
   elapsedMs: number;
   model?: string;
   promptVersion?: number;
+  prompt?: ChatbotPromptTelemetry;
 };
 
 export type ChatbotMessage = {

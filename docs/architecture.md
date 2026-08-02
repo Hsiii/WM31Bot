@@ -95,6 +95,40 @@ channel. Relative timers need no timezone; wall-clock and recurring requests
 require an IANA timezone or an unambiguous location. Each requester may keep at
 most 50 active reminders.
 
+## Prompt harness and context policy
+
+Workers compile every model call into three explicit authority layers:
+
+1. stable MiniSago policy and the selected capability mode are passed as Codex
+   developer instructions;
+2. a short, fixed instruction states the task for answering, routing, or social
+   action; and
+3. the current request, Discord messages, attachments, repository choices, and
+   tool results are labeled as untrusted context.
+
+Codex receives the task as its prompt and the context over standard input.
+Implicit repository instruction discovery is disabled for worker jobs, so files
+such as `AGENTS.md` remain repository data unless the owner explicitly asks to
+work with them. Mechanical permissions, MCP session binding, command wrappers,
+and output schemas continue to enforce capabilities outside the prompt.
+
+Initial messages, each message, extracted attachment text, and resolved MCP
+context have deterministic character budgets in
+`src/chatbot/context-policy.ts`. Selection keeps the newest messages, truncates
+oversized items, and emits `context_omissions_json` metadata rather than hiding
+loss. Taiwanese slang reference material is loaded only when Chinese appears in
+the active context; identity, trust, and output policy always remain loaded.
+
+Policy, task, and context formats have independent versions. Traces record
+those versions and layer sizes, but never private reasoning. Prompt-injection
+and budget cases are covered by structural evaluations in
+`mac-agent/src/prompts/prompt-plan.test.ts`.
+
+MiniSago has no model-managed long-term memory: worker jobs set Codex memories
+off. Conversation state is request-scoped Discord context, while sanitized
+operational traces are retained locally for 14 days and exposed only as bounded
+metadata when a requester asks about a previous answer.
+
 ## Background features
 
 The Gateway also handles Instagram link replies, quick-reply nudges, voice

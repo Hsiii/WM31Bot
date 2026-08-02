@@ -1,15 +1,22 @@
 import type { ChatbotJob } from "../../../src/chatbot/protocol";
 import {
   ANSWER_OUTPUT_SCHEMA,
-  buildAnswerPrompt,
+  ANSWER_TASK_INSTRUCTION,
+  buildAnswerDeveloperInstructions,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
+  PROMPT_VERSION,
 } from "./answer";
+import { answerContext } from "./context";
 import {
-  buildExecutionRoutePrompt,
+  executionRouteContext,
+  EXECUTION_ROUTE_INSTRUCTIONS,
+  EXECUTION_ROUTE_TASK_INSTRUCTION,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
 } from "./execution-route";
 import {
-  buildSocialActionPrompt,
+  socialActionContext,
+  SOCIAL_ACTION_INSTRUCTIONS,
+  SOCIAL_ACTION_TASK_INSTRUCTION,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
 } from "./social-action";
 
@@ -22,6 +29,78 @@ export {
 export { EXECUTION_ROUTE_OUTPUT_SCHEMA } from "./execution-route";
 export { SOCIAL_ACTION_OUTPUT_SCHEMA } from "./social-action";
 
+export const PROMPT_PLAN_VERSIONS = {
+  policy: 1,
+  task: 1,
+  context: 1,
+} as const;
+
+export type PromptPlan = {
+  versions: typeof PROMPT_PLAN_VERSIONS;
+  developerInstructions: string;
+  taskInstruction: string;
+  context: string;
+  telemetry: {
+    promptVersion: number;
+    purpose: NonNullable<ChatbotJob["purpose"]>;
+    developerCharacters: number;
+    taskCharacters: number;
+    contextCharacters: number;
+  };
+};
+
+function promptPlan(
+  purpose: NonNullable<ChatbotJob["purpose"]>,
+  developerInstructions: string,
+  taskInstruction: string,
+  context: string,
+): PromptPlan {
+  return {
+    versions: PROMPT_PLAN_VERSIONS,
+    developerInstructions,
+    taskInstruction,
+    context,
+    telemetry: {
+      promptVersion: PROMPT_VERSION,
+      purpose,
+      developerCharacters: developerInstructions.length,
+      taskCharacters: taskInstruction.length,
+      contextCharacters: context.length,
+    },
+  };
+}
+
+export function buildPromptPlan(
+  job: ChatbotJob,
+  attachmentText: string[],
+  ignoredAttachments: string[],
+  developerPolicy?: string,
+  macFileRoots: string[] = [],
+): PromptPlan {
+  if (job.purpose === "execution_route") {
+    return promptPlan(
+      "execution_route",
+      EXECUTION_ROUTE_INSTRUCTIONS,
+      EXECUTION_ROUTE_TASK_INSTRUCTION,
+      executionRouteContext(job),
+    );
+  }
+  if (job.purpose === "social_action") {
+    return promptPlan(
+      "social_action",
+      SOCIAL_ACTION_INSTRUCTIONS,
+      SOCIAL_ACTION_TASK_INSTRUCTION,
+      socialActionContext(job),
+    );
+  }
+  return promptPlan(
+    "answer",
+    buildAnswerDeveloperInstructions(job, developerPolicy, macFileRoots),
+    ANSWER_TASK_INSTRUCTION,
+    answerContext(job, attachmentText, ignoredAttachments),
+  );
+}
+
 export function buildCodexPrompt(
   job: ChatbotJob,
   attachmentText: string[],
@@ -29,16 +108,15 @@ export function buildCodexPrompt(
   developerPolicy?: string,
   macFileRoots: string[] = [],
 ) {
-  if (job.purpose === "execution_route") {
-    return buildExecutionRoutePrompt(job);
-  }
-  if (job.purpose === "social_action") return buildSocialActionPrompt(job);
-  return buildAnswerPrompt(
+  const plan = buildPromptPlan(
     job,
     attachmentText,
     ignoredAttachments,
     developerPolicy,
     macFileRoots,
+  );
+  return [plan.developerInstructions, plan.taskInstruction, plan.context].join(
+    "\n\n",
   );
 }
 

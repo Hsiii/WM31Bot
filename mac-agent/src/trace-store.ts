@@ -5,6 +5,7 @@ import { Database } from "bun:sqlite";
 
 import type {
   ChatbotJob,
+  ChatbotPromptTelemetry,
   ChatbotTraceContext,
 } from "../../src/chatbot/protocol";
 
@@ -22,6 +23,7 @@ type TraceRow = {
   model: string;
   prompt_version: number;
   tool_trace_json: string | null;
+  prompt_metadata_json: string | null;
 };
 
 type TraceStoreMetadata = {
@@ -136,7 +138,8 @@ export class ChatbotTraceStore {
         error TEXT,
         model TEXT NOT NULL,
         prompt_version INTEGER NOT NULL,
-        tool_trace_json TEXT
+        tool_trace_json TEXT,
+        prompt_metadata_json TEXT
       );
       CREATE INDEX IF NOT EXISTS chatbot_trace_request
         ON chatbot_trace_jobs(request_message_id, started_at);
@@ -151,7 +154,24 @@ export class ChatbotTraceStore {
         "ALTER TABLE chatbot_trace_jobs ADD COLUMN tool_trace_json TEXT",
       );
     }
+    if (
+      !traceColumns.some((column) => column.name === "prompt_metadata_json")
+    ) {
+      this.database.exec(
+        "ALTER TABLE chatbot_trace_jobs ADD COLUMN prompt_metadata_json TEXT",
+      );
+    }
     this.cleanup();
+  }
+
+  recordPrompt(jobId: string, prompt: ChatbotPromptTelemetry) {
+    this.database
+      .query(
+        `UPDATE chatbot_trace_jobs
+         SET prompt_metadata_json = ?, prompt_version = ?
+         WHERE job_id = ?`,
+      )
+      .run(JSON.stringify(prompt), prompt.promptVersion, jobId);
   }
 
   start(job: ChatbotJob, now = Date.now(), metadata: TraceStoreMetadata = {}) {
@@ -227,7 +247,7 @@ export class ChatbotTraceStore {
     const rows = this.database
       .query(
         `SELECT purpose, input_json, output, error, started_at, finished_at,
-                model, prompt_version, tool_trace_json
+                model, prompt_version, tool_trace_json, prompt_metadata_json
          FROM chatbot_trace_jobs
          WHERE request_message_id = ?
          ORDER BY started_at`,
@@ -241,6 +261,9 @@ export class ChatbotTraceStore {
       safeJson<NonNullable<ChatbotTraceContext["toolCalls"]>>(
         terminal?.tool_trace_json ?? null,
       ) ?? [];
+    const prompt = safeJson<ChatbotPromptTelemetry>(
+      terminal?.prompt_metadata_json ?? null,
+    );
     const mcpHistoryCount = [...toolCalls]
       .reverse()
       .flatMap((call) => {
@@ -286,6 +309,7 @@ export class ChatbotTraceStore {
       ...(terminal?.prompt_version !== undefined
         ? { promptVersion: terminal.prompt_version }
         : {}),
+      ...(prompt ? { prompt } : {}),
     };
   }
 
