@@ -324,6 +324,53 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes the owner-bound channel messaging action", async () => {
+    const sent: unknown[] = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      sendChannelMessage: async (input) => {
+        sent.push(input);
+        return {
+          id: "234567890123456789",
+          channelId: "123456789012345678",
+          channelName: "general",
+          guildId: "987654321098765432",
+          guildName: "Sago Club",
+          jumpUrl:
+            "https://discord.com/channels/987654321098765432/123456789012345678/234567890123456789",
+        };
+      },
+    });
+    const client = await connect(session.token);
+
+    const result = await client.callTool({
+      name: "send_channel_message",
+      arguments: {
+        server: "Sago Club",
+        channel: "general",
+        content: "hello club",
+      },
+    });
+
+    expect(sent).toEqual([
+      {
+        server: "Sago Club",
+        channel: "general",
+        content: "hello club",
+      },
+    ]);
+    expect(result.structuredContent).toMatchObject({
+      status: "complete",
+      message: {
+        id: "234567890123456789",
+        channelName: "general",
+      },
+    });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("creates, lists, and cancels bearer-bound reminders", async () => {
     const created: unknown[] = [];
     const cancelled: string[] = [];

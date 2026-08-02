@@ -28,6 +28,7 @@ import {
   listSharedEmojiGuilds,
 } from "./emojis";
 import { getChatbotReminderScheduler } from "./reminders";
+import { sendChannelMessage } from "./channel-messages";
 import { joinMemberVoiceChannel, leaveVoiceChannel } from "./voice";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -1394,6 +1395,16 @@ export async function handleChatbotMention({
                   ...input,
                   discordRequest,
                 }),
+            }
+          : {}),
+        ...(requesterUserId === accessConfig.ownerUserId
+          ? {
+              sendChannelMessage: (input: {
+                content: string;
+                channelId?: string;
+                server?: string;
+                channel?: string;
+              }) => sendChannelMessage({ ...input, discordRequest }),
             }
           : {}),
         ...(reminderScheduler

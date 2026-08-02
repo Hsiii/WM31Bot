@@ -11,6 +11,7 @@ import {
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
+  CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
   canUseMacFiles as canUseMacFilesWithConfig,
   canUseDeveloperTools as canUseDeveloperToolsWithConfig,
   codexFailureMessage,
@@ -64,9 +65,12 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
-  test("pre-approves only the owner-bound emoji copy mutation", () => {
+  test("pre-approves owner-bound MCP mutations", () => {
     expect(EMOJI_COPY_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.copy_guild_emoji.approval_mode="approve"',
+    );
+    expect(CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"',
     );
   });
 
