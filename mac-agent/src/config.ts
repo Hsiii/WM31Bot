@@ -25,15 +25,8 @@ export type MacAgentConfig = {
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
-  workerCapabilities: Array<"chat" | "dev" | "mac">;
   workerId: string;
-  workerPriority: number;
 };
-
-const workerCapabilityNames = ["chat", "dev", "mac"] as const;
-
-export const defaultWorkerCapabilities = (headless: boolean) =>
-  headless ? "chat,dev" : "chat,dev,mac";
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const defaultApplicationSupport =
@@ -168,24 +161,6 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(workerId)) {
     throw new Error("MINISAGO_WORKER_ID must be a safe 1-64 character ID.");
   }
-  const configuredCapabilities = (
-    process.env.MINISAGO_WORKER_CAPABILITIES ||
-    defaultWorkerCapabilities(headless)
-  )
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const workerCapabilities = workerCapabilityNames.filter((capability) =>
-    configuredCapabilities.includes(capability),
-  );
-  if (
-    workerCapabilities.length === 0 ||
-    workerCapabilities.length !== new Set(configuredCapabilities).size
-  ) {
-    throw new Error(
-      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev, and mac.",
-    );
-  }
   const githubRepositories = (process.env.MINISAGO_GITHUB_REPOSITORIES || "")
     .split(",")
     .map((value) => value.trim())
@@ -199,7 +174,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       "MINISAGO_GITHUB_REPOSITORIES must contain owner/repository names.",
     );
   }
-  if (githubRepositories.length === 0 && workerCapabilities.includes("dev")) {
+  if (githubRepositories.length === 0) {
     throw new Error(
       "MINISAGO_GITHUB_REPOSITORIES is required for dev workers.",
     );
@@ -269,17 +244,6 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_TRACE_DATABASE_PATH?.trim() ||
       join(defaultApplicationSupport, "traces.sqlite"),
     workspaceRoot,
-    workerCapabilities,
     workerId,
-    workerPriority: Math.max(
-      0,
-      Math.min(
-        1_000,
-        Number.parseInt(
-          process.env.MINISAGO_WORKER_PRIORITY || (headless ? "100" : "50"),
-          10,
-        ) || 0,
-      ),
-    ),
   };
 }

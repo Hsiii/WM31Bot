@@ -43,7 +43,7 @@ function fakeSocket() {
 }
 
 describe("Mac agent bridge", () => {
-  test("binds cloud worker identity and capabilities to its profile secret", () => {
+  test("binds cloud worker identity to its profile secret", () => {
     useWorker();
     const bridge = new MacAgentBridge();
     const worker = fakeSocket();
@@ -56,9 +56,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "other-worker",
-        capabilities: ["dev"],
         repositories: ["Hsiii/mini-sago"],
-        priority: 1_000,
       }),
     );
 
@@ -81,10 +79,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
         chatbotRepository: "Hsiii/mini-sago",
-        priority: 100,
       }),
     );
 
@@ -121,9 +117,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: ["Hsiii/mini-sago"],
-        priority: 100,
       }),
     );
     bridge.message(
@@ -195,10 +189,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
         chatbotRepository: "Hsiii/mini-sago",
-        priority: 100,
       }),
     );
     bridge.message(
@@ -265,9 +257,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: [],
-        priority: 100,
       }),
     );
     bridge.message(
@@ -349,9 +339,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: ["Hsiii/mini-sago"],
-        priority: 100,
       }),
     );
     bridge.message(
@@ -413,8 +401,6 @@ describe("Mac agent bridge", () => {
     const authenticate = (
       target: ReturnType<typeof fakeSocket>,
       workerId: string,
-      capabilities: Array<"chat" | "dev" | "mac">,
-      priority: number,
       secret: string,
     ) => {
       bridge.open(target.socket);
@@ -425,9 +411,7 @@ describe("Mac agent bridge", () => {
           protocolVersion: CHATBOT_PROTOCOL_VERSION,
           secret,
           workerId,
-          capabilities,
           repositories: ["Hsiii/mini-sago"],
-          priority,
         }),
       );
       bridge.message(
@@ -436,8 +420,8 @@ describe("Mac agent bridge", () => {
       );
     };
 
-    authenticate(cloud, "oracle", ["chat", "dev"], 100, bridgeSecret);
-    authenticate(mac, "hsi-mac", ["chat", "dev", "mac"], 50, macSecret);
+    authenticate(cloud, "oracle", bridgeSecret);
+    authenticate(mac, "hsi-mac", macSecret);
     expect(cloud.closed).toEqual([]);
     expect(mac.closed).toEqual([]);
     expect(bridge.getWorkerSummary()).toEqual({
@@ -558,9 +542,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
         repositories: ["Hsiii/mini-sago"],
-        priority: 100,
       }),
     );
     bridge.message(

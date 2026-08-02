@@ -2,7 +2,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 
-import mammoth from "mammoth";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import type { ChatbotAttachment, ChatbotJob } from "../../lib/chatbot/protocol";
@@ -77,13 +76,10 @@ function isSupported(attachment: ChatbotAttachment) {
     imageContentTypes.has(contentType) ||
     imageExtensions.has(extension) ||
     contentType === "application/pdf" ||
-    contentType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     contentType.startsWith("text/") ||
     textContentTypes.has(contentType) ||
     textExtensions.has(extension) ||
-    extension === ".pdf" ||
-    extension === ".docx"
+    extension === ".pdf"
   );
 }
 
@@ -240,20 +236,6 @@ async function extractText(
     return extractPdf(bytes, maximum);
   }
 
-  if (
-    contentType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    extension === ".docx"
-  ) {
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-      throw new Error("file does not contain DOCX data");
-    }
-    const result = await mammoth.extractRawText({
-      buffer: Buffer.from(bytes),
-    });
-    return truncate(result.value, maximum);
-  }
-
   return truncate(new TextDecoder().decode(bytes), maximum);
 }
 
@@ -270,7 +252,10 @@ export async function prepareAttachments(
   const imagePaths: string[] = [];
   const textBlocks: string[] = [];
   const ignored: string[] = [];
-  const candidates = rankCandidates(job);
+  const candidates =
+    job.purpose === undefined || job.purpose === "answer"
+      ? rankCandidates(job)
+      : [];
   let downloadedBytes = 0;
   let extractedCharacters = 0;
 

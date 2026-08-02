@@ -310,20 +310,15 @@ export function parseFinalResponse(
           ? (result as Record<string, unknown>)
           : undefined;
       const resultCount =
-        event.item.tool === "search_messages" &&
-        Array.isArray(resultRecord?.results)
-          ? resultRecord.results.length
-          : event.item.tool === "resolve_context" &&
-              resultRecord?.search &&
-              typeof resultRecord.search === "object" &&
-              Array.isArray(
-                (resultRecord.search as Record<string, unknown>).results,
-              )
-            ? (
-                (resultRecord.search as Record<string, unknown>)
-                  .results as unknown[]
-              ).length
-            : undefined;
+        event.item.tool === "resolve_context" &&
+        resultRecord?.search &&
+        typeof resultRecord.search === "object" &&
+        Array.isArray((resultRecord.search as Record<string, unknown>).results)
+          ? (
+              (resultRecord.search as Record<string, unknown>)
+                .results as unknown[]
+            ).length
+          : undefined;
       onMcpToolCall?.({
         name: event.item.tool.slice(0, 100),
         arguments: sanitizedToolArguments(event.item.arguments),
@@ -410,18 +405,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     | undefined;
 
   try {
-    const preparationJob =
-      job.purpose === "social_action"
-        ? {
-            ...job,
-            requestMessage: undefined,
-            messages: [],
-          }
-        : job;
-    prepared = await prepareAttachments(
-      preparationJob,
-      timeoutController.signal,
-    );
+    prepared = await prepareAttachments(job, timeoutController.signal);
     if (hasDeveloperAccess) {
       developerWorkspace = await prepareDeveloperWorkspace(job, {
         ...options,

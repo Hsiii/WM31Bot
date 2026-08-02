@@ -5,7 +5,6 @@ import {
   CHATBOT_JOB_TIMEOUT_MS,
   CHATBOT_DEV_JOB_TIMEOUT_MS,
   CHATBOT_PROTOCOL_VERSION,
-  CHATBOT_WORKER_CAPABILITIES,
   type ChatbotJob,
   type ChatbotOutgoingFile,
   type ChatbotWorkerCapability,
@@ -36,19 +35,19 @@ type PendingUsageRequest = {
 type Worker = {
   id: string;
   socket: Socket;
-  capabilities: Set<ChatbotWorkerCapability>;
+  profile: WorkerProfile;
   repositories: Set<string>;
   repositoryNames: string[];
   chatbotRepository?: string;
-  priority: number;
   available: boolean;
   capacity: number;
 };
 
+type WorkerProfile = "oracle" | "mac";
+
 type WorkerPolicy = {
   workerId?: string;
-  capabilities: Set<ChatbotWorkerCapability>;
-  requireMac: boolean;
+  profile: WorkerProfile;
 };
 
 type Workflow = {
@@ -109,22 +108,6 @@ function parseClientMessage(message: string | Buffer) {
 
 function send(socket: Socket, message: MacAgentServerMessage) {
   socket.send(JSON.stringify(message));
-}
-
-function validCapabilities(
-  capabilities: unknown,
-): capabilities is ChatbotWorkerCapability[] {
-  return (
-    Array.isArray(capabilities) &&
-    capabilities.length > 0 &&
-    capabilities.every(
-      (capability) =>
-        typeof capability === "string" &&
-        CHATBOT_WORKER_CAPABILITIES.includes(
-          capability as ChatbotWorkerCapability,
-        ),
-    )
-  );
 }
 
 function validRepositories(repositories: unknown): repositories is string[] {
@@ -203,6 +186,14 @@ function repositoryKey(repository: string) {
   return repository.toLocaleLowerCase("en-US");
 }
 
+function supports(worker: Worker, capabilities: ChatbotWorkerCapability[]) {
+  return worker.profile === "mac" || !capabilities.includes("mac");
+}
+
+function profilePriority(profile: WorkerProfile) {
+  return profile === "oracle" ? 100 : 50;
+}
+
 function configuredSecret(name: string) {
   const secret = process.env[name]?.trim();
   return secret && Buffer.byteLength(secret) >= 32 ? secret : undefined;
@@ -214,15 +205,13 @@ function workerPolicy(secret: string): WorkerPolicy | null {
       secret: configuredSecret("MINISAGO_WORKER_BRIDGE_SECRET"),
       policy: {
         workerId: process.env.MINISAGO_WORKER_ID?.trim() || "oracle",
-        capabilities: new Set(["chat", "dev"]),
-        requireMac: false,
+        profile: "oracle",
       },
     },
     {
       secret: configuredSecret("MINISAGO_MAC_BRIDGE_SECRET"),
       policy: {
-        capabilities: new Set(CHATBOT_WORKER_CAPABILITIES),
-        requireMac: true,
+        profile: "mac",
       },
     },
   ];
@@ -324,7 +313,7 @@ export class MacAgentBridge {
     const chatbotRepositories = new Map<string, string>();
 
     for (const worker of this.workers.values()) {
-      if (!worker.available || !worker.capabilities.has("dev")) continue;
+      if (!worker.available) continue;
       for (const repository of worker.repositoryNames) {
         repositoryNames.set(repositoryKey(repository), repository);
       }
@@ -512,9 +501,7 @@ export class MacAgentBridge {
     const current = this.workers.get(workflow.workerId);
     if (
       current?.available &&
-      capabilities.every((capability) =>
-        current.capabilities.has(capability),
-      ) &&
+      supports(current, capabilities) &&
       (!repository || current.repositories.has(repositoryKey(repository)))
     ) {
       return { status: "accepted" };
@@ -537,9 +524,7 @@ export class MacAgentBridge {
     const compatible = [...this.workers.values()].filter(
       (worker) =>
         worker.available &&
-        capabilities.every((capability) =>
-          worker.capabilities.has(capability),
-        ) &&
+        supports(worker, capabilities) &&
         (!repository || worker.repositories.has(repositoryKey(repository))),
     );
     if (compatible.length === 0) return { status: "offline" };
@@ -550,7 +535,8 @@ export class MacAgentBridge {
     if (available.length === 0) return { status: "busy" };
 
     available.sort((left, right) => {
-      const priority = right.priority - left.priority;
+      const priority =
+        profilePriority(right.profile) - profilePriority(left.profile);
       if (priority !== 0) return priority;
       const utilization =
         this.usedSlots(left.id, movingWorkflowId) / left.capacity -
@@ -570,11 +556,6 @@ export class MacAgentBridge {
       !policy ||
       !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(message.workerId) ||
       (policy.workerId !== undefined && message.workerId !== policy.workerId) ||
-      !validCapabilities(message.capabilities) ||
-      !message.capabilities.every((capability) =>
-        policy.capabilities.has(capability),
-      ) ||
-      (policy.requireMac && !message.capabilities.includes("mac")) ||
       !validRepositories(message.repositories) ||
       (message.chatbotRepository !== undefined &&
         (typeof message.chatbotRepository !== "string" ||
@@ -582,8 +563,7 @@ export class MacAgentBridge {
             (repository) =>
               repositoryKey(repository) ===
               repositoryKey(message.chatbotRepository!),
-          ))) ||
-      !Number.isFinite(message.priority)
+          )))
     ) {
       socket.close(4001, "Authentication failed");
       return;
@@ -604,11 +584,10 @@ export class MacAgentBridge {
     const worker: Worker = {
       id: message.workerId,
       socket,
-      capabilities: new Set(message.capabilities),
+      profile: policy.profile,
       repositories: new Set(message.repositories.map(repositoryKey)),
       repositoryNames: [...message.repositories],
       chatbotRepository: message.chatbotRepository,
-      priority: Math.max(0, Math.min(1_000, Math.floor(message.priority))),
       available: false,
       capacity: 1,
     };

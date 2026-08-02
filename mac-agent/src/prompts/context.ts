@@ -78,6 +78,10 @@ export function answerContext(
 ) {
   const sections = [requestContext(job)];
 
+  if (job.availableTools?.length) {
+    sections.push(block("available_reactions_json", job.availableTools));
+  }
+
   if (attachmentText.length > 0) {
     sections.push(block("extracted_attachments", attachmentText.join("\n\n")));
   }

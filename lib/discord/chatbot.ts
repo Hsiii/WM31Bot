@@ -1134,7 +1134,6 @@ export async function handleChatbotMention({
   let result: MacAgentJobResult;
   let mcpSession: ReturnType<typeof registerChatbotMcpSession> | undefined;
   let mcpSnapshot: ChatbotMcpSessionSnapshot = {
-    reacted: false,
     searchUnavailable: false,
   };
   let reactionCapabilities: DiscordReactionCapabilities | undefined;
@@ -1279,26 +1278,9 @@ export async function handleChatbotMention({
               discordRequest,
             })
         : undefined;
-      const reactionTool = reactionCapabilities?.tools.find(
-        (tool) => tool.name === "discord.add_reaction",
-      );
-      const addReaction =
-        reactionBroker && reactionCapabilities && reactionTool
-          ? (emoji: string) =>
-              reactionBroker.addReaction({
-                channelId: message.channel_id,
-                messageId: message.id,
-                emoji,
-                capabilities: reactionCapabilities!,
-                discordRequest,
-              })
-          : undefined;
       const reminderScheduler = getChatbotReminderScheduler();
 
       mcpSession = registerChatbotMcpSession({
-        getRecentMessages: recentMessages,
-        ...(searchMessages ? { searchMessages } : {}),
-        ...(lookupMembers ? { lookupMembers } : {}),
         getPreviousTrace: async () => previousTrace,
         getCodexUsage: () => workflow.getCodexUsage(),
         resolveContext: async ({
@@ -1371,12 +1353,6 @@ export async function handleChatbotMention({
               : { status: "not_requested" as const },
           };
         },
-        ...(addReaction ? { addReaction } : {}),
-        ...(reactionTool
-          ? {
-              addReactionDescription: `${reactionTool.description} Available values: ${JSON.stringify(reactionTool.metadata ?? {})}`,
-            }
-          : {}),
         ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
           ? {
               listSharedGuilds: async () =>
@@ -1468,6 +1444,9 @@ export async function handleChatbotMention({
         requestMessage,
         messages,
         mcpAccessToken: mcpSession.token,
+        ...(reactionCapabilities?.tools.length
+          ? { availableTools: reactionCapabilities.tools }
+          : {}),
       };
       const dispatch = workflow.dispatch(job);
 
@@ -1491,7 +1470,7 @@ export async function handleChatbotMention({
     }
     workflow.release();
   }
-  let reacted = mcpSnapshot.reacted;
+  let reacted = false;
   let reply: string | null = null;
   const files = result.ok ? (result.files ?? []) : [];
   if (result.ok) {

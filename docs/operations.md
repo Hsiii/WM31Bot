@@ -97,6 +97,8 @@ opaque bearer tokens created for an active chatbot workflow. Each token is
 bound in memory to the real requester and Discord permission context, expires
 after 16 minutes, and is revoked when the workflow finishes. MCP arguments
 cannot select a requester, guild, channel, worker capability, or mutation scope.
+History, guild search, and member aliases share one `resolve_context` tool so a
+model can request the necessary evidence in one bounded parallel operation.
 
 The read-only `get_codex_usage` tool asks the worker reserved by a workflow to
 query its local authenticated Codex app-server. The bridge validates the bounded
@@ -108,12 +110,13 @@ and Read Message History. If role data is unavailable, search falls back to the
 current channel. Member roles, join dates, presence, and reaction-member lists
 are not sent to Codex.
 
-Each Codex run is ephemeral. It receives the selected message context and at
-most 10 supported attachments, 20 MB each and 40 MB total. Downloads accept only
-Discord HTTPS CDN hosts, stop when the request is cancelled, and are deleted
-afterward. Normal Codex configuration, memories, user-configured MCP servers,
-plugins, and private browser sessions are unavailable. Answer jobs receive only
-MiniSago's curated MCP tools.
+Each Codex run is ephemeral. Answer jobs receive the selected message context
+and at most 10 supported image, PDF, or text attachments, 20 MB each and 40 MB
+total. Routing and ambient jobs never download attachments. Downloads accept
+only Discord HTTPS CDN hosts, stop when the request is cancelled, and are
+deleted afterward. Normal Codex configuration, memories, user-configured MCP
+servers, plugins, and private browser sessions are unavailable. Answer jobs
+receive only MiniSago's curated MCP tools.
 
 Chat runs in an isolated workspace with restricted permissions. Owner
 development enables commands and network access only inside a selected

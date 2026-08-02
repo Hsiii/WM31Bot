@@ -205,14 +205,24 @@ describe("Codex chatbot runner", () => {
     const answerJob: ChatbotJob = {
       ...job,
       purpose: "answer",
+      availableTools: [
+        {
+          name: "discord.add_reaction",
+          risk: "ambient",
+          description: "React to the current request.",
+          inputSchema: {},
+          metadata: { customEmojis: [{ value: "sago:emoji-1" }] },
+        },
+      ],
     };
     const prompt = buildCodexPrompt(answerJob, [], []);
 
     expect(prompt).toContain("MiniSago MCP");
     expect(prompt).toContain("nearby context is insufficient");
-    expect(prompt).toContain("either call MCP add_reaction");
+    expect(prompt).toContain("use only the structured reaction field");
     expect(prompt).toContain("host validates it");
-    expect(prompt).not.toContain("<available_tools_json>");
+    expect(prompt).toContain("<available_reactions_json>");
+    expect(prompt).toContain("sago:emoji-1");
     expect(outputSchemaForJob(answerJob)).toBe(ANSWER_OUTPUT_SCHEMA);
     expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
   });
@@ -265,12 +275,17 @@ describe("Codex chatbot runner", () => {
             id: "tool-1",
             type: "mcp_tool_call",
             server: "minisago",
-            tool: "search_messages",
-            arguments: { queries: [{ content: "launch" }] },
+            tool: "resolve_context",
+            arguments: {
+              historyCount: 0,
+              queries: [{ content: "launch" }],
+            },
             result: {
               structured_content: {
-                status: "complete",
-                results: [{ id: "message-1" }],
+                search: {
+                  status: "complete",
+                  results: [{ id: "message-1" }],
+                },
               },
             },
             status: "completed",
@@ -292,8 +307,11 @@ describe("Codex chatbot runner", () => {
     expect(response).toBe('{"reply":"found it","reaction":null}');
     expect(calls).toEqual([
       {
-        name: "search_messages",
-        arguments: { queries: [{ content: "launch" }] },
+        name: "resolve_context",
+        arguments: {
+          historyCount: 0,
+          queries: [{ content: "launch" }],
+        },
         resultCount: 1,
         status: "completed",
       },
@@ -556,7 +574,7 @@ describe("Codex chatbot runner", () => {
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
     expect(instructions.length).toBeLessThan(5_200);
-    expect(prompt).not.toContain("<available_tools_json>");
+    expect(prompt).not.toContain("<available_reactions_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");
   });

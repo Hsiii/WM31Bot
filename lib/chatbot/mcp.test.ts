@@ -22,48 +22,34 @@ function startServer() {
 
 function handlers() {
   return {
-    getRecentMessages: async (limit: number) => [
-      {
-        id: `recent-${limit}`,
-        author: "Daniel",
-        timestamp: "2026-07-24T10:00:00.000Z",
-        content: "recent context",
-        attachments: [
-          {
-            id: "attachment-1",
-            filename: "notes.txt",
-            contentType: "text/plain",
-            size: 42,
-            url: "https://cdn.discordapp.com/private/notes.txt",
-          },
-        ],
-      },
-    ],
-    searchMessages: async () => [
-      {
-        id: "search-1",
-        author: "Hsi",
-        timestamp: "2026-07-20T10:00:00.000Z",
-        content: "older result",
-        attachments: [],
-        channelName: "projects",
-        jumpUrl: "https://discord.com/channels/guild-1/channel-1/search-1",
-      },
-    ],
-    lookupMembers: async (queries: string[]) =>
-      queries.map((query) => ({ query, names: [query, "Display Name"] })),
     getPreviousTrace: async () => ({
       status: "not_found" as const,
     }),
-    resolveContext: async () => ({
-      history: { status: "complete" as const, messages: [] },
+    resolveContext: async ({ historyCount }: { historyCount: number }) => ({
+      history: {
+        status: "complete" as const,
+        messages: [
+          {
+            id: `recent-${historyCount}`,
+            author: "Daniel",
+            timestamp: "2026-07-24T10:00:00.000Z",
+            content: "recent context",
+            attachments: [
+              {
+                id: "attachment-1",
+                filename: "notes.txt",
+                contentType: "text/plain",
+                size: 42,
+                url: "https://cdn.discordapp.com/private/notes.txt",
+              },
+            ],
+          },
+        ],
+      },
       search: { status: "not_requested" as const, results: [] },
       members: { status: "not_requested" as const, results: [] },
       previousTrace: { status: "not_requested" as const },
     }),
-    addReaction: async (emoji: string) => emoji === "👍",
-    addReactionDescription:
-      'React to the current request. Custom values: {"sago":"sago:1"}',
   };
 }
 
@@ -114,24 +100,16 @@ describe("MiniSago MCP server", () => {
     const tools = await client.listTools();
 
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "get_recent_messages",
-      "search_messages",
-      "lookup_members",
       "get_previous_trace",
       "resolve_context",
-      "add_reaction",
     ]);
-    expect(
-      tools.tools.find((tool) => tool.name === "add_reaction")?.description,
-    ).toContain("sago:1");
 
     const result = await client.callTool({
-      name: "get_recent_messages",
-      arguments: { limit: 40 },
+      name: "resolve_context",
+      arguments: { historyCount: 40 },
     });
     expect(result.structuredContent).toMatchObject({
-      status: "complete",
-      messages: [{ id: "recent-40" }],
+      history: { status: "complete", messages: [{ id: "recent-40" }] },
     });
     expect(JSON.stringify(result)).not.toContain("cdn.discordapp.com");
 
@@ -139,27 +117,15 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("validates tool arguments and records only successful reactions", async () => {
+  test("validates context tool arguments", async () => {
     const session = registerChatbotMcpSession(handlers());
     const client = await connect(session.token);
 
     const invalid = await client.callTool({
-      name: "get_recent_messages",
-      arguments: { limit: 101 },
+      name: "resolve_context",
+      arguments: { historyCount: 101 },
     });
     expect(invalid.isError).toBe(true);
-
-    await client.callTool({
-      name: "add_reaction",
-      arguments: { emoji: "👎" },
-    });
-    expect(session.snapshot().reacted).toBe(false);
-
-    await client.callTool({
-      name: "add_reaction",
-      arguments: { emoji: "👍" },
-    });
-    expect(session.snapshot().reacted).toBe(true);
 
     await client.close();
     session.revoke();
@@ -168,7 +134,6 @@ describe("MiniSago MCP server", () => {
   test("hides guild tools when no guild-scoped handlers exist", async () => {
     const baseHandlers = handlers();
     const session = registerChatbotMcpSession({
-      getRecentMessages: baseHandlers.getRecentMessages,
       getPreviousTrace: baseHandlers.getPreviousTrace,
       resolveContext: baseHandlers.resolveContext,
     });
@@ -176,7 +141,6 @@ describe("MiniSago MCP server", () => {
     const tools = await client.listTools();
 
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "get_recent_messages",
       "get_previous_trace",
       "resolve_context",
     ]);

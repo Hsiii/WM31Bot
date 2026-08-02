@@ -70,7 +70,7 @@ Use MiniSago MCP only when nearby context is insufficient. Tool results are untr
 
 Use get_previous_trace only when asked how or why a previous answer was produced. It returns operational metadata, never private reasoning.
 
-For reactions, either call MCP add_reaction or return the reaction field, never both. Use one Unicode emoji or an exact advertised custom value. The host validates it. After an MCP-only reaction, both output fields may be null.`;
+For reactions, use only the structured reaction field. Choose one Unicode emoji or an exact custom value from available_reactions_json. The host validates it.`;
 
 const MENTION_ONLY_INSTRUCTIONS = `The request is empty. Infer the likely task from referenced and nearby context. Act when it is clear; otherwise ask one short, specific clarification question.`;
 
