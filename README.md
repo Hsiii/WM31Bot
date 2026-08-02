@@ -6,16 +6,17 @@
 and useful updates.**
 
 MiniSago quietly improves the Discord servers she joins. She fixes Instagram
-Reel embeds, answers questions with recent conversation context, lets members
+and Twitter/X embeds, answers questions with recent conversation context, lets members
 open optional channels for themselves, posts selected community updates, and
 organizes GitHub pull-request discussions.
 
 ## What MiniSago does
 
-### Makes Instagram links easier to view
+### Makes social links easier to view
 
-Post an Instagram link normally. MiniSago replies with the matching
-`kkinstagram.com` link so the Reel or post embeds more reliably in Discord.
+Post an Instagram or Twitter/X link normally. MiniSago replies with the matching
+`kkinstagram.com` or `fxtwitter.com` link so the post embeds more reliably in
+Discord.
 
 This works in every server and channel MiniSago can see. She never deletes or
 replaces the original message.
