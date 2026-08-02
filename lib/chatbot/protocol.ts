@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 23;
+export const CHATBOT_PROTOCOL_VERSION = 24;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -30,6 +30,19 @@ export type ChatbotReaction = {
 export type ChatbotExecutionMode = "chat" | "dev";
 export type ChatbotExecutionTarget = "default" | "mac";
 export type ChatbotMutationScope = "code" | "issue" | "deploy";
+
+export type CodexUsageWindow = {
+  label: string;
+  windowMinutes: number;
+  usedPercent: number;
+  remainingPercent: number;
+  resetsAt: string | null;
+};
+
+export type CodexUsageSnapshot = {
+  windows: CodexUsageWindow[];
+  updatedAt: string;
+};
 
 export type ChatbotToolCapability = {
   name: string;
@@ -118,6 +131,11 @@ export type MacAgentClientMessage =
       type: "heartbeat";
     }
   | {
+      type: "codex_usage_result";
+      requestId: string;
+      usage: CodexUsageSnapshot | null;
+    }
+  | {
       type: "result";
       jobId: string;
       ok: true;
@@ -143,4 +161,8 @@ export type MacAgentServerMessage =
   | {
       type: "cancel";
       jobId: string;
+    }
+  | {
+      type: "codex_usage_request";
+      requestId: string;
     };

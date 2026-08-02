@@ -9,6 +9,7 @@ import {
   type ChatbotJob,
   type ChatbotOutgoingFile,
   type ChatbotWorkerCapability,
+  type CodexUsageSnapshot,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
 } from "./protocol";
@@ -23,6 +24,12 @@ type PendingJob = {
   workerId: string;
   workflowId?: string;
   resolve: (result: MacAgentJobResult) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+type PendingUsageRequest = {
+  workerId: string;
+  resolve: (usage: CodexUsageSnapshot | null) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
@@ -71,6 +78,7 @@ export type WorkflowLease = {
     capabilities: ChatbotWorkerCapability[],
     repository?: string,
   ) => WorkerSelectionResult;
+  getCodexUsage: () => Promise<CodexUsageSnapshot | null>;
   release: () => void;
 };
 
@@ -158,6 +166,39 @@ function validOutgoingFiles(
   );
 }
 
+function validCodexUsage(value: unknown): value is CodexUsageSnapshot | null {
+  return (
+    value === null ||
+    Boolean(
+      value &&
+      typeof value === "object" &&
+      typeof (value as CodexUsageSnapshot).updatedAt === "string" &&
+      (value as CodexUsageSnapshot).updatedAt.length <= 40 &&
+      Number.isFinite(Date.parse((value as CodexUsageSnapshot).updatedAt)) &&
+      Array.isArray((value as CodexUsageSnapshot).windows) &&
+      (value as CodexUsageSnapshot).windows.length <= 4 &&
+      (value as CodexUsageSnapshot).windows.every(
+        (window) =>
+          typeof window.label === "string" &&
+          window.label.length <= 40 &&
+          Number.isInteger(window.windowMinutes) &&
+          window.windowMinutes > 0 &&
+          window.windowMinutes <= 525_600 &&
+          Number.isFinite(window.usedPercent) &&
+          window.usedPercent >= 0 &&
+          window.usedPercent <= 100 &&
+          Number.isFinite(window.remainingPercent) &&
+          window.remainingPercent >= 0 &&
+          window.remainingPercent <= 100 &&
+          (window.resetsAt === null ||
+            (typeof window.resetsAt === "string" &&
+              window.resetsAt.length <= 40 &&
+              Number.isFinite(Date.parse(window.resetsAt)))),
+      ),
+    )
+  );
+}
+
 function repositoryKey(repository: string) {
   return repository.toLocaleLowerCase("en-US");
 }
@@ -202,6 +243,7 @@ export class MacAgentBridge {
     ReturnType<typeof setTimeout>
   >();
   private pendingJobs = new Map<string, PendingJob>();
+  private pendingUsageRequests = new Map<string, PendingUsageRequest>();
   private workflows = new Map<string, Workflow>();
 
   isConfigured() {
@@ -269,6 +311,7 @@ export class MacAgentBridge {
         dispatch: (job) => this.dispatchWorkflowJob(job, workflowId),
         route: (requiredCapabilities, repository) =>
           this.routeWorkflow(workflowId, requiredCapabilities, repository),
+        getCodexUsage: () => this.getWorkflowCodexUsage(workflowId),
         release: () => {
           this.workflows.delete(workflowId);
         },
@@ -352,6 +395,11 @@ export class MacAgentBridge {
       return;
     }
 
+    if (message.type === "codex_usage_result") {
+      this.finishUsageRequest(worker, message);
+      return;
+    }
+
     socket.close(4002, "Unexpected message");
   }
 
@@ -370,6 +418,29 @@ export class MacAgentBridge {
       workerId,
       "The Codex worker disconnected while answering.",
     );
+    this.failPendingUsageRequests(workerId);
+  }
+
+  private getWorkflowCodexUsage(
+    workflowId: string,
+  ): Promise<CodexUsageSnapshot | null> {
+    const workflow = this.workflows.get(workflowId);
+    const worker = workflow ? this.workers.get(workflow.workerId) : undefined;
+    if (!worker) return Promise.resolve(null);
+
+    const requestId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingUsageRequests.delete(requestId);
+        resolve(null);
+      }, 7_000);
+      this.pendingUsageRequests.set(requestId, {
+        workerId: worker.id,
+        resolve,
+        timer,
+      });
+      send(worker.socket, { type: "codex_usage_request", requestId });
+    });
   }
 
   private dispatchWorkflowJob(
@@ -577,6 +648,26 @@ export class MacAgentBridge {
           }
         : { ok: false, error: message.error },
     );
+  }
+
+  private finishUsageRequest(
+    worker: Worker,
+    message: Extract<MacAgentClientMessage, { type: "codex_usage_result" }>,
+  ) {
+    const pending = this.pendingUsageRequests.get(message.requestId);
+    if (!pending || pending.workerId !== worker.id) return;
+    clearTimeout(pending.timer);
+    this.pendingUsageRequests.delete(message.requestId);
+    pending.resolve(validCodexUsage(message.usage) ? message.usage : null);
+  }
+
+  private failPendingUsageRequests(workerId: string) {
+    for (const [requestId, pending] of this.pendingUsageRequests) {
+      if (pending.workerId !== workerId) continue;
+      clearTimeout(pending.timer);
+      this.pendingUsageRequests.delete(requestId);
+      pending.resolve(null);
+    }
   }
 
   private failPendingJobs(workerId: string, error: string) {

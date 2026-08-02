@@ -51,6 +51,11 @@ member aliases, inspect a previous answer's observable trace, or add one
 validated reaction. Simple questions skip the former context-planning model
 call.
 
+Anyone who can chat with Sago can also ask for her Codex usage percentage and
+reset time before starting something expensive. The read-only MCP tool reads the
+answering worker's current capacity but cannot change the account or consume a
+reset credit.
+
 Community members can discuss code and links through the read-only chat path,
 but repository checkout, developer commands, GitHub mutations, Mac access, and
 other privileged capabilities are owner-only. Community and owner chat requests

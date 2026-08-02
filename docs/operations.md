@@ -98,6 +98,11 @@ bound in memory to the real requester and Discord permission context, expires
 after 16 minutes, and is revoked when the workflow finishes. MCP arguments
 cannot select a requester, guild, channel, worker capability, or mutation scope.
 
+The read-only `get_codex_usage` tool asks the worker reserved by a workflow to
+query its local authenticated Codex app-server. The bridge validates the bounded
+usage snapshot before the MCP server returns percentages and reset times. No
+account mutation or reset-credit operation is exposed.
+
 Guild searches are restricted to channels where the requester has View Channel
 and Read Message History. If role data is unavailable, search falls back to the
 current channel. Member roles, join dates, presence, and reaction-member lists
@@ -108,7 +113,7 @@ most 10 supported attachments, 20 MB each and 40 MB total. Downloads accept only
 Discord HTTPS CDN hosts, stop when the request is cancelled, and are deleted
 afterward. Normal Codex configuration, memories, user-configured MCP servers,
 plugins, and private browser sessions are unavailable. Answer jobs receive only
-MiniSago's curated Discord MCP tools.
+MiniSago's curated MCP tools.
 
 Chat runs in an isolated workspace with restricted permissions. Owner
 development enables commands and network access only inside a selected

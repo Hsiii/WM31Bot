@@ -253,6 +253,81 @@ describe("Mac agent bridge", () => {
     expect(bridge.getStatus()).toBe("available");
   });
 
+  test("reads Codex usage from the worker reserved by a workflow", async () => {
+    useWorker();
+    const bridge = new MacAgentBridge();
+    const { socket, sent } = fakeSocket();
+    bridge.open(socket);
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "authenticate",
+        protocolVersion: CHATBOT_PROTOCOL_VERSION,
+        secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev"],
+        repositories: [],
+        priority: 100,
+      }),
+    );
+    bridge.message(
+      socket,
+      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
+    );
+    const acquired = bridge.acquireWorkflow();
+    if (acquired.status !== "accepted") throw new Error("Expected workflow");
+
+    const usagePromise = acquired.workflow.getCodexUsage();
+    const request = JSON.parse(sent.at(-1)!);
+    expect(request.type).toBe("codex_usage_request");
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "codex_usage_result",
+        requestId: request.requestId,
+        usage: {
+          windows: [
+            {
+              label: "weekly",
+              windowMinutes: 10_080,
+              usedPercent: 35,
+              remainingPercent: 65,
+              resetsAt: "2026-08-09T00:00:00.000Z",
+            },
+          ],
+          updatedAt: "2026-08-02T00:00:00.000Z",
+        },
+      }),
+    );
+    expect(await usagePromise).toMatchObject({
+      windows: [{ usedPercent: 35, remainingPercent: 65 }],
+    });
+
+    const invalidPromise = acquired.workflow.getCodexUsage();
+    const invalidRequest = JSON.parse(sent.at(-1)!);
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "codex_usage_result",
+        requestId: invalidRequest.requestId,
+        usage: {
+          windows: [
+            {
+              label: "weekly",
+              windowMinutes: 10_080,
+              usedPercent: 200,
+              remainingPercent: -100,
+              resetsAt: "not-a-date",
+            },
+          ],
+          updatedAt: "not-a-date",
+        },
+      }),
+    );
+    expect(await invalidPromise).toBeNull();
+    acquired.workflow.release();
+  });
+
   test("runs multiple reserved workflows concurrently up to capacity", async () => {
     useWorker();
     const bridge = new MacAgentBridge();

@@ -175,6 +175,12 @@ guild, channel permissions, and available actions outside model-controlled
 arguments, expires the token after 16 minutes, and revokes it when the workflow
 ends.
 
+Answer sessions also expose the read-only `get_codex_usage` tool. The hosted MCP
+handler requests a live `account/rateLimits/read` snapshot from the reserved
+worker's authenticated Codex app-server and returns each available window's
+used and remaining percentage plus its exact reset time. It cannot consume
+reset credits or mutate the account.
+
 The trace database is owner-readable, expires entries after 14 days, and prunes
 oldest entries above 250 MB. When a user asks about a previous answer, the
 `get_previous_trace` MCP tool returns bounded observable metadata from the same
