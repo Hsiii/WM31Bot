@@ -1300,6 +1300,7 @@ export async function handleChatbotMention({
         ...(searchMessages ? { searchMessages } : {}),
         ...(lookupMembers ? { lookupMembers } : {}),
         getPreviousTrace: async () => previousTrace,
+        getCodexUsage: () => workflow.getCodexUsage(),
         resolveContext: async ({
           historyCount,
           includePreviousTrace,

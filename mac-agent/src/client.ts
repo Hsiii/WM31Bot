@@ -15,6 +15,7 @@ import {
 import { SessionMonitor } from "./session-monitor";
 import { ChatbotTraceStore } from "./trace-store";
 import { prepareOutgoingFiles } from "./outgoing-files";
+import { readCodexUsage } from "./codex-usage";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const AUTH_RETRY_MS = 30_000;
@@ -186,6 +187,18 @@ export class MacAgentClient {
 
     if (message.type === "cancel") {
       this.currentJobs.get(message.jobId)?.abort();
+      return;
+    }
+
+    if (message.type === "codex_usage_request") {
+      const usage = await readCodexUsage(this.config);
+      if (this.authenticated) {
+        this.send({
+          type: "codex_usage_result",
+          requestId: message.requestId,
+          usage,
+        });
+      }
       return;
     }
 

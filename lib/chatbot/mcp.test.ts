@@ -185,6 +185,46 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes read-only worker Codex usage when its handler is available", async () => {
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      getCodexUsage: async () => ({
+        windows: [
+          {
+            label: "weekly",
+            windowMinutes: 10_080,
+            usedPercent: 30,
+            remainingPercent: 70,
+            resetsAt: "2026-08-09T00:00:00.000Z",
+          },
+        ],
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      }),
+    });
+    const client = await connect(session.token);
+
+    const tools = await client.listTools();
+    const usageTool = tools.tools.find(
+      (tool) => tool.name === "get_codex_usage",
+    );
+    expect(usageTool?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+    const result = await client.callTool({
+      name: "get_codex_usage",
+      arguments: {},
+    });
+    expect(result.structuredContent).toMatchObject({
+      status: "complete",
+      windows: [{ remainingPercent: 70 }],
+    });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("exposes owner-bound cross-guild emoji tools", async () => {
     const copies: unknown[] = [];
     const session = registerChatbotMcpSession({
