@@ -6,12 +6,14 @@
 and useful updates.**
 
 MiniSago quietly improves the Discord servers she joins. She fixes Instagram
-embeds, answers questions with conversation context, manages optional channels,
-posts selected community updates, and organizes pull-request discussions.
+and Twitter/X embeds, answers questions with conversation context, manages
+optional channels, posts selected community updates, and organizes pull-request
+discussions.
 
 ## Features
 
-- Rewrites Instagram links through `kkinstagram.com` for more reliable embeds.
+- Rewrites Instagram and Twitter/X links through `kkinstagram.com` and
+  `fxtwitter.com` for more reliable embeds.
 - Answers mentions using nearby conversation, supported attachments, public web
   search, and permission-filtered Discord history.
 - Supports one unmentioned follow-up from the same person for 90 seconds when
@@ -24,7 +26,7 @@ posts selected community updates, and organizes pull-request discussions.
 - Can occasionally acknowledge fresh community messages with an ambient
   reaction when that opt-in feature is enabled.
 
-MiniSago never replaces the original Instagram message, never sends
+MiniSago never replaces the original social-link message, never sends
 unsolicited ambient replies, and searches only Discord channels the requester
 can access.
 
