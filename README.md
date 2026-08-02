@@ -35,7 +35,7 @@ your message, or both.
 MiniSago can:
 
 - summarize recent conversation;
-- answer questions about images, PDFs, documents, and text attachments;
+- answer questions about images, PDFs, and text attachments;
 - search the public web when current information is needed;
 - find older messages in Discord history and return links to the originals;
 - reason carefully about identity questions using available server evidence;

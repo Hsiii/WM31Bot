@@ -29,13 +29,6 @@ type TraceStoreMetadata = {
   promptVersion?: number;
 };
 
-type ContextPlan = {
-  historyCount?: number;
-  history?: "local" | "medium" | "extended";
-  memberQueries?: string[];
-  queries?: Array<Record<string, unknown>>;
-};
-
 function safeJson<T>(value: string | null): T | undefined {
   if (!value) return undefined;
   try {
@@ -240,11 +233,9 @@ export class ChatbotTraceStore {
          ORDER BY started_at`,
       )
       .all(previous.request_message_id) as TraceRow[];
-    const planner = rows.find((row) => row.purpose === "context_plan");
     const terminal = [...rows]
       .reverse()
       .find((row) => row.purpose === "answer");
-    const plan = safeJson<ContextPlan>(planner?.output ?? null);
     const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
     const toolCalls =
       safeJson<NonNullable<ChatbotTraceContext["toolCalls"]>>(
@@ -254,17 +245,14 @@ export class ChatbotTraceStore {
       .reverse()
       .flatMap((call) => {
         const value =
-          call.name === "get_recent_messages"
-            ? call.arguments.limit
-            : call.name === "resolve_context"
-              ? call.arguments.historyCount
-              : undefined;
+          call.name === "resolve_context"
+            ? call.arguments.historyCount
+            : undefined;
         return typeof value === "number" ? [value] : [];
       })
       .at(0);
     const mcpSearchQueries = toolCalls.flatMap((call) =>
-      ["search_messages", "resolve_context"].includes(call.name) &&
-      Array.isArray(call.arguments.queries)
+      call.name === "resolve_context" && Array.isArray(call.arguments.queries)
         ? call.arguments.queries.filter(
             (query): query is Record<string, unknown> =>
               Boolean(query) && typeof query === "object",
@@ -272,52 +260,23 @@ export class ChatbotTraceStore {
         : [],
     );
     const mcpMemberQueries = toolCalls.flatMap((call) =>
-      call.name === "lookup_members" && Array.isArray(call.arguments.queries)
-        ? call.arguments.queries.filter(
+      call.name === "resolve_context" &&
+      Array.isArray(call.arguments.memberQueries)
+        ? call.arguments.memberQueries.filter(
             (query): query is string => typeof query === "string",
           )
-        : call.name === "resolve_context" &&
-            Array.isArray(call.arguments.memberQueries)
-          ? call.arguments.memberQueries.filter(
-              (query): query is string => typeof query === "string",
-            )
-          : [],
+        : [],
     );
-    const legacyHistoryCount =
-      plan?.history === "extended"
-        ? 100
-        : plan?.history === "medium"
-          ? 50
-          : plan?.history === "local"
-            ? 20
-            : undefined;
     return {
-      ...((typeof mcpHistoryCount === "number" ||
-        typeof plan?.historyCount === "number" ||
-        legacyHistoryCount) && {
-        historyCount:
-          typeof mcpHistoryCount === "number"
-            ? mcpHistoryCount
-            : typeof plan?.historyCount === "number"
-              ? plan.historyCount
-              : legacyHistoryCount,
+      ...(typeof mcpHistoryCount === "number" && {
+        historyCount: mcpHistoryCount,
       }),
       contextMessageCount: answerJob?.messages.length ?? 0,
-      searchQueries: (mcpSearchQueries.length
-        ? mcpSearchQueries
-        : (plan?.queries ?? [])
-      )
-        .slice(0, 4)
-        .map(sanitizedSearchQuery),
+      searchQueries: mcpSearchQueries.slice(0, 4).map(sanitizedSearchQuery),
       searchResultCount: toolCalls
-        .filter((call) =>
-          ["search_messages", "resolve_context"].includes(call.name),
-        )
+        .filter((call) => call.name === "resolve_context")
         .reduce((total, call) => total + (call.resultCount ?? 0), 0),
-      memberQueries: (mcpMemberQueries.length
-        ? mcpMemberQueries
-        : (plan?.memberQueries ?? [])
-      )
+      memberQueries: mcpMemberQueries
         .filter((value): value is string => typeof value === "string")
         .slice(0, 4)
         .map((value) => value.slice(0, 100)),

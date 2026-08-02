@@ -405,18 +405,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     | undefined;
 
   try {
-    const preparationJob =
-      job.purpose === "social_action"
-        ? {
-            ...job,
-            requestMessage: undefined,
-            messages: [],
-          }
-        : job;
-    prepared = await prepareAttachments(
-      preparationJob,
-      timeoutController.signal,
-    );
+    prepared = await prepareAttachments(job, timeoutController.signal);
     if (hasDeveloperAccess) {
       developerWorkspace = await prepareDeveloperWorkspace(job, {
         ...options,

@@ -48,6 +48,94 @@ describe("chatbot attachment limits", () => {
     await prepared.cleanup();
   });
 
+  test.serial("skips attachments outside answer jobs", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetched = false;
+    globalThis.fetch = (async () => {
+      fetched = true;
+      return new Response("unused");
+    }) as unknown as typeof fetch;
+
+    try {
+      const prepared = await prepareAttachments({
+        id: "route-with-attachment",
+        requesterUserId: "owner",
+        purpose: "execution_route",
+        channelId: "channel-1",
+        requestMessageId: "message-1",
+        request: "handle this",
+        messages: [
+          {
+            id: "message-1",
+            author: "Hsi",
+            timestamp: "2026-07-20T10:00:00.000Z",
+            content: "repository notes",
+            attachments: [
+              {
+                id: "attachment-1",
+                filename: "notes.txt",
+                contentType: "text/plain",
+                size: 5,
+                url: "https://cdn.discordapp.com/notes.txt",
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(fetched).toBe(false);
+      expect(prepared.imagePaths).toEqual([]);
+      expect(prepared.textBlocks).toEqual([]);
+      await prepared.cleanup();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test.serial("ignores unsupported Word documents", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetched = false;
+    globalThis.fetch = (async () => {
+      fetched = true;
+      return new Response("unused");
+    }) as unknown as typeof fetch;
+
+    try {
+      const prepared = await prepareAttachments({
+        id: "answer-with-docx",
+        requesterUserId: "test-user",
+        purpose: "answer",
+        channelId: "channel-1",
+        requestMessageId: "message-1",
+        request: "read this",
+        messages: [
+          {
+            id: "message-1",
+            author: "Hsi",
+            timestamp: "2026-07-20T10:00:00.000Z",
+            content: "document",
+            attachments: [
+              {
+                id: "attachment-1",
+                filename: "notes.docx",
+                contentType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                size: 5,
+                url: "https://cdn.discordapp.com/notes.docx",
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(fetched).toBe(false);
+      expect(prepared.textBlocks).toEqual([]);
+      await prepared.cleanup();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test.serial(
     "extracts text attachments and removes temporary files",
     async () => {
