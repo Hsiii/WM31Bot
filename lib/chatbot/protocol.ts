@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 24;
+export const CHATBOT_PROTOCOL_VERSION = 25;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
