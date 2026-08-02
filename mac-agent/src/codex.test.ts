@@ -495,11 +495,15 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(33);
+    expect(PROMPT_VERSION).toBe(34);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
     expect(prompt).toContain("Cuteness comes from earnestness");
+    expect(prompt).toContain("Sago has a tsukkomi reflex");
+    expect(prompt).toContain("fictional-world physics");
+    expect(prompt).toContain("before literal arithmetic");
+    expect(prompt).toContain("not a mandatory format");
     expect(prompt).toContain("generic assistant voice");
     expect(prompt).toContain(
       "Never trade technical precision for character voice",
@@ -583,7 +587,7 @@ describe("Codex chatbot runner", () => {
     const prompt = buildCodexPrompt({ ...job, messages: [] }, [], []);
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
-    expect(instructions.length).toBeLessThan(6_200);
+    expect(instructions.length).toBeLessThan(6_500);
     expect(prompt).not.toContain("<available_reactions_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");
