@@ -31,42 +31,30 @@ describe("quick reply nudge", () => {
     expect(tracker.observe(message(TARGET_ID, 281))).toBe(false);
   });
 
-  test("does not count late replies or consecutive target messages", () => {
-    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
+  test("ignores replies that do not satisfy the timing and context rules", () => {
+    const cases = [
+      [message("friend", 0), message(TARGET_ID, 31), message(TARGET_ID, 32)],
+      [
+        message("friend", 0),
+        message("bot", 5, { bot: true }),
+        message(TARGET_ID, 10),
+      ],
+      [message(TARGET_ID, 0), message("friend", 10), message(TARGET_ID, 20)],
+      [
+        message(TARGET_ID, 0, { channelId: "one" }),
+        message("friend", 50, { channelId: "two" }),
+        message(TARGET_ID, 55, { channelId: "two" }),
+      ],
+    ];
 
-    expect(tracker.observe(message("friend", 0))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 31))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 32))).toBe(false);
-  });
-
-  test("requires the immediately previous message to be from another human", () => {
-    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
-
-    expect(tracker.observe(message("friend", 0))).toBe(false);
-    expect(tracker.observe(message("bot", 5, { bot: true }))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 10))).toBe(false);
-  });
-
-  test("does not count when the target spoke during the previous minute", () => {
-    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
-
-    expect(tracker.observe(message(TARGET_ID, 0))).toBe(false);
-    expect(tracker.observe(message("friend", 10))).toBe(false);
-    expect(tracker.observe(message(TARGET_ID, 20))).toBe(false);
-  });
-
-  test("tracks target activity across channels", () => {
-    const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
-
-    expect(tracker.observe(message(TARGET_ID, 0, { channelId: "one" }))).toBe(
-      false,
-    );
-    expect(tracker.observe(message("friend", 50, { channelId: "two" }))).toBe(
-      false,
-    );
-    expect(tracker.observe(message(TARGET_ID, 55, { channelId: "two" }))).toBe(
-      false,
-    );
+    for (const messages of cases) {
+      const tracker = new QuickReplyNudgeTracker(TARGET_ID, () => "2026-08-01");
+      expect(messages.map((item) => tracker.observe(item))).toEqual([
+        false,
+        false,
+        false,
+      ]);
+    }
   });
 
   test("keeps channel context separate and resets the daily threshold", () => {

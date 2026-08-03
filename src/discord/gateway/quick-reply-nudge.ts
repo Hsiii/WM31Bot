@@ -18,11 +18,6 @@ type RecentMessage = {
   timestampMs: number;
 };
 
-type DailyCount = {
-  count: number;
-  nudged: boolean;
-};
-
 export const QUICK_REPLY_TARGET_USER_ID = "468711293264855052";
 
 const taipeiDate = new Intl.DateTimeFormat("en-CA", {
@@ -34,7 +29,9 @@ const taipeiDate = new Intl.DateTimeFormat("en-CA", {
 
 export class QuickReplyNudgeTracker {
   private readonly recentByChannel = new Map<string, RecentMessage>();
-  private readonly dailyCounts = new Map<string, DailyCount>();
+  private dailyCount = 0;
+  private dailyCountDate = "";
+  private nudgedToday = false;
   private lastTargetMessageAt: number | null = null;
 
   constructor(
@@ -86,17 +83,16 @@ export class QuickReplyNudgeTracker {
     }
 
     const day = this.dateKey(timestampMs);
-    const daily = this.dailyCounts.get(day) ?? { count: 0, nudged: false };
-    daily.count += 1;
-    this.dailyCounts.set(day, daily);
-
-    for (const knownDay of this.dailyCounts.keys()) {
-      if (knownDay !== day) this.dailyCounts.delete(knownDay);
+    if (day !== this.dailyCountDate) {
+      this.dailyCountDate = day;
+      this.dailyCount = 0;
+      this.nudgedToday = false;
     }
+    this.dailyCount += 1;
 
-    if (daily.count <= QUICK_REPLY_LIMIT || daily.nudged) return false;
+    if (this.dailyCount <= QUICK_REPLY_LIMIT || this.nudgedToday) return false;
 
-    daily.nudged = true;
+    this.nudgedToday = true;
     return true;
   }
 }

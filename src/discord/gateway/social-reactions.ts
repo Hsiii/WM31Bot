@@ -20,37 +20,25 @@ import {
 } from "../api/reactions";
 
 const HOUR_MS = 60 * 60_000;
+const MINIMUM_ATTENTION_DELAY_MS = 20_000;
+const MAXIMUM_ATTENTION_DELAY_MS = 90_000;
+const MISSED_NOTIFICATION_COOLDOWN_MS = 5 * 60_000;
+const GLOBAL_ATTENTION_COOLDOWN_MS = 5 * 60_000;
+const MAXIMUM_MESSAGE_AGE_MS = 10 * 60_000;
+const REACTION_CHANNEL_COOLDOWN_MS = 15 * 60_000;
+const REACTION_USER_COOLDOWN_MS = 30 * 60_000;
+const MAXIMUM_REACTIONS_PER_HOUR = 3;
+const MAXIMUM_BUFFERED_CHANNELS = 20;
+const MAXIMUM_BUFFERED_MESSAGES_PER_CHANNEL = 12;
 
 export type AmbientReactionPolicy = {
   attentionProbability: number;
-  minimumAttentionDelayMs: number;
-  maximumAttentionDelayMs: number;
-  missedNotificationCooldownMs: number;
-  globalAttentionCooldownMs: number;
-  maximumMessageAgeMs: number;
-  reactionChannelCooldownMs: number;
-  reactionUserCooldownMs: number;
   maximumEvaluationsPerHour: number;
-  maximumReactionsPerHour: number;
-  maximumBufferedChannels: number;
-  maximumBufferedMessagesPerChannel: number;
-  capabilityCacheMs: number;
 };
 
 export const DEFAULT_AMBIENT_REACTION_POLICY: AmbientReactionPolicy = {
   attentionProbability: 0.25,
-  minimumAttentionDelayMs: 20_000,
-  maximumAttentionDelayMs: 90_000,
-  missedNotificationCooldownMs: 5 * 60_000,
-  globalAttentionCooldownMs: 5 * 60_000,
-  maximumMessageAgeMs: 10 * 60_000,
-  reactionChannelCooldownMs: 15 * 60_000,
-  reactionUserCooldownMs: 30 * 60_000,
   maximumEvaluationsPerHour: 4,
-  maximumReactionsPerHour: 3,
-  maximumBufferedChannels: 20,
-  maximumBufferedMessagesPerChannel: 12,
-  capabilityCacheMs: 10 * 60_000,
 };
 
 type SocialActionDecision =
@@ -246,7 +234,6 @@ export class AmbientReactionController {
       options.reactionBroker ??
       new DiscordReactionBroker({
         now: options.now,
-        cacheMs: options.policy?.capabilityCacheMs,
       });
   }
 
@@ -287,14 +274,10 @@ export class AmbientReactionController {
   }
 
   private prune(now: number) {
-    const policy = this.policy;
     pruneWindow(this.evaluationTimes, now - HOUR_MS);
     pruneWindow(this.reactionTimes, now - HOUR_MS);
-    pruneTimes(
-      this.lastReactionByChannel,
-      now - policy.reactionChannelCooldownMs,
-    );
-    pruneTimes(this.lastReactionByUser, now - policy.reactionUserCooldownMs);
+    pruneTimes(this.lastReactionByChannel, now - REACTION_CHANNEL_COOLDOWN_MS);
+    pruneTimes(this.lastReactionByUser, now - REACTION_USER_COOLDOWN_MS);
     pruneDeadlines(this.missedUntilByChannel, now);
     for (const [channelId, buffer] of this.buffers) {
       buffer.messages = buffer.messages.filter((message) =>
@@ -302,7 +285,7 @@ export class AmbientReactionController {
           message,
           buffer.botUserId,
           now,
-          policy.maximumMessageAgeMs,
+          MAXIMUM_MESSAGE_AGE_MS,
         ),
       );
       if (buffer.messages.length === 0) this.buffers.delete(channelId);
@@ -319,11 +302,11 @@ export class AmbientReactionController {
     messages.push(message);
     this.buffers.delete(message.channel_id);
     this.buffers.set(message.channel_id, {
-      messages: messages.slice(-this.policy.maximumBufferedMessagesPerChannel),
+      messages: messages.slice(-MAXIMUM_BUFFERED_MESSAGES_PER_CHANNEL),
       botUserId,
       discordRequest,
     });
-    while (this.buffers.size > this.policy.maximumBufferedChannels) {
+    while (this.buffers.size > MAXIMUM_BUFFERED_CHANNELS) {
       const oldest = this.buffers.keys().next().value;
       if (!oldest) break;
       this.buffers.delete(oldest);
@@ -342,7 +325,7 @@ export class AmbientReactionController {
     this.prune(now);
     if (
       !authorId ||
-      !freshHumanMessage(message, botUserId, now, policy.maximumMessageAgeMs) ||
+      !freshHumanMessage(message, botUserId, now, MAXIMUM_MESSAGE_AGE_MS) ||
       !message.guild_id ||
       !(
         accessConfig.guildIds.has(message.guild_id) ||
@@ -364,7 +347,7 @@ export class AmbientReactionController {
       now < this.globalAttentionAvailableAt ||
       now < (this.missedUntilByChannel.get(message.channel_id) ?? 0) ||
       this.evaluationTimes.length >= policy.maximumEvaluationsPerHour ||
-      this.reactionTimes.length >= policy.maximumReactionsPerHour
+      this.reactionTimes.length >= MAXIMUM_REACTIONS_PER_HOUR
     ) {
       return false;
     }
@@ -372,16 +355,14 @@ export class AmbientReactionController {
     if (this.random() >= policy.attentionProbability) {
       this.missedUntilByChannel.set(
         message.channel_id,
-        now + policy.missedNotificationCooldownMs,
+        now + MISSED_NOTIFICATION_COOLDOWN_MS,
       );
       return false;
     }
 
-    const delayRange =
-      policy.maximumAttentionDelayMs - policy.minimumAttentionDelayMs;
+    const delayRange = MAXIMUM_ATTENTION_DELAY_MS - MINIMUM_ATTENTION_DELAY_MS;
     const delay =
-      policy.minimumAttentionDelayMs +
-      Math.floor(this.random() * (delayRange + 1));
+      MINIMUM_ATTENTION_DELAY_MS + Math.floor(this.random() * (delayRange + 1));
     this.scheduledChannelId = message.channel_id;
     this.attentionTimer = this.schedule(() => {
       const channelId = this.scheduledChannelId;
@@ -409,14 +390,13 @@ export class AmbientReactionController {
     const startedAt = this.now();
     const policy = this.policy;
     this.prune(startedAt);
-    this.globalAttentionAvailableAt =
-      startedAt + policy.globalAttentionCooldownMs;
+    this.globalAttentionAvailableAt = startedAt + GLOBAL_ATTENTION_COOLDOWN_MS;
     const buffer = this.buffers.get(channelId);
     this.buffers.delete(channelId);
     if (
       !buffer ||
       this.evaluationTimes.length >= policy.maximumEvaluationsPerHour ||
-      this.reactionTimes.length >= policy.maximumReactionsPerHour
+      this.reactionTimes.length >= MAXIMUM_REACTIONS_PER_HOUR
     ) {
       return false;
     }
@@ -429,11 +409,11 @@ export class AmbientReactionController {
           message,
           buffer.botUserId,
           startedAt,
-          policy.maximumMessageAgeMs,
+          MAXIMUM_MESSAGE_AGE_MS,
         ) &&
         startedAt -
           (this.lastReactionByUser.get(authorId) ?? Number.NEGATIVE_INFINITY) >=
-          policy.reactionUserCooldownMs
+          REACTION_USER_COOLDOWN_MS
       );
     });
     const latest = candidates.at(-1);
@@ -444,7 +424,7 @@ export class AmbientReactionController {
       startedAt -
         (this.lastReactionByChannel.get(channelId) ??
           Number.NEGATIVE_INFINITY) <
-        policy.reactionChannelCooldownMs
+        REACTION_CHANNEL_COOLDOWN_MS
     ) {
       return false;
     }
@@ -514,17 +494,17 @@ export class AmbientReactionController {
         selected,
         buffer.botUserId,
         completedAt,
-        policy.maximumMessageAgeMs,
+        MAXIMUM_MESSAGE_AGE_MS,
       ) ||
-      this.reactionTimes.length >= policy.maximumReactionsPerHour ||
+      this.reactionTimes.length >= MAXIMUM_REACTIONS_PER_HOUR ||
       completedAt -
         (this.lastReactionByChannel.get(channelId) ??
           Number.NEGATIVE_INFINITY) <
-        policy.reactionChannelCooldownMs ||
+        REACTION_CHANNEL_COOLDOWN_MS ||
       completedAt -
         (this.lastReactionByUser.get(selectedAuthorId) ??
           Number.NEGATIVE_INFINITY) <
-        policy.reactionUserCooldownMs
+        REACTION_USER_COOLDOWN_MS
     ) {
       return false;
     }

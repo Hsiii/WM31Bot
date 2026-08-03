@@ -189,9 +189,7 @@ class InstagramGatewayClient implements VoiceGateway {
   private voiceStates = new VoiceStateTracker();
 
   constructor(private readonly config: InstagramGatewayConfig) {
-    this.reactionBroker = new DiscordReactionBroker({
-      cacheMs: config.ambientReactionPolicy.capabilityCacheMs,
-    });
+    this.reactionBroker = new DiscordReactionBroker();
     this.ambientReactions = new AmbientReactionController({
       policy: config.ambientReactionPolicy,
       reactionBroker: this.reactionBroker,
