@@ -1,6 +1,25 @@
 import { describe, expect, test } from "bun:test";
 
-import { ChannelTaskQueue } from "./gateway";
+import {
+  BOT_CUSTOM_STATUS,
+  buildBotPresence,
+  ChannelTaskQueue,
+} from "./gateway";
+
+test("uses the configured custom status for the initial presence", () => {
+  expect(buildBotPresence()).toEqual({
+    since: null,
+    activities: [
+      {
+        name: "Custom Status",
+        type: 4,
+        state: BOT_CUSTOM_STATUS,
+      },
+    ],
+    status: "online",
+    afk: false,
+  });
+});
 
 describe("Discord gateway channel scheduling", () => {
   test("runs messages from one channel in arrival order", async () => {
