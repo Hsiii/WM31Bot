@@ -1,10 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-
 import vocabData from "./toefl-vocab.json";
 import { TARGET_GUILD_ID } from "../config";
+import { discordRequest, readJsonFile, writeJsonFile } from "./job-utils";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_DAILY_TIME = "08:00";
 const DEFAULT_TIMEZONE = "Asia/Taipei";
 const DEFAULT_STATE_FILE = ".data/toefl-vocab-state.json";
@@ -228,28 +225,6 @@ export function buildToeflVocabMessagePayload({
   };
 }
 
-async function readState(stateFile: string): Promise<ToeflVocabState> {
-  try {
-    return JSON.parse(await readFile(stateFile, "utf8")) as ToeflVocabState;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error) {
-      const code = (error as { code?: string }).code;
-
-      if (code === "ENOENT") {
-        return {};
-      }
-    }
-
-    throw error;
-  }
-}
-
-async function writeState(stateFile: string, state: ToeflVocabState) {
-  await mkdir(dirname(stateFile), { recursive: true });
-  await writeFile(`${stateFile}.tmp`, `${JSON.stringify(state, null, 2)}\n`);
-  await rename(`${stateFile}.tmp`, stateFile);
-}
-
 async function sendDiscordChannelMessage({
   botToken,
   channelId,
@@ -261,10 +236,10 @@ async function sendDiscordChannelMessage({
   guildId: string;
   payload: ToeflVocabMessagePayload;
 }) {
-  const channel = await fetchDiscordJson<DiscordChannel>({
+  const channel = await discordRequest<DiscordChannel>(
     botToken,
-    path: `/channels/${channelId}`,
-  });
+    `/channels/${channelId}`,
+  );
 
   if (channel.guild_id !== guildId) {
     throw new Error(
@@ -272,43 +247,10 @@ async function sendDiscordChannelMessage({
     );
   }
 
-  await fetchDiscordJson({
-    botToken,
-    path: `/channels/${channelId}/messages`,
-    init: {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
+  await discordRequest(botToken, `/channels/${channelId}/messages`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
-}
-
-async function fetchDiscordJson<T>({
-  botToken,
-  path,
-  init,
-}: {
-  botToken: string;
-  path: string;
-  init?: RequestInit;
-}) {
-  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`${response.status} ${await response.text()}`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
 }
 
 async function sendDailyToeflVocabIfDue(
@@ -322,7 +264,10 @@ async function sendDailyToeflVocabIfDue(
     return;
   }
 
-  const state = await readState(config.stateFile);
+  const state = await readJsonFile<ToeflVocabState>(
+    config.stateFile,
+    () => ({}),
+  );
 
   if (state.lastSentDate === timeParts.dateKey) {
     return;
@@ -342,7 +287,7 @@ async function sendDailyToeflVocabIfDue(
     guildId: config.guildId,
     payload,
   });
-  await writeState(config.stateFile, {
+  await writeJsonFile(config.stateFile, {
     lastSentDate: timeParts.dateKey,
     lastSentWord: entry.word,
   });

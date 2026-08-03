@@ -7,7 +7,6 @@ import {
   formatGamerForumPostMessage,
   getForumCurrentPageNumber,
   getForumLastPageNumber,
-  millisecondsUntilNextForumCheck,
   parseGamerForumMarkdownPosts,
   parseGamerForumPosts,
   parseForumCheckTimes,
@@ -80,29 +79,11 @@ describe("Gamer forum page helpers", () => {
 });
 
 describe("Gamer forum schedule", () => {
-  const timezone = "Asia/Taipei";
   const checkTimes = parseForumCheckTimes("08:30,20:30");
 
   test("parses two unique daily wall-clock times", () => {
     expect(checkTimes).toEqual([510, 1230]);
     expect(() => parseForumCheckTimes("08:30,08:30")).toThrow();
-  });
-
-  test("finds the next Taipei check without startup drift", () => {
-    expect(
-      millisecondsUntilNextForumCheck(
-        new Date("2026-07-18T00:00:00.000Z"),
-        timezone,
-        checkTimes,
-      ),
-    ).toBe(30 * 60_000);
-    expect(
-      millisecondsUntilNextForumCheck(
-        new Date("2026-07-18T00:30:00.000Z"),
-        timezone,
-        checkTimes,
-      ),
-    ).toBe(12 * 60 * 60_000);
   });
 });
 

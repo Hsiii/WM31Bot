@@ -1,9 +1,12 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-
 import { TARGET_GUILD_ID } from "../config";
+import {
+  decodeEntities,
+  discordRequest,
+  readJsonFile,
+  writeJsonFile,
+} from "./job-utils";
+import { Cron } from "croner";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_FORUM_URL =
   "https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&to=112";
 const DEFAULT_READER_BASE_URL = "https://r.jina.ai/";
@@ -115,40 +118,6 @@ export function parseForumCheckTimes(value: string) {
   return minutes.sort((a, b) => a - b);
 }
 
-function getZonedMinutes(date: Date, timezone: string) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(date)
-      .map((part) => [part.type, part.value]),
-  );
-
-  return Number(parts.hour) * 60 + Number(parts.minute);
-}
-
-export function millisecondsUntilNextForumCheck(
-  now: Date,
-  timezone: string,
-  checkTimes: number[],
-) {
-  const scheduledMinutes = new Set(checkTimes);
-  const firstCandidate = Math.floor(now.getTime() / 60_000) * 60_000 + 60_000;
-
-  for (let offset = 0; offset <= 48 * 60; offset += 1) {
-    const candidate = new Date(firstCandidate + offset * 60_000);
-
-    if (scheduledMinutes.has(getZonedMinutes(candidate, timezone))) {
-      return candidate.getTime() - now.getTime();
-    }
-  }
-
-  throw new Error("Could not find the next Gamer forum check time.");
-}
-
 function comparePostIds(a: string, b: string) {
   const numericA = Number(a);
   const numericB = Number(b);
@@ -160,40 +129,12 @@ function comparePostIds(a: string, b: string) {
   return a.localeCompare(b);
 }
 
-function decodeHtmlEntities(value: string) {
-  return value.replace(
-    /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
-    (entity, rawEntity: string) => {
-      const normalized = rawEntity.toLowerCase();
-
-      if (normalized.startsWith("#x")) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
-      }
-
-      if (normalized.startsWith("#")) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
-      }
-
-      const namedEntities: Record<string, string> = {
-        amp: "&",
-        lt: "<",
-        gt: ">",
-        quot: '"',
-        apos: "'",
-        nbsp: " ",
-      };
-
-      return namedEntities[normalized] ?? entity;
-    },
-  );
-}
-
 function normalizeUrl(value: string) {
-  return decodeHtmlEntities(value.trim());
+  return decodeEntities(value.trim());
 }
 
 function htmlToText(html: string) {
-  return decodeHtmlEntities(
+  return decodeEntities(
     html
       .replace(/<script\b[\s\S]*?<\/script>/gi, "")
       .replace(/<style\b[\s\S]*?<\/style>/gi, "")
@@ -296,7 +237,7 @@ export function parseGamerForumPosts(
 }
 
 function markdownToText(markdown: string) {
-  return decodeHtmlEntities(
+  return decodeEntities(
     markdown
       .replace(/\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "")
       .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
@@ -531,28 +472,6 @@ async function fetchLatestGamerForumPosts(
   return parseForumReaderResponse(html, watchUrl);
 }
 
-async function readState(stateFile: string): Promise<GamerForumState> {
-  try {
-    return JSON.parse(await readFile(stateFile, "utf8")) as GamerForumState;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error) {
-      const code = (error as { code?: string }).code;
-
-      if (code === "ENOENT") {
-        return {};
-      }
-    }
-
-    throw error;
-  }
-}
-
-async function writeState(stateFile: string, state: GamerForumState) {
-  await mkdir(dirname(stateFile), { recursive: true });
-  await writeFile(`${stateFile}.tmp`, `${JSON.stringify(state, null, 2)}\n`);
-  await rename(`${stateFile}.tmp`, stateFile);
-}
-
 function toState(post: GamerForumPost, now: Date): GamerForumState {
   return {
     lastPostId: post.id,
@@ -560,35 +479,6 @@ function toState(post: GamerForumPost, now: Date): GamerForumState {
     lastPostUrl: post.url,
     lastCheckedAt: now.toISOString(),
   };
-}
-
-async function fetchDiscordJson<T>({
-  botToken,
-  path,
-  init,
-}: {
-  botToken: string;
-  path: string;
-  init?: RequestInit;
-}) {
-  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`${response.status} ${await response.text()}`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
 }
 
 async function sendDiscordChannelMessage({
@@ -602,10 +492,10 @@ async function sendDiscordChannelMessage({
   guildId: string;
   payload: DiscordMessagePayload;
 }) {
-  const channel = await fetchDiscordJson<DiscordChannel>({
+  const channel = await discordRequest<DiscordChannel>(
     botToken,
-    path: `/channels/${channelId}`,
-  });
+    `/channels/${channelId}`,
+  );
 
   if (channel.guild_id !== guildId) {
     throw new Error(
@@ -613,13 +503,9 @@ async function sendDiscordChannelMessage({
     );
   }
 
-  await fetchDiscordJson({
-    botToken,
-    path: `/channels/${channelId}/messages`,
-    init: {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
+  await discordRequest(botToken, `/channels/${channelId}/messages`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -637,10 +523,13 @@ async function sendGamerForumAlertsIfNeeded(
     throw new Error("Gamer forum page did not contain any posts.");
   }
 
-  const state = await readState(config.stateFile);
+  const state = await readJsonFile<GamerForumState>(
+    config.stateFile,
+    () => ({}),
+  );
 
   if (!state.lastPostId) {
-    await writeState(config.stateFile, toState(latestPost, now));
+    await writeJsonFile(config.stateFile, toState(latestPost, now));
     console.log(
       `Initialized Gamer forum monitor at post ${latestPost.id}; future posts will be sent.`,
     );
@@ -658,12 +547,12 @@ async function sendGamerForumAlertsIfNeeded(
       guildId: config.guildId,
       payload: buildGamerForumPostMessagePayload(post),
     });
-    await writeState(config.stateFile, toState(post, now));
+    await writeJsonFile(config.stateFile, toState(post, now));
     console.log(`Sent Gamer forum post ${post.id} to Discord.`);
   }
 
   if (newPosts.length === 0) {
-    await writeState(config.stateFile, {
+    await writeJsonFile(config.stateFile, {
       ...state,
       lastCheckedAt: now.toISOString(),
     });
@@ -677,38 +566,23 @@ export function startGamerForumMonitor() {
     return null;
   }
 
-  let running = false;
   const tick = async () => {
-    if (running) {
-      return;
-    }
-
-    running = true;
-
     try {
       await sendGamerForumAlertsIfNeeded(config);
     } catch (error) {
       console.error("Failed to check Gamer forum posts:", error);
-    } finally {
-      running = false;
     }
   };
 
   void tick();
-
-  const scheduleNext = () => {
-    const delay = millisecondsUntilNextForumCheck(
-      new Date(),
-      config.timezone,
-      config.checkTimes,
-    );
-
-    return setTimeout(async () => {
-      await tick();
-      scheduleNext();
-    }, delay);
-  };
-  const timer = scheduleNext();
+  const schedules = config.checkTimes.map(
+    (minutes) =>
+      new Cron(
+        `${minutes % 60} ${Math.floor(minutes / 60)} * * *`,
+        { timezone: config.timezone, protect: true },
+        tick,
+      ),
+  );
   const formattedTimes = config.checkTimes
     .map(
       (minutes) =>
@@ -720,5 +594,5 @@ export function startGamerForumMonitor() {
     `Gamer forum monitor enabled for ${config.watchUrl} at ${formattedTimes} ${config.timezone}.`,
   );
 
-  return timer;
+  return schedules;
 }

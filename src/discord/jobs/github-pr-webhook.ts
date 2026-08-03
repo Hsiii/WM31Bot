@@ -1,8 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
+import { discordRequest, readJsonFile, writeJsonFile } from "./job-utils";
+
 const TARGET_REPOSITORY = "Hsiii/health-check-system";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
 const DEFAULT_STATE_FILE = ".data/github-pr-threads.json";
@@ -176,7 +175,10 @@ function getWebhookConfig(): WebhookConfig | null {
 
 async function readState(stateFile: string): Promise<ThreadState> {
   try {
-    const state = JSON.parse(await readFile(stateFile, "utf8")) as ThreadState;
+    const state = await readJsonFile<ThreadState>(stateFile, () => ({
+      version: 1,
+      threads: {},
+    }));
 
     if (state.version !== 1 || !state.threads) {
       throw new Error("unsupported state format");
@@ -184,44 +186,10 @@ async function readState(stateFile: string): Promise<ThreadState> {
 
     return state;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { version: 1, threads: {} };
-    }
-
     throw new Error(
       `Failed to read GitHub PR thread state at ${stateFile}: ${error instanceof Error ? error.message : "unknown error"}`,
     );
   }
-}
-
-async function writeState(stateFile: string, state: ThreadState) {
-  await mkdir(dirname(stateFile), { recursive: true });
-  const temporaryFile = `${stateFile}.tmp`;
-  await writeFile(temporaryFile, `${JSON.stringify(state, null, 2)}\n`);
-  await rename(temporaryFile, stateFile);
-}
-
-async function discordRequest<T>(
-  botToken: string,
-  path: string,
-  init?: RequestInit,
-) {
-  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Discord returned ${response.status}: ${await response.text()}`,
-    );
-  }
-
-  return response.status === 204 ? undefined : ((await response.json()) as T);
 }
 
 function getPullRequestDetails(payload: PullRequestPayload) {
@@ -284,7 +252,7 @@ async function openReviewThread(
       archived: false,
     };
     state.threads[details.key] = record;
-    await writeState(config.stateFile, state);
+    await writeJsonFile(config.stateFile, state);
   }
 
   if (record.reviewRequestSent) {
@@ -325,7 +293,7 @@ async function openReviewThread(
   );
 
   record.reviewRequestSent = true;
-  await writeState(config.stateFile, state);
+  await writeJsonFile(config.stateFile, state);
   return "created" as const;
 }
 
@@ -392,7 +360,7 @@ async function notifyAuthorOfApproval(
   );
 
   record.approvalNotificationSent = true;
-  await writeState(config.stateFile, state);
+  await writeJsonFile(config.stateFile, state);
   return "notified" as const;
 }
 
@@ -429,7 +397,7 @@ async function archiveReviewThread(
     );
 
     record.mergeNotificationSent = true;
-    await writeState(config.stateFile, state);
+    await writeJsonFile(config.stateFile, state);
   }
 
   await discordRequest(config.botToken, `/channels/${record.threadId}`, {
@@ -438,7 +406,7 @@ async function archiveReviewThread(
   });
 
   record.archived = true;
-  await writeState(config.stateFile, state);
+  await writeJsonFile(config.stateFile, state);
   return "archived" as const;
 }
 
