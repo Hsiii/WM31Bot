@@ -39,12 +39,6 @@ const REACTION_PERMISSIONS = String((1n << 6n) | (1n << 10n) | (1n << 16n));
 const TEST_POLICY = {
   ...DEFAULT_AMBIENT_REACTION_POLICY,
   attentionProbability: 1,
-  minimumAttentionDelayMs: 1_000,
-  maximumAttentionDelayMs: 1_000,
-  globalAttentionCooldownMs: 0,
-  missedNotificationCooldownMs: 0,
-  reactionChannelCooldownMs: 0,
-  reactionUserCooldownMs: 0,
 };
 
 function discordFixture(requests: string[]) {
@@ -145,7 +139,7 @@ describe("ambient Discord attention", () => {
         discordRequest,
       }),
     ).toBe(false);
-    expect(test.scheduledDelay).toBe(1_000);
+    expect(test.scheduledDelay).toBe(20_000);
     expect(test.jobs).toHaveLength(0);
     expect(requests).toHaveLength(0);
 

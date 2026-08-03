@@ -30,7 +30,6 @@ import {
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-export const BOT_CUSTOM_STATUS = "標我才會讀訊息";
 const MESSAGE_CONTENT_LIMIT = 2_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const GUILDS_INTENT = 1 << 0;
@@ -156,21 +155,6 @@ export class ChannelTaskQueue {
   }
 }
 
-export function buildBotPresence() {
-  return {
-    since: null,
-    activities: [
-      {
-        name: "Custom Status",
-        type: 4,
-        state: BOT_CUSTOM_STATUS,
-      },
-    ],
-    status: "online",
-    afk: false,
-  };
-}
-
 function getGatewayCloseReason(code: number) {
   if (code === 4004) {
     return "authentication failed; check DISCORD_BOT_TOKEN";
@@ -205,9 +189,7 @@ class InstagramGatewayClient implements VoiceGateway {
   private voiceStates = new VoiceStateTracker();
 
   constructor(private readonly config: InstagramGatewayConfig) {
-    this.reactionBroker = new DiscordReactionBroker({
-      cacheMs: config.ambientReactionPolicy.capabilityCacheMs,
-    });
+    this.reactionBroker = new DiscordReactionBroker();
     this.ambientReactions = new AmbientReactionController({
       policy: config.ambientReactionPolicy,
       reactionBroker: this.reactionBroker,
@@ -404,7 +386,18 @@ class InstagramGatewayClient implements VoiceGateway {
           browser: "minisago",
           device: "minisago",
         },
-        presence: buildBotPresence(),
+        presence: {
+          since: null,
+          activities: [
+            {
+              name: "Custom Status",
+              type: 4,
+              state: "標我才會讀訊息",
+            },
+          ],
+          status: "online",
+          afk: false,
+        },
       },
     });
   }

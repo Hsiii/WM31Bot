@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 
 import { Cron } from "croner";
+import { writeJsonFile } from "./job-utils";
 
 const DEFAULT_STATE_FILE = ".data/reminders.json";
 const LEGACY_DEFAULT_TIMEZONE = "Asia/Taipei";
@@ -280,14 +280,11 @@ export class ReminderScheduler {
   }
 
   private async write() {
-    await mkdir(dirname(this.options.stateFile), { recursive: true });
-    const temporaryFile = `${this.options.stateFile}.tmp`;
     const state: ReminderState = {
       version: 1,
       reminders: this.reminders,
     };
-    await writeFile(temporaryFile, `${JSON.stringify(state, null, 2)}\n`);
-    await rename(temporaryFile, this.options.stateFile);
+    await writeJsonFile(this.options.stateFile, state);
   }
 }
 

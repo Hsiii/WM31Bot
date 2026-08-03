@@ -42,6 +42,44 @@ function fakeSocket() {
   return { socket, sent, closed };
 }
 
+function connectWorker(
+  bridge: MacAgentBridge,
+  {
+    workerId = "oracle",
+    secret = bridgeSecret,
+    repositories = ["Hsiii/mini-sago"],
+    chatbotRepository,
+    capacity = 1,
+  }: {
+    workerId?: string;
+    secret?: string;
+    repositories?: string[];
+    chatbotRepository?: string;
+    capacity?: number | null;
+  } = {},
+) {
+  const worker = fakeSocket();
+  bridge.open(worker.socket);
+  bridge.message(
+    worker.socket,
+    JSON.stringify({
+      type: "authenticate",
+      protocolVersion: CHATBOT_PROTOCOL_VERSION,
+      secret,
+      workerId,
+      repositories,
+      ...(chatbotRepository ? { chatbotRepository } : {}),
+    }),
+  );
+  if (capacity !== null) {
+    bridge.message(
+      worker.socket,
+      JSON.stringify({ type: "availability", available: true, capacity }),
+    );
+  }
+  return worker;
+}
+
 describe("Mac agent bridge", () => {
   test("binds cloud worker identity to its profile secret", () => {
     useWorker();
@@ -69,20 +107,11 @@ describe("Mac agent bridge", () => {
   test("stays offline until an authenticated helper reports availability", () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const { socket, sent } = fakeSocket();
-
-    bridge.open(socket);
-    bridge.message(
-      socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
-        chatbotRepository: "Hsiii/mini-sago",
-      }),
-    );
+    const { socket, sent } = connectWorker(bridge, {
+      repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
+      chatbotRepository: "Hsiii/mini-sago",
+      capacity: null,
+    });
 
     expect(sent.map((message) => JSON.parse(message))).toEqual([
       { type: "authenticated", protocolVersion: CHATBOT_PROTOCOL_VERSION },
@@ -99,7 +128,7 @@ describe("Mac agent bridge", () => {
   test("enforces the advertised capacity and resolves matching results", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const { socket, sent } = fakeSocket();
+    const { socket, sent } = connectWorker(bridge);
     const job: ChatbotJob = {
       id: "job-1",
       requesterUserId: "test-user",
@@ -108,22 +137,6 @@ describe("Mac agent bridge", () => {
       request: "Summarize this",
       messages: [],
     };
-
-    bridge.open(socket);
-    bridge.message(
-      socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: ["Hsiii/mini-sago"],
-      }),
-    );
-    bridge.message(
-      socket,
-      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
-    );
 
     const dispatch = bridge.dispatch(job);
     expect(dispatch.status).toBe("accepted");
@@ -170,7 +183,10 @@ describe("Mac agent bridge", () => {
   test("reserves the bridge across routing and answering jobs", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const { socket } = fakeSocket();
+    const { socket } = connectWorker(bridge, {
+      repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
+      chatbotRepository: "Hsiii/mini-sago",
+    });
     const job: ChatbotJob = {
       id: "router-1",
       requesterUserId: "test-user",
@@ -180,23 +196,6 @@ describe("Mac agent bridge", () => {
       request: "What did we decide?",
       messages: [],
     };
-
-    bridge.open(socket);
-    bridge.message(
-      socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
-        chatbotRepository: "Hsiii/mini-sago",
-      }),
-    );
-    bridge.message(
-      socket,
-      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
-    );
 
     const acquired = bridge.acquireWorkflow();
     expect(acquired.status).toBe("accepted");
@@ -248,22 +247,7 @@ describe("Mac agent bridge", () => {
   test("reads Codex usage from the worker reserved by a workflow", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const { socket, sent } = fakeSocket();
-    bridge.open(socket);
-    bridge.message(
-      socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: [],
-      }),
-    );
-    bridge.message(
-      socket,
-      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
-    );
+    const { socket, sent } = connectWorker(bridge, { repositories: [] });
     const acquired = bridge.acquireWorkflow();
     if (acquired.status !== "accepted") throw new Error("Expected workflow");
 
@@ -321,7 +305,7 @@ describe("Mac agent bridge", () => {
   test("runs multiple reserved workflows concurrently up to capacity", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const { socket } = fakeSocket();
+    const { socket } = connectWorker(bridge, { capacity: 2 });
     const job: ChatbotJob = {
       id: "job-1",
       requesterUserId: "test-user",
@@ -330,22 +314,6 @@ describe("Mac agent bridge", () => {
       request: "Summarize this",
       messages: [],
     };
-
-    bridge.open(socket);
-    bridge.message(
-      socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: ["Hsiii/mini-sago"],
-      }),
-    );
-    bridge.message(
-      socket,
-      JSON.stringify({ type: "availability", available: true, capacity: 2 }),
-    );
 
     const first = bridge.acquireWorkflow();
     const second = bridge.acquireWorkflow();
@@ -396,32 +364,11 @@ describe("Mac agent bridge", () => {
     process.env.MINISAGO_WORKER_BRIDGE_SECRET = bridgeSecret;
     process.env.MINISAGO_MAC_BRIDGE_SECRET = macSecret;
     const bridge = new MacAgentBridge();
-    const cloud = fakeSocket();
-    const mac = fakeSocket();
-    const authenticate = (
-      target: ReturnType<typeof fakeSocket>,
-      workerId: string,
-      secret: string,
-    ) => {
-      bridge.open(target.socket);
-      bridge.message(
-        target.socket,
-        JSON.stringify({
-          type: "authenticate",
-          protocolVersion: CHATBOT_PROTOCOL_VERSION,
-          secret,
-          workerId,
-          repositories: ["Hsiii/mini-sago"],
-        }),
-      );
-      bridge.message(
-        target.socket,
-        JSON.stringify({ type: "availability", available: true, capacity: 1 }),
-      );
-    };
-
-    authenticate(cloud, "oracle", bridgeSecret);
-    authenticate(mac, "hsi-mac", macSecret);
+    const cloud = connectWorker(bridge);
+    const mac = connectWorker(bridge, {
+      workerId: "hsi-mac",
+      secret: macSecret,
+    });
     expect(cloud.closed).toEqual([]);
     expect(mac.closed).toEqual([]);
     expect(bridge.getWorkerSummary()).toEqual({
@@ -533,22 +480,7 @@ describe("Mac agent bridge", () => {
   test("enforces repository scope before dispatching a dev job", () => {
     useWorker();
     const bridge = new MacAgentBridge();
-    const worker = fakeSocket();
-    bridge.open(worker.socket);
-    bridge.message(
-      worker.socket,
-      JSON.stringify({
-        type: "authenticate",
-        protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: bridgeSecret,
-        workerId: "oracle",
-        repositories: ["Hsiii/mini-sago"],
-      }),
-    );
-    bridge.message(
-      worker.socket,
-      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
-    );
+    connectWorker(bridge);
 
     const workflow = bridge.acquireWorkflow();
     if (workflow.status !== "accepted") throw new Error("Expected workflow");

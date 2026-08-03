@@ -1,9 +1,11 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-
 import { TARGET_GUILD_ID } from "../config";
+import {
+  decodeEntities,
+  discordRequest,
+  readJsonFile,
+  writeJsonFile,
+} from "./job-utils";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_HANDLE = "thsottiaux";
 const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
@@ -39,34 +41,6 @@ type DiscordChannel = {
   guild_id?: string;
 };
 
-function decodeXmlEntities(value: string) {
-  return value.replace(
-    /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
-    (entity, rawEntity: string) => {
-      const normalized = rawEntity.toLowerCase();
-
-      if (normalized.startsWith("#x")) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
-      }
-
-      if (normalized.startsWith("#")) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
-      }
-
-      const namedEntities: Record<string, string> = {
-        amp: "&",
-        lt: "<",
-        gt: ">",
-        quot: '"',
-        apos: "'",
-        nbsp: " ",
-      };
-
-      return namedEntities[normalized] ?? entity;
-    },
-  );
-}
-
 function readElement(xml: string, name: string) {
   const match = new RegExp(
     `<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`,
@@ -78,11 +52,11 @@ function readElement(xml: string, name: string) {
   }
 
   const value = match[1].replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1");
-  return decodeXmlEntities(value.trim());
+  return decodeEntities(value.trim());
 }
 
 function htmlToText(value: string) {
-  return decodeXmlEntities(
+  return decodeEntities(
     value
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/p>/gi, "\n\n")
@@ -100,7 +74,7 @@ function extractPostId(url: string) {
 function extractEnclosureUrl(itemXml: string) {
   const tag = /<enclosure\b[^>]*>/i.exec(itemXml)?.[0];
   const url = tag ? /\burl=(?:"([^"]+)"|'([^']+)')/i.exec(tag) : undefined;
-  return url ? decodeXmlEntities(url[1] ?? url[2]) : undefined;
+  return url ? decodeEntities(url[1] ?? url[2]) : undefined;
 }
 
 export function parseXPosts(feedXml: string) {
@@ -200,25 +174,6 @@ function getXPostMonitorConfig(): XPostMonitorConfig | null {
   };
 }
 
-async function readState(path: string): Promise<XPostState> {
-  try {
-    return JSON.parse(await readFile(path, "utf8")) as XPostState;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
-    }
-
-    throw error;
-  }
-}
-
-async function writeState(path: string, state: XPostState) {
-  await mkdir(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`);
-  await rename(temporaryPath, path);
-}
-
 async function fetchLatestXPosts(feedUrl: string) {
   const response = await fetch(feedUrl, {
     headers: { "User-Agent": USER_AGENT },
@@ -231,29 +186,6 @@ async function fetchLatestXPosts(feedUrl: string) {
   }
 
   return parseXPosts(await response.text());
-}
-
-async function discordRequest<T>(
-  botToken: string,
-  path: string,
-  init?: RequestInit,
-) {
-  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Discord returned ${response.status}: ${await response.text()}`,
-    );
-  }
-
-  return response.status === 204 ? undefined : ((await response.json()) as T);
 }
 
 async function sendXPost(config: XPostMonitorConfig, post: XPost) {
@@ -289,10 +221,10 @@ async function sendXPostAlertsIfNeeded(
     throw new Error("X feed did not contain any posts.");
   }
 
-  const state = await readState(config.stateFile);
+  const state = await readJsonFile<XPostState>(config.stateFile, () => ({}));
 
   if (!state.lastPostId) {
-    await writeState(config.stateFile, {
+    await writeJsonFile(config.stateFile, {
       lastPostId: latestPost.id,
       lastPostUrl: latestPost.url,
       lastCheckedAt: now.toISOString(),
@@ -309,7 +241,7 @@ async function sendXPostAlertsIfNeeded(
 
   for (const post of newPosts) {
     await sendXPost(config, post);
-    await writeState(config.stateFile, {
+    await writeJsonFile(config.stateFile, {
       lastPostId: post.id,
       lastPostUrl: post.url,
       lastCheckedAt: now.toISOString(),
@@ -321,7 +253,7 @@ async function sendXPostAlertsIfNeeded(
     newPosts.length === 0 &&
     shouldCheckpointXPostState(state.lastCheckedAt, now)
   ) {
-    await writeState(config.stateFile, {
+    await writeJsonFile(config.stateFile, {
       ...state,
       lastCheckedAt: now.toISOString(),
     });
