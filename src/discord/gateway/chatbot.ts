@@ -102,7 +102,8 @@ export class ChatbotConversationTracker {
     this.conversations.delete(message.channel_id);
     return (
       conversation.expiresAt > this.now() &&
-      message.author?.id === conversation.requesterUserId
+      message.author?.id === conversation.requesterUserId &&
+      !message.mentions?.length
     );
   }
 }
