@@ -66,8 +66,19 @@ describe("Discord chatbot", () => {
     expect(conversations.take({ ...followUp, id: "follow-up-3" })).toBe(false);
 
     conversations.activate("channel-1", "member-1");
-    now += 90_000;
+    expect(
+      conversations.take({
+        ...followUp,
+        id: "mentioned-member-1",
+        content: "<@member-2> 你記得嗎",
+        mentions: [{ id: "member-2" }],
+      }),
+    ).toBe(false);
     expect(conversations.take({ ...followUp, id: "follow-up-4" })).toBe(false);
+
+    conversations.activate("channel-1", "member-1");
+    now += 90_000;
+    expect(conversations.take({ ...followUp, id: "follow-up-5" })).toBe(false);
   });
 
   test("accepts reply-only, reaction-only, and combined mention decisions", () => {
