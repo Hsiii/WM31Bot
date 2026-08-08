@@ -32,9 +32,9 @@ RUN bun install --frozen-lockfile --production
 
 COPY mac-agent/requirements-sandbox.txt ./requirements-sandbox.txt
 RUN python3 -m venv /opt/minisago-python \
-  && /opt/minisago-python/bin/pip install --no-cache-dir -r requirements-sandbox.txt \
-  && mkdir -p /opt/minisago-models /opt/minisago-numba-cache \
-  && U2NET_HOME=/opt/minisago-models NUMBA_CACHE_DIR=/opt/minisago-numba-cache /opt/minisago-python/bin/python -c 'from PIL import Image; from rembg import new_session, remove; remove(Image.new("RGB", (64, 64), "white"), session=new_session("silueta"))'
+  && /opt/minisago-python/bin/pip install --no-cache-dir -r requirements-sandbox.txt
+RUN mkdir -p /opt/minisago-models /opt/minisago-numba-cache \
+  && U2NET_HOME=/opt/minisago-models NUMBA_CACHE_DIR=/opt/minisago-numba-cache /opt/minisago-python/bin/python -c 'from PIL import Image; from rembg import new_session, remove; remove(Image.new("RGB", (64, 64), "white"), session=new_session("u2netp"))'
 RUN chmod -R a+rX /opt/minisago-python /opt/minisago-models /opt/minisago-numba-cache
 
 COPY --chown=bun:bun src/chatbot /app/src/chatbot

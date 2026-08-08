@@ -14,7 +14,7 @@ const MAX_EXECUTION_OUTPUT_BYTES = 12 * 1024 * 1024;
 const MAX_ACTIVE_JOBS = 2;
 const MAX_WORKSPACE_BYTES = 64 * 1024 * 1024;
 const MAX_WORKSPACE_FILES = 128;
-const CONTAINER_TIMEOUT_MS = 52_000;
+const CONTAINER_TIMEOUT_MS = 97_000;
 const POLL_INTERVAL_MS = 100;
 const SANDBOX_LABEL = "dev.hsichen.minisago.python-sandbox";
 const jobDirectoryPattern =
@@ -230,7 +230,7 @@ async function waitForContainer(id: string, directory: string) {
   const deadline = Date.now() + CONTAINER_TIMEOUT_MS;
   for (;;) {
     if (Date.now() >= deadline) {
-      throw new Error("Python execution exceeded 52 seconds.");
+      throw new Error("Python execution exceeded 97 seconds.");
     }
     await workspaceUsage(directory);
     const inspection = await dockerJson<{
@@ -351,7 +351,7 @@ for (const entry of await readdir(jobsRoot)) {
 Bun.serve({
   hostname: "0.0.0.0",
   port: PORT,
-  idleTimeout: 60,
+  idleTimeout: 105,
   async fetch(request) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {

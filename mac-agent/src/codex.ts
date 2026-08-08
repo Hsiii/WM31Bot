@@ -566,7 +566,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "--config",
         "mcp_servers.minisago.startup_timeout_sec=10",
         "--config",
-        "mcp_servers.minisago.tool_timeout_sec=60",
+        "mcp_servers.minisago.tool_timeout_sec=105",
       );
     }
 
