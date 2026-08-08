@@ -148,7 +148,7 @@ async function prepareWorkspace(
       const filename = safeFilename(index, attachment.filename);
       const path = join(inputsDirectory, filename);
       await writeFile(path, Buffer.from(attachment.data, "base64"), {
-        mode: 0o400,
+        mode: 0o444,
       });
       attachments.push({
         id: attachment.id,
@@ -167,7 +167,7 @@ async function prepareWorkspace(
         attachments,
         ...(outputPath ? { outputPath } : {}),
       }),
-      { mode: 0o400 },
+      { mode: 0o444 },
     );
     await chmod(inputsDirectory, 0o555);
     await chmod(directory, 0o733);
