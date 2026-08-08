@@ -45,6 +45,23 @@ const imageContentTypes = new Set([
   "image/webp",
 ]);
 const imageExtensions = new Set([".gif", ".jpeg", ".jpg", ".png", ".webp"]);
+const mediaContentTypes = new Set([
+  ...imageContentTypes,
+  "audio/mpeg",
+  "audio/wav",
+  "audio/webm",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+const mediaExtensions = new Set([
+  ...imageExtensions,
+  ".mp3",
+  ".mp4",
+  ".mov",
+  ".wav",
+  ".webm",
+]);
 
 type AttachmentCandidate = {
   attachment: ChatbotAttachment;
@@ -56,6 +73,7 @@ type AttachmentCandidate = {
 export type PreparedAttachments = {
   directory: string;
   imagePaths: string[];
+  mediaManifestPath: string;
   outputsDirectory: string;
   textBlocks: string[];
   ignored: string[];
@@ -75,7 +93,8 @@ function isSupported(attachment: ChatbotAttachment) {
 
   return (
     imageContentTypes.has(contentType) ||
-    imageExtensions.has(extension) ||
+    mediaContentTypes.has(contentType) ||
+    mediaExtensions.has(extension) ||
     contentType === "application/pdf" ||
     contentType.startsWith("text/") ||
     textContentTypes.has(contentType) ||
@@ -252,7 +271,15 @@ export async function prepareAttachments(
   const directory = await mkdtemp(join(tmpdir(), "minisago-chatbot-"));
   const outputsDirectory = join(directory, "outputs");
   await mkdir(outputsDirectory);
+  const mediaManifestPath = join(directory, "media-manifest.json");
   const imagePaths: string[] = [];
+  const mediaAttachments: Array<{
+    id: string;
+    filename: string;
+    contentType?: string;
+    size: number;
+    storedFilename: string;
+  }> = [];
   const textBlocks: string[] = [];
   const ignored: string[] = [];
   const candidates =
@@ -289,15 +316,29 @@ export async function prepareAttachments(
 
         const extension = extname(attachment.filename).toLocaleLowerCase();
         if (
-          imageContentTypes.has(contentType) ||
-          imageExtensions.has(extension)
+          mediaContentTypes.has(contentType) ||
+          mediaExtensions.has(extension)
         ) {
           const path = join(
             directory,
             safeFilename(index, attachment.filename),
           );
           await Bun.write(path, bytes);
-          imagePaths.push(path);
+          if (
+            imageContentTypes.has(contentType) ||
+            imageExtensions.has(extension)
+          ) {
+            imagePaths.push(path);
+          }
+          mediaAttachments.push({
+            id: attachment.id,
+            filename: attachment.filename,
+            ...(attachment.contentType
+              ? { contentType: attachment.contentType }
+              : {}),
+            size: bytes.byteLength,
+            storedFilename: basename(path),
+          });
           continue;
         }
 
@@ -326,9 +367,20 @@ export async function prepareAttachments(
     throw error;
   }
 
+  await Bun.write(
+    mediaManifestPath,
+    JSON.stringify({
+      version: 1,
+      root: directory,
+      outputDirectory: outputsDirectory,
+      attachments: mediaAttachments,
+    }),
+  );
+
   return {
     directory,
     imagePaths,
+    mediaManifestPath,
     outputsDirectory,
     textBlocks,
     ignored,

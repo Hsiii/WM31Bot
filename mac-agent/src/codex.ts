@@ -31,6 +31,7 @@ export {
 
 const LOCAL_CHAT_TIMEOUT_MS = 110_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
+const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media-mcp.ts");
 export const EMOJI_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
@@ -141,6 +142,44 @@ export function canUseMacFiles(
     job.executionMode !== "dev" &&
     job.purpose === "answer"
   );
+}
+
+export function canUseMediaTools(
+  job: ChatbotJob,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return (
+    platform === "linux" &&
+    job.purpose === "answer" &&
+    job.executionMode !== "dev" &&
+    job.executionTarget !== "mac"
+  );
+}
+
+export function mediaMcpConfig(
+  manifestPath: string,
+  bunPath = process.execPath,
+  serverPath = MEDIA_MCP_SERVER_PATH,
+) {
+  return {
+    arguments: [
+      "--config",
+      `mcp_servers.minisago_media.command=${JSON.stringify(bunPath)}`,
+      "--config",
+      `mcp_servers.minisago_media.args=[${JSON.stringify(serverPath)}]`,
+      "--config",
+      'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST"]',
+      "--config",
+      "mcp_servers.minisago_media.required=true",
+      "--config",
+      'mcp_servers.minisago_media.default_tools_approval_mode="approve"',
+      "--config",
+      "mcp_servers.minisago_media.startup_timeout_sec=10",
+      "--config",
+      "mcp_servers.minisago_media.tool_timeout_sec=50",
+    ],
+    environment: { MINISAGO_MEDIA_MANIFEST: manifestPath },
+  };
 }
 
 function escapeSeatbeltLiteral(value: string) {
@@ -300,7 +339,8 @@ export function parseFinalResponse(
     if (
       event.type === "item.completed" &&
       event.item?.type === "mcp_tool_call" &&
-      event.item.server === "minisago" &&
+      (event.item.server === "minisago" ||
+        event.item.server === "minisago_media") &&
       event.item.tool
     ) {
       const result =
@@ -328,7 +368,10 @@ export function parseFinalResponse(
             ).length
           : undefined;
       onMcpToolCall?.({
-        name: event.item.tool.slice(0, 100),
+        name:
+          event.item.server === "minisago_media"
+            ? `media.${event.item.tool}`.slice(0, 100)
+            : event.item.tool.slice(0, 100),
         arguments: sanitizedToolArguments(event.item.arguments),
         ...(typeof resultCount === "number" ? { resultCount } : {}),
         ...(event.item.status
@@ -399,6 +442,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   const profile = codexProfileForJob(job, options.chatbotAccess);
   const hasDeveloperAccess = canUseDeveloperTools(job, options.chatbotAccess);
   const hasMacFileAccess = canUseMacFiles(job, options.chatbotAccess);
+  const hasMediaTools = canUseMediaTools(job);
   const timeoutController = new AbortController();
   const timeout = setTimeout(
     () => timeoutController.abort(),
@@ -432,6 +476,9 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       ...prompt.telemetry,
       versions: prompt.versions,
     });
+    const mediaMcp = hasMediaTools
+      ? mediaMcpConfig(prepared.mediaManifestPath)
+      : undefined;
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -484,7 +531,11 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     } else {
       codexArguments.push(
         "--config",
-        'permissions.minisago-chatbot.filesystem={":minimal"="read",":workspace_roots"={"."="read"}}',
+        `permissions.minisago-chatbot.filesystem={":minimal"="read",${
+          hasMediaTools
+            ? `${JSON.stringify(prepared.outputsDirectory)}="write",`
+            : ""
+        }":workspace_roots"={"."="read"}}`,
         "--config",
         "permissions.minisago-chatbot.network.enabled=false",
       );
@@ -513,6 +564,8 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "mcp_servers.minisago.tool_timeout_sec=60",
       );
     }
+
+    if (mediaMcp) codexArguments.push(...mediaMcp.arguments);
 
     if (outputSchema) {
       const schemaPath = join(prepared.directory, "output-schema.json");
@@ -553,6 +606,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
           ...(job.mcpAccessToken
             ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
             : {}),
+          ...mediaMcp?.environment,
           ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
         },
       ),

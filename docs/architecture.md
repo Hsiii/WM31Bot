@@ -90,6 +90,13 @@ Other tools cover Codex usage, reminders, voice, owner channel messages, and
 owner emoji creation. Discord identity and destinations remain bound by the
 host wherever possible.
 
+Linux answer jobs also receive a worker-local stdio MCP server for media
+attached to the active request. Its typed tools inspect media, transform images,
+extract video frames, and produce bounded MP4, MP3, or GIF artifacts through
+fixed FFmpeg presets. It accepts attachment IDs rather than paths or URLs and
+has no network access. The server and its manifest are recreated for each job;
+it is separate from the hosted authority-bearing MCP endpoint.
+
 Reminder identity and destination are fixed to the requester and current
 channel. Relative timers need no timezone; wall-clock and recurring requests
 require an IANA timezone or an unambiguous location. Each requester may keep at

@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import { describe, expect, test } from "bun:test";
 
@@ -226,6 +226,63 @@ describe("chatbot attachment limits", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test.serial(
+    "downloads video into the request-local media manifest",
+    async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async () =>
+        new Response("video", {
+          headers: { "Content-Length": "5" },
+        })) as unknown as typeof fetch;
+
+      try {
+        const prepared = await prepareAttachments({
+          id: "job-video",
+          requesterUserId: "test-user",
+          purpose: "answer",
+          channelId: "channel-1",
+          requestMessageId: "message-video",
+          request: "make a clip",
+          messages: [
+            {
+              id: "message-video",
+              author: "Hsi",
+              timestamp: "2026-08-08T00:00:00.000Z",
+              content: "clip this",
+              attachments: [
+                {
+                  id: "attachment-video",
+                  filename: "source.mp4",
+                  contentType: "video/mp4",
+                  size: 5,
+                  url: "https://cdn.discordapp.com/source.mp4",
+                },
+              ],
+            },
+          ],
+        });
+
+        expect(prepared.imagePaths).toEqual([]);
+        const manifest = JSON.parse(
+          await readFile(prepared.mediaManifestPath, "utf8"),
+        );
+        expect(manifest.attachments).toEqual([
+          {
+            id: "attachment-video",
+            filename: "source.mp4",
+            contentType: "video/mp4",
+            size: 5,
+            storedFilename: "0-source.mp4",
+          },
+        ]);
+        expect(manifest.outputDirectory).toBe(prepared.outputsDirectory);
+        await prepared.cleanup();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 
   test.serial(
     "includes replied-to images with missing or modern MIME types",
