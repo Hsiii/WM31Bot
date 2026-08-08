@@ -175,6 +175,18 @@ describe("chatbot attachment limits", () => {
         expect(prepared.textBlocks).toEqual([
           "Attachment: notes.txt\nShip next Friday.",
         ]);
+        const manifest = JSON.parse(
+          await readFile(prepared.mediaManifestPath, "utf8"),
+        );
+        expect(manifest.attachments).toEqual([
+          {
+            id: "attachment-1",
+            filename: "notes.txt",
+            contentType: "text/plain",
+            size: 17,
+            storedFilename: "0-notes.txt",
+          },
+        ]);
         expect(prepared.imagePaths).toHaveLength(0);
         expect(prepared.ignored).toEqual([]);
         await prepared.cleanup();

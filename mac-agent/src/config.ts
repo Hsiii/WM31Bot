@@ -21,6 +21,7 @@ export type MacAgentConfig = {
   maxConcurrentJobs: number;
   macFileRoots: string[];
   mcpUrl: string;
+  sandboxUrl: string;
   headless: boolean;
   sessionMonitorPath: string;
   traceDatabasePath: string;
@@ -236,6 +237,9 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     macFileRoots: macFileRoots(),
     mcpUrl: validateMcpUrl(
       process.env.MINISAGO_MCP_URL?.trim() || defaultMcpUrl(bridgeUrl),
+    ),
+    sandboxUrl: validateMcpUrl(
+      process.env.MINISAGO_SANDBOX_URL?.trim() || "http://sandbox:8080",
     ),
     sessionMonitorPath:
       process.env.MINISAGO_SESSION_MONITOR_PATH?.trim() ||

@@ -94,6 +94,7 @@ describe("Codex chatbot runner", () => {
     expect(
       mediaMcpConfig(
         "/tmp/request/media-manifest.json",
+        "http://sandbox:8080/",
         "/usr/local/bin/bun",
         "/app/mac-agent/src/media-mcp.ts",
       ),
@@ -104,7 +105,7 @@ describe("Codex chatbot runner", () => {
         "--config",
         'mcp_servers.minisago_media.args=["/app/mac-agent/src/media-mcp.ts"]',
         "--config",
-        'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST"]',
+        'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL"]',
         "--config",
         "mcp_servers.minisago_media.required=true",
         "--config",
@@ -116,6 +117,7 @@ describe("Codex chatbot runner", () => {
       ],
       environment: {
         MINISAGO_MEDIA_MANIFEST: "/tmp/request/media-manifest.json",
+        MINISAGO_SANDBOX_URL: "http://sandbox:8080/",
       },
     });
   });
@@ -444,8 +446,10 @@ describe("Codex chatbot runner", () => {
       "owner-authorized development task without mutation scope",
     );
     expect(devPrompt).toContain("never intentionally modify remote state");
-    expect(devPrompt).not.toContain("read-only chat task");
-    expect(chatPrompt).toContain("read-only chat task");
+    expect(devPrompt).not.toContain("read-only chat");
+    expect(chatPrompt).toContain("Chat is read-only");
+    expect(chatPrompt).toContain("Use bounded Python");
+    expect(chatPrompt).toContain("instead of rejecting work");
   });
 
   test("lets Codex choose extra Discord context through MCP", () => {
@@ -563,7 +567,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(35);
+    expect(PROMPT_VERSION).toBe(36);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");

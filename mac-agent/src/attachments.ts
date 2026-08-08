@@ -313,32 +313,28 @@ export async function prepareAttachments(
         }
         downloadedBytes += bytes.byteLength;
         const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
-
         const extension = extname(attachment.filename).toLocaleLowerCase();
+        const path = join(directory, safeFilename(index, attachment.filename));
+        await Bun.write(path, bytes);
+        mediaAttachments.push({
+          id: attachment.id,
+          filename: attachment.filename,
+          ...(attachment.contentType
+            ? { contentType: attachment.contentType }
+            : {}),
+          size: bytes.byteLength,
+          storedFilename: basename(path),
+        });
         if (
           mediaContentTypes.has(contentType) ||
           mediaExtensions.has(extension)
         ) {
-          const path = join(
-            directory,
-            safeFilename(index, attachment.filename),
-          );
-          await Bun.write(path, bytes);
           if (
             imageContentTypes.has(contentType) ||
             imageExtensions.has(extension)
           ) {
             imagePaths.push(path);
           }
-          mediaAttachments.push({
-            id: attachment.id,
-            filename: attachment.filename,
-            ...(attachment.contentType
-              ? { contentType: attachment.contentType }
-              : {}),
-            size: bytes.byteLength,
-            storedFilename: basename(path),
-          });
           continue;
         }
 

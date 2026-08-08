@@ -49,6 +49,7 @@ ENV MINISAGO_GITHUB_WORKTREE_ROOT=/workspace/worktrees
 ENV MINISAGO_GITHUB_CONFIG_DIR=/home/bun/.config/gh
 ENV MINISAGO_MAX_CONCURRENT_JOBS=2
 ENV MINISAGO_WORKER_ID=oracle
+ENV MINISAGO_SANDBOX_URL=http://sandbox:8080
 
 ENTRYPOINT ["/usr/local/bin/worker-entrypoint"]
 CMD ["bun", "src/index.ts"]

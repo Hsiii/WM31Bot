@@ -143,20 +143,20 @@ describe("generated artifacts", () => {
     ).rejects.toThrow("outside the request output folder");
   });
 
-  test("rejects generated artifacts outside the media allowlist", async () => {
+  test("rejects generated artifacts outside the output allowlist", async () => {
     const root = await mkdtemp(join(tmpdir(), "minisago-artifacts-"));
     temporaryDirectories.push(root);
-    await writeFile(join(root, "result.zip"), "archive");
+    await writeFile(join(root, "result.exe"), "binary");
 
     await expect(
       prepareGeneratedArtifacts(
         JSON.stringify({
           reply: "",
           reaction: null,
-          artifacts: ["result.zip"],
+          artifacts: ["result.exe"],
         }),
         root,
       ),
-    ).rejects.toThrow("unsupported media type");
+    ).rejects.toThrow("unsupported output type");
   });
 });

@@ -41,6 +41,7 @@ describe("MiniSago media MCP", () => {
       env: {
         ...getDefaultEnvironment(),
         MINISAGO_MEDIA_MANIFEST: manifestPath,
+        MINISAGO_SANDBOX_URL: "http://sandbox:8080",
       },
       stderr: "pipe",
     });
@@ -57,9 +58,13 @@ describe("MiniSago media MCP", () => {
       "transform_image",
       "extract_video_frame",
       "transcode_media",
+      "run_python",
     ]);
     expect(
       tools.tools.find((tool) => tool.name === "transcode_media")?.inputSchema,
     ).not.toHaveProperty("args");
+    expect(
+      tools.tools.find((tool) => tool.name === "run_python")?.inputSchema,
+    ).not.toHaveProperty("command");
   });
 });
