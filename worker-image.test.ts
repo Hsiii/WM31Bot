@@ -46,6 +46,7 @@ test("worker image includes a minimal Python runtime", () => {
     'PYTHON = "/opt/minisago-python/bin/python3"',
   );
   expect(pythonRuntime).toContain('"U2NET_HOME": "/opt/minisago-models"');
+  expect(sandboxBroker.match(/mode: 0o444/gu)).toHaveLength(2);
 });
 
 test("images copy code from the consolidated source layout", () => {
