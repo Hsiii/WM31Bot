@@ -88,3 +88,8 @@ Mac.
 
 See [Security](security.md) for credential and sandbox boundaries and
 [Operations](operations.md) for logs, recovery, deployment, and removal.
+
+The Oracle image includes Python 3 with `venv` support for owner development
+jobs. Chat jobs do not receive arbitrary Python or shell execution. Media work
+uses the image's FFmpeg binaries only through MiniSago's request-local typed MCP
+tools.

@@ -53,8 +53,8 @@ dedicated AppArmor profile. The worker process remains unprivileged.
 
 ## Attachments and Mac files
 
-Only answer jobs download attachments. Supported formats are images, PDFs, and
-text files, with these limits:
+Only answer jobs download attachments. Supported formats are images, short
+audio/video files, PDFs, and text files, with these limits:
 
 - at most 10 attachments;
 - at most 20 MB per attachment and 40 MB total; and
@@ -69,6 +69,14 @@ identifier from the job's dedicated output folder. The worker rejects path
 escapes, symlinks, unsupported media extensions, files above 8 MB, and more than
 one output before sending bytes to the hosted service. Generated files are
 deleted with the downloaded attachments after the response.
+
+The Linux media MCP accepts only attachment IDs from its sealed per-job
+manifest. It exposes typed transformations rather than shell commands or raw
+FFmpeg arguments. Inspection omits source metadata and tags; transformations
+strip output metadata. Inputs are limited to 20 MB, 10 minutes, 8,192 pixels per
+dimension, and 40 megapixels. Commands use fixed local protocols, two threads,
+and a 45-second deadline. Presets further limit generated clips to 15 seconds
+for GIF, 30 seconds for MP4, and 120 seconds for MP3.
 
 Mac file requests are owner-only and read-only. Search is limited to configured
 roots, and the host revalidates the exact path before uploading at most one

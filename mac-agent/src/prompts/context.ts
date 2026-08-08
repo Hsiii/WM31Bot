@@ -14,10 +14,12 @@ function block(name: string, value: unknown) {
 }
 
 function promptAttachment({
+  id,
   filename,
   contentType,
 }: ChatbotMessage["attachments"][number]) {
   return {
+    id,
     filename,
     ...(contentType ? { contentType } : {}),
   };
