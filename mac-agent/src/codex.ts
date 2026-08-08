@@ -29,7 +29,7 @@ export {
   SOCIAL_ACTION_OUTPUT_SCHEMA,
 } from "./prompts";
 
-const LOCAL_CHAT_TIMEOUT_MS = 110_000;
+const LOCAL_CHAT_TIMEOUT_MS = 150_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
 const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media-mcp.ts");
 export const EMOJI_ADD_MCP_APPROVAL_CONFIG =
@@ -178,7 +178,7 @@ export function mediaMcpConfig(
       "--config",
       "mcp_servers.minisago_media.startup_timeout_sec=10",
       "--config",
-      "mcp_servers.minisago_media.tool_timeout_sec=50",
+      "mcp_servers.minisago_media.tool_timeout_sec=135",
     ],
     environment: {
       MINISAGO_MEDIA_MANIFEST: manifestPath,

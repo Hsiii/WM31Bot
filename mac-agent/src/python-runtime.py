@@ -9,7 +9,7 @@ from pathlib import Path
 
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_PROCESS_OUTPUT_BYTES = 64 * 1024
-PROCESS_TIMEOUT_SECONDS = 90
+PROCESS_TIMEOUT_SECONDS = 120
 PYTHON = "/opt/minisago-python/bin/python3"
 
 
