@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 
@@ -56,6 +56,7 @@ type AttachmentCandidate = {
 export type PreparedAttachments = {
   directory: string;
   imagePaths: string[];
+  outputsDirectory: string;
   textBlocks: string[];
   ignored: string[];
   cleanup: () => Promise<void>;
@@ -249,6 +250,8 @@ export async function prepareAttachments(
   signal?: AbortSignal,
 ): Promise<PreparedAttachments> {
   const directory = await mkdtemp(join(tmpdir(), "minisago-chatbot-"));
+  const outputsDirectory = join(directory, "outputs");
+  await mkdir(outputsDirectory);
   const imagePaths: string[] = [];
   const textBlocks: string[] = [];
   const ignored: string[] = [];
@@ -326,6 +329,7 @@ export async function prepareAttachments(
   return {
     directory,
     imagePaths,
+    outputsDirectory,
     textBlocks,
     ignored,
     cleanup: () => rm(directory, { recursive: true, force: true }),

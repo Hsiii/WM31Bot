@@ -64,6 +64,12 @@ Downloads accept only Discord HTTPS CDN hosts, stop on cancellation, and are
 deleted after the response. Attachment URLs are stripped from observable tool
 results and sanitized in traces.
 
+Generated media is request-local and may be returned only by an opaque artifact
+identifier from the job's dedicated output folder. The worker rejects path
+escapes, symlinks, unsupported media extensions, files above 8 MB, and more than
+one output before sending bytes to the hosted service. Generated files are
+deleted with the downloaded attachments after the response.
+
 Mac file requests are owner-only and read-only. Search is limited to configured
 roots, and the host revalidates the exact path before uploading at most one
 regular file of 8 MB or less. Symlinks and paths outside the roots are rejected.

@@ -1,5 +1,6 @@
 import type { ChatbotJob } from "../../../src/chatbot/protocol";
 import {
+  ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_OUTPUT_SCHEMA,
   ANSWER_TASK_INSTRUCTION,
   buildAnswerDeveloperInstructions,
@@ -21,6 +22,7 @@ import {
 } from "./social-action";
 
 export {
+  ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_INSTRUCTIONS,
   ANSWER_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
@@ -124,9 +126,10 @@ export function outputSchemaForJob(job: ChatbotJob) {
   if (job.purpose === "execution_route") return EXECUTION_ROUTE_OUTPUT_SCHEMA;
   if (job.purpose === "social_action") return SOCIAL_ACTION_OUTPUT_SCHEMA;
   if (job.purpose === "answer") {
-    return job.executionTarget === "mac"
-      ? MAC_FILE_ANSWER_OUTPUT_SCHEMA
-      : ANSWER_OUTPUT_SCHEMA;
+    if (job.executionTarget === "mac") return MAC_FILE_ANSWER_OUTPUT_SCHEMA;
+    return job.executionMode === "dev"
+      ? ANSWER_OUTPUT_SCHEMA
+      : ARTIFACT_ANSWER_OUTPUT_SCHEMA;
   }
   return undefined;
 }

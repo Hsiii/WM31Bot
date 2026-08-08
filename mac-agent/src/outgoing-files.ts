@@ -4,6 +4,17 @@ import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 import type { ChatbotOutgoingFile } from "../../src/chatbot/protocol";
 
 const MAX_OUTGOING_FILE_BYTES = 8 * 1024 * 1024;
+const artifactIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$/u;
+const generatedArtifactExtensions = new Set([
+  ".gif",
+  ".jpeg",
+  ".jpg",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".png",
+  ".webp",
+]);
 
 const contentTypes = new Map([
   [".csv", "text/csv"],
@@ -51,6 +62,42 @@ export function requestedFilePaths(content: string) {
   }
 }
 
+export function requestedArtifactIds(content: string) {
+  try {
+    const value = JSON.parse(content) as Record<string, unknown>;
+    const artifacts = Array.isArray(value.artifacts)
+      ? value.artifacts.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            id !== "." &&
+            id !== ".." &&
+            artifactIdPattern.test(id),
+        )
+      : [];
+    delete value.artifacts;
+    return { content: JSON.stringify(value), artifacts: artifacts.slice(0, 1) };
+  } catch {
+    return { content, artifacts: [] };
+  }
+}
+
+async function readOutgoingFile(path: string): Promise<ChatbotOutgoingFile> {
+  const info = await stat(path);
+  if (!info.isFile()) throw new Error("Outgoing path is not a regular file.");
+  if (info.size > MAX_OUTGOING_FILE_BYTES) {
+    throw new Error("Outgoing file exceeds Discord's 8 MB upload limit.");
+  }
+  const bytes = await readFile(path);
+  return {
+    filename: basename(path).slice(0, 255),
+    contentType:
+      contentTypes.get(extname(path).toLocaleLowerCase()) ||
+      "application/octet-stream",
+    size: bytes.byteLength,
+    data: bytes.toString("base64"),
+  };
+}
+
 export async function prepareOutgoingFiles(
   content: string,
   allowedRoots: string[],
@@ -71,20 +118,31 @@ export async function prepareOutgoingFiles(
         "Outgoing file is outside the configured Mac file folders.",
       );
     }
-    const info = await stat(path);
-    if (!info.isFile()) throw new Error("Outgoing path is not a regular file.");
-    if (info.size > MAX_OUTGOING_FILE_BYTES) {
-      throw new Error("Outgoing file exceeds Discord's 8 MB upload limit.");
+    files.push(await readOutgoingFile(path));
+  }
+
+  return { content: requested.content, files };
+}
+
+export async function prepareGeneratedArtifacts(
+  content: string,
+  outputRoot: string,
+): Promise<{ content: string; files: ChatbotOutgoingFile[] }> {
+  const requested = requestedArtifactIds(content);
+  const root = await realpath(outputRoot);
+  const files: ChatbotOutgoingFile[] = [];
+
+  for (const artifact of requested.artifacts) {
+    const path = await realpath(resolve(root, artifact));
+    if (!inside(root, path)) {
+      throw new Error(
+        "Generated artifact is outside the request output folder.",
+      );
     }
-    const bytes = await readFile(path);
-    files.push({
-      filename: basename(path).slice(0, 255),
-      contentType:
-        contentTypes.get(extname(path).toLocaleLowerCase()) ||
-        "application/octet-stream",
-      size: bytes.byteLength,
-      data: bytes.toString("base64"),
-    });
+    if (!generatedArtifactExtensions.has(extname(path).toLocaleLowerCase())) {
+      throw new Error("Generated artifact has an unsupported media type.");
+    }
+    files.push(await readOutgoingFile(path));
   }
 
   return { content: requested.content, files };

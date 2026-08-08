@@ -14,7 +14,6 @@ import {
 } from "./codex";
 import { SessionMonitor } from "./session-monitor";
 import { ChatbotTraceStore } from "./trace-store";
-import { prepareOutgoingFiles } from "./outgoing-files";
 import { readCodexUsage } from "./codex-usage";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
@@ -245,14 +244,19 @@ export class MacAgentClient {
                   this.traceStore.recordPrompt(job.id, prompt),
                 signal: controller.signal,
               });
-              this.traceStore.finish(job.id, answer, Date.now(), toolCalls);
+              this.traceStore.finish(
+                job.id,
+                answer.content,
+                Date.now(),
+                toolCalls,
+              );
               return answer;
             })();
 
       const outgoing =
-        job.purpose === "answer" && job.executionTarget === "mac"
-          ? await prepareOutgoingFiles(rawContent, this.config.macFileRoots)
-          : { content: rawContent, files: [] };
+        typeof rawContent === "string"
+          ? { content: rawContent, files: [] }
+          : rawContent;
 
       if (!controller.signal.aborted && this.authenticated) {
         this.currentJobs.delete(job.id);

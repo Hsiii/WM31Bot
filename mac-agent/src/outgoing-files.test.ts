@@ -5,7 +5,9 @@ import { join } from "node:path";
 
 import {
   outgoingFileLimits,
+  prepareGeneratedArtifacts,
   prepareOutgoingFiles,
+  requestedArtifactIds,
   requestedFilePaths,
 } from "./outgoing-files";
 
@@ -74,5 +76,87 @@ describe("Mac outgoing files", () => {
 
   test("keeps the websocket upload bounded", () => {
     expect(outgoingFileLimits).toEqual({ count: 1, bytes: 8 * 1024 * 1024 });
+  });
+});
+
+describe("generated artifacts", () => {
+  test("extracts one opaque artifact ID and removes the model-only field", () => {
+    expect(
+      requestedArtifactIds(
+        JSON.stringify({
+          reply: "done",
+          reaction: null,
+          artifacts: ["result.webp", "ignored.png", "../secret.txt"],
+        }),
+      ),
+    ).toEqual({
+      content: JSON.stringify({ reply: "done", reaction: null }),
+      artifacts: ["result.webp"],
+    });
+  });
+
+  test("reads one generated artifact from the request output folder", async () => {
+    const root = await mkdtemp(join(tmpdir(), "minisago-artifacts-"));
+    temporaryDirectories.push(root);
+    await writeFile(join(root, "result.webp"), "image");
+
+    const result = await prepareGeneratedArtifacts(
+      JSON.stringify({
+        reply: "done",
+        reaction: null,
+        artifacts: ["result.webp"],
+      }),
+      root,
+    );
+
+    expect(result.content).toBe(
+      JSON.stringify({ reply: "done", reaction: null }),
+    );
+    expect(result.files).toEqual([
+      {
+        filename: "result.webp",
+        contentType: "image/webp",
+        size: 5,
+        data: Buffer.from("image").toString("base64"),
+      },
+    ]);
+  });
+
+  test("rejects generated artifact symlinks that escape the output folder", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "minisago-artifacts-"));
+    temporaryDirectories.push(parent);
+    const root = join(parent, "outputs");
+    await mkdir(root);
+    const secret = join(parent, "secret.txt");
+    await writeFile(secret, "nope");
+    await symlink(secret, join(root, "result.txt"));
+
+    await expect(
+      prepareGeneratedArtifacts(
+        JSON.stringify({
+          reply: "",
+          reaction: null,
+          artifacts: ["result.txt"],
+        }),
+        root,
+      ),
+    ).rejects.toThrow("outside the request output folder");
+  });
+
+  test("rejects generated artifacts outside the media allowlist", async () => {
+    const root = await mkdtemp(join(tmpdir(), "minisago-artifacts-"));
+    temporaryDirectories.push(root);
+    await writeFile(join(root, "result.zip"), "archive");
+
+    await expect(
+      prepareGeneratedArtifacts(
+        JSON.stringify({
+          reply: "",
+          reaction: null,
+          artifacts: ["result.zip"],
+        }),
+        root,
+      ),
+    ).rejects.toThrow("unsupported media type");
   });
 });
