@@ -82,6 +82,12 @@ describe("prompt plan", () => {
 
     expect(english.developerInstructions).not.toContain("各各=各付各的");
     expect(chinese.developerInstructions).toContain("各各=各付各的");
+    expect(chinese.developerInstructions).toContain(
+      "中風 literally means stroke",
+    );
+    expect(chinese.developerInstructions).toContain(
+      "do not treat it as synonymous with 抽風",
+    );
   });
 
   test("keeps routing capabilities in context rather than policy", () => {
