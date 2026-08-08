@@ -39,6 +39,8 @@ test("worker image includes a minimal Python runtime", () => {
   }
   expect(dockerfile).toContain("mac-agent/requirements-sandbox.txt");
   expect(dockerfile).toContain('new_session("silueta")');
+  expect(dockerfile).toContain("NUMBA_CACHE_DIR=/opt/minisago-numba-cache");
+  expect(dockerfile).toContain("remove(Image.new");
   expect(sandboxRequirements.trim()).toBe(
     "opencv-python-headless==5.0.0.93\nrembg[cpu]==2.0.76",
   );
@@ -47,6 +49,9 @@ test("worker image includes a minimal Python runtime", () => {
   );
   expect(pythonRuntime).toContain('"U2NET_HOME": "/opt/minisago-models"');
   expect(pythonRuntime).toContain('"HOME": "/tmp"');
+  expect(pythonRuntime).toContain(
+    '"NUMBA_CACHE_DIR": "/opt/minisago-numba-cache"',
+  );
   expect(sandboxBroker.match(/mode: 0o444/gu)).toHaveLength(2);
   expect(sandboxBroker).toContain("await chmod(directory, 0o757)");
   expect(sandboxBroker).toContain("removeWorkspace(directory)");
