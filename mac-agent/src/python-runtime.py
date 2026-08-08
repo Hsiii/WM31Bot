@@ -10,11 +10,12 @@ from pathlib import Path
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_PROCESS_OUTPUT_BYTES = 64 * 1024
 PROCESS_TIMEOUT_SECONDS = 45
+PYTHON = "/opt/minisago-python/bin/python3"
 
 
 def run(code: str, environment: dict[str, str]) -> tuple[str, str]:
     process = subprocess.Popen(
-        ["/usr/bin/python3", "-I", "-"],
+        [PYTHON, "-I", "-"],
         cwd="/workspace",
         env=environment,
         stdin=subprocess.PIPE,
@@ -67,8 +68,11 @@ def main() -> None:
         "HOME": "/workspace",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
+        "OMP_NUM_THREADS": "2",
+        "PATH": "/opt/minisago-python/bin:/usr/bin:/bin",
         "TMPDIR": "/workspace",
         "MINISAGO_INPUTS_JSON": json.dumps(request["attachments"]),
+        "U2NET_HOME": "/opt/minisago-models",
     }
     if output_path:
         environment["MINISAGO_OUTPUT_PATH"] = output_path

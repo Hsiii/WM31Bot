@@ -30,6 +30,13 @@ WORKDIR /app/mac-agent
 COPY --chown=bun:bun mac-agent/package.json mac-agent/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
+COPY mac-agent/requirements-sandbox.txt ./requirements-sandbox.txt
+RUN python3 -m venv /opt/minisago-python \
+  && /opt/minisago-python/bin/pip install --no-cache-dir -r requirements-sandbox.txt \
+  && mkdir -p /opt/minisago-models \
+  && U2NET_HOME=/opt/minisago-models /opt/minisago-python/bin/python -c 'from rembg import new_session; new_session("silueta")'
+RUN chmod -R a+rX /opt/minisago-python /opt/minisago-models
+
 COPY --chown=bun:bun src/chatbot /app/src/chatbot
 COPY --chown=bun:bun mac-agent/src ./src
 COPY --chown=bun:bun mac-agent/tsconfig.json ./tsconfig.json
