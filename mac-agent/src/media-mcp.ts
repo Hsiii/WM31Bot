@@ -27,7 +27,7 @@ async function main() {
     { name: "minisago-media", version: "1.0.0" },
     {
       instructions:
-        "Use these request-local tools only when the requester explicitly asks to inspect, compute with, or transform an attachment. Inputs are limited to this request's attachments; outputs are temporary artifacts. Never invent attachment IDs or artifact IDs. Return at most one useful artifact in the final answer. Prefer a specific media tool when it fits. Otherwise use run_python for general request-local computation. Python has no network, cannot install packages, receives no credentials, and is limited by time, memory, processes, and output size.",
+        "Use these request-local tools only when the requester explicitly asks to inspect, compute with, or transform an attachment. Inputs are limited to this request's attachments; outputs are temporary artifacts. Never invent attachment IDs or artifact IDs. Return at most one useful artifact in the final answer. Prefer a specific media tool when it fits. Otherwise use run_python for general request-local computation. Python includes Pillow, NumPy, OpenCV, scikit-image, rembg with the offline silueta model, and FFmpeg. It has no network, cannot install packages, receives no credentials, and is limited by time, memory, processes, and output size.",
     },
   );
   const readAnnotations = {
@@ -150,7 +150,7 @@ async function main() {
     "run_python",
     {
       description:
-        "Run bounded Python for a computation or attachment transformation not covered by another tool. Read MINISAGO_INPUTS_JSON for selected request-local input paths. If outputExtension is set, write exactly one result to MINISAGO_OUTPUT_PATH and return its artifact ID. The runtime has no network or package installation.",
+        "Run bounded Python for a computation or attachment transformation not covered by another tool. Read MINISAGO_INPUTS_JSON for selected request-local input paths. If outputExtension is set, write exactly one result to MINISAGO_OUTPUT_PATH and return its artifact ID. Pillow, NumPy, OpenCV, scikit-image, rembg (offline silueta model), and FFmpeg are available. The runtime has no network or package installation.",
       inputSchema: {
         code: z.string().min(1).max(20_000),
         attachmentIds: z.array(z.string().trim().min(1).max(100)).max(10),
