@@ -12,9 +12,14 @@ import type {
 } from "../../src/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
+import {
+  prepareGeneratedArtifacts,
+  prepareOutgoingFiles,
+} from "./outgoing-files";
 import { buildPromptPlan, outputSchemaForJob } from "./prompts";
 
 export {
+  ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_OUTPUT_SCHEMA,
   buildCodexPrompt,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
@@ -571,12 +576,18 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       throw new Error(codexFailureMessage(stdout, stderr, exitCode));
     }
 
-    return parseFinalResponse(
+    const content = parseFinalResponse(
       stdout,
       hasDeveloperAccess,
       options.onMcpToolCall,
       hasDeveloperAccess || hasMacFileAccess,
     );
+    if (job.purpose !== "answer" || hasDeveloperAccess) {
+      return { content, files: [] };
+    }
+    return await (hasMacFileAccess
+      ? prepareOutgoingFiles(content, options.macFileRoots)
+      : prepareGeneratedArtifacts(content, prepared.outputsDirectory));
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", abort);

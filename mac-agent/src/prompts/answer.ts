@@ -5,7 +5,7 @@ import {
   TAIWANESE_LANGUAGE_REFERENCE,
 } from "./language";
 
-export const PROMPT_VERSION = 34;
+export const PROMPT_VERSION = 35;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
@@ -42,6 +42,20 @@ export const MAC_FILE_ANSWER_OUTPUT_SCHEMA = {
       type: "array",
       maxItems: 1,
       items: { type: "string", maxLength: 4_096 },
+    },
+  },
+} as const;
+
+export const ARTIFACT_ANSWER_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reply", "reaction", "artifacts"],
+  properties: {
+    ...ANSWER_OUTPUT_SCHEMA.properties,
+    artifacts: {
+      type: "array",
+      maxItems: 1,
+      items: { type: "string", maxLength: 255 },
     },
   },
 } as const;
@@ -92,7 +106,9 @@ export const CHAT_MODE_INSTRUCTIONS = `This is a read-only chat task except for 
 
 For reminders, use the reminder tools. Durations need no timezone; derive them from the request timestamp. Wall-clock and recurring requests need a timezone or location from context. Resolve locations to IANA. If missing or ambiguous, do not schedule; ask one short question for the timezone or location.
 
-Do not ask for confirmation. One-time reminders use ISO with an offset; recurring reminders use five-field cron plus IANA. After success, state the returned schedule and timezone, or that a duration timer needed none.`;
+Do not ask for confirmation. One-time reminders use ISO with an offset; recurring reminders use five-field cron plus IANA. After success, state the returned schedule and timezone, or that a duration timer needed none.
+
+Only put exact IDs returned by request-local MiniSago tools in artifacts. Otherwise return an empty array; never use paths or URLs.`;
 
 export function macFileInstructions(roots: string[]) {
   return `This owner request is explicitly routed to Hsi's Mac. You may use read-only local commands to find a requested file only within these folders: ${JSON.stringify(roots)}.
