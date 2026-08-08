@@ -6,6 +6,8 @@ import type { ChatbotOutgoingFile } from "../../src/chatbot/protocol";
 const MAX_OUTGOING_FILE_BYTES = 8 * 1024 * 1024;
 const artifactIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$/u;
 const generatedArtifactExtensions = new Set([
+  ".csv",
+  ".docx",
   ".gif",
   ".jpeg",
   ".jpg",
@@ -13,7 +15,11 @@ const generatedArtifactExtensions = new Set([
   ".mp3",
   ".mp4",
   ".png",
+  ".pdf",
+  ".txt",
   ".webp",
+  ".xlsx",
+  ".zip",
 ]);
 
 const contentTypes = new Map([
@@ -140,7 +146,7 @@ export async function prepareGeneratedArtifacts(
       );
     }
     if (!generatedArtifactExtensions.has(extname(path).toLocaleLowerCase())) {
-      throw new Error("Generated artifact has an unsupported media type.");
+      throw new Error("Generated artifact has an unsupported output type.");
     }
     files.push(await readOutgoingFile(path));
   }

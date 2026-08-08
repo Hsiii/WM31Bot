@@ -36,6 +36,12 @@ docker compose -f compose.worker.yaml up -d
 docker compose -f compose.worker.yaml logs -f worker
 ```
 
+The Linux worker compose file also starts an internal sandbox broker. It alone
+holds the Docker socket and launches short-lived, networkless containers with
+read-only system paths and size-monitored scratch space for generic Python
+computation. The worker itself never receives the Docker socket. Keep the sandbox
+service private; it intentionally publishes no host port.
+
 Put the same secret in the worker's `MINISAGO_MAC_BRIDGE_SECRET` and the hosted
 service's `MINISAGO_WORKER_BRIDGE_SECRET`. Device authentication must write only
 to the persistent Codex volume.

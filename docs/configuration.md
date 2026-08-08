@@ -54,6 +54,7 @@ scheduled-monitor variable names.
 | `MINISAGO_TRACE_DATABASE_PATH`   | No       | Local response-trace database                           |
 | `MINISAGO_WORKSPACE_ROOT`        | Dev      | Parent of disposable repository worktrees               |
 | `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Capacity advertised to the bridge, from 1 to 16         |
+| `MINISAGO_SANDBOX_URL`           | Linux    | Internal request-local computation broker URL           |
 | `MINISAGO_HEADLESS`              | Linux    | Keep a worker connected without a session monitor       |
 | `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                  |
 | `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                      |

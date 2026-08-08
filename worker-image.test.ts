@@ -6,6 +6,12 @@ const dockerfile = await Bun.file(
 const hostedDockerfile = await Bun.file(
   new URL("./Dockerfile", import.meta.url),
 ).text();
+const workerCompose = await Bun.file(
+  new URL("./compose.worker.yaml", import.meta.url),
+).text();
+const sandboxBroker = await Bun.file(
+  new URL("./mac-agent/src/sandbox-broker.ts", import.meta.url),
+).text();
 
 test("worker image includes conservative media processing tools", () => {
   for (const packageName of [
@@ -37,4 +43,26 @@ test("images copy code from the consolidated source layout", () => {
   );
   expect(hostedDockerfile).not.toContain("/app/lib");
   expect(hostedDockerfile).not.toContain("/app/data");
+});
+
+test("generic Python runs behind a private container boundary", () => {
+  const sandboxOffset = workerCompose.indexOf("\n  sandbox:\n");
+  const worker = workerCompose.slice(0, sandboxOffset);
+  const sandbox = workerCompose.slice(sandboxOffset);
+  expect(worker).not.toContain("/var/run/docker.sock");
+  expect(sandbox).toContain("/var/run/docker.sock:/var/run/docker.sock");
+  expect(sandbox).toContain("sandbox-internal");
+  expect(sandbox).toContain("cap_drop:\n      - ALL");
+  expect(sandbox).toContain("no-new-privileges:true");
+  expect(workerCompose).toContain("internal: true");
+  for (const guardrail of [
+    'CapDrop: ["ALL"]',
+    'NetworkMode: "none"',
+    "PidsLimit: 32",
+    'SecurityOpt: ["no-new-privileges"]',
+    "MAX_WORKSPACE_BYTES = 64 * 1024 * 1024",
+    "CONTAINER_TIMEOUT_MS = 52_000",
+  ]) {
+    expect(sandboxBroker).toContain(guardrail);
+  }
 });

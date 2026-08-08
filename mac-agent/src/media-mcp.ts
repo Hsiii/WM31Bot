@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { MediaProcessor } from "./media";
+import { PythonProcessor, pythonArtifactExtensions } from "./python";
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -18,12 +19,15 @@ function message(error: unknown) {
 async function main() {
   const manifestPath = process.env.MINISAGO_MEDIA_MANIFEST;
   if (!manifestPath) throw new Error("MINISAGO_MEDIA_MANIFEST is required.");
+  const sandboxUrl = process.env.MINISAGO_SANDBOX_URL;
+  if (!sandboxUrl) throw new Error("MINISAGO_SANDBOX_URL is required.");
   const processor = await MediaProcessor.fromFile(manifestPath);
+  const python = await PythonProcessor.fromFile(manifestPath, sandboxUrl);
   const server = new McpServer(
     { name: "minisago-media", version: "1.0.0" },
     {
       instructions:
-        "Use these request-local tools only when the requester explicitly asks to inspect or transform an attached media file. Inputs are limited to this request's attachments; outputs are temporary artifacts. Never invent attachment IDs or artifact IDs. Return at most one useful artifact in the final answer.",
+        "Use these request-local tools only when the requester explicitly asks to inspect, compute with, or transform an attachment. Inputs are limited to this request's attachments; outputs are temporary artifacts. Never invent attachment IDs or artifact IDs. Return at most one useful artifact in the final answer. Prefer a specific media tool when it fits. Otherwise use run_python for general request-local computation. Python has no network, cannot install packages, receives no credentials, and is limited by time, memory, processes, and output size.",
     },
   );
   const readAnnotations = {
@@ -135,6 +139,30 @@ async function main() {
         return toolResult({
           status: "complete",
           ...(await processor.transcode(input)),
+        });
+      } catch (error) {
+        return toolResult({ status: "invalid", error: message(error) });
+      }
+    },
+  );
+
+  server.registerTool(
+    "run_python",
+    {
+      description:
+        "Run bounded Python for a computation or attachment transformation not covered by another tool. Read MINISAGO_INPUTS_JSON for selected request-local input paths. If outputExtension is set, write exactly one result to MINISAGO_OUTPUT_PATH and return its artifact ID. The runtime has no network or package installation.",
+      inputSchema: {
+        code: z.string().min(1).max(20_000),
+        attachmentIds: z.array(z.string().trim().min(1).max(100)).max(10),
+        outputExtension: z.enum(pythonArtifactExtensions).optional(),
+      },
+      annotations: transformAnnotations,
+    },
+    async (input) => {
+      try {
+        return toolResult({
+          status: "complete",
+          ...(await python.run(input)),
         });
       } catch (error) {
         return toolResult({ status: "invalid", error: message(error) });

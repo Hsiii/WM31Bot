@@ -1,5 +1,6 @@
 services:
   worker:
+    image: minisago-worker:local
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -7,15 +8,62 @@ services:
     init: true
     env_file: .env.worker
     environment:
+      MINISAGO_SANDBOX_URL: http://sandbox:8080
       MINISAGO_WORKER_ID: oracle
+    depends_on:
+      sandbox:
+        condition: service_healthy
     volumes:
       - minisago-codex:/home/bun/.codex
       - minisago-github:/home/bun/.config/gh
       - minisago-state:/var/lib/minisago
       - minisago-workspace:/workspace
+    networks:
+      - default
+      - sandbox-internal
+
+  sandbox:
+    image: minisago-worker:local
+    restart: unless-stopped
+    init: true
+    entrypoint: ["bun"]
+    command: ["src/sandbox-broker.ts"]
+    user: "0:0"
+    environment:
+      HOME: /tmp
+      MINISAGO_SANDBOX_IMAGE: minisago-worker:local
+      MINISAGO_SANDBOX_JOBS_ROOT: /var/lib/minisago-sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/minisago-sandbox:/var/lib/minisago-sandbox
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=0700
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:8080/health');process.exit(r.ok?0:1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sandbox-internal
 
 volumes:
   minisago-codex:
   minisago-github:
   minisago-state:
   minisago-workspace:
+
+networks:
+  sandbox-internal:
+    internal: true

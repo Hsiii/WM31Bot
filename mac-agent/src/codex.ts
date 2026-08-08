@@ -62,6 +62,7 @@ type CodexRunOptions = {
   githubWorktreeRoot: string;
   macFileRoots: string[];
   mcpUrl: string;
+  sandboxUrl: string;
   workspaceRoot: string;
   chatbotAccess: ChatbotAccessConfig;
   onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
@@ -158,6 +159,7 @@ export function canUseMediaTools(
 
 export function mediaMcpConfig(
   manifestPath: string,
+  sandboxUrl: string,
   bunPath = process.execPath,
   serverPath = MEDIA_MCP_SERVER_PATH,
 ) {
@@ -168,7 +170,7 @@ export function mediaMcpConfig(
       "--config",
       `mcp_servers.minisago_media.args=[${JSON.stringify(serverPath)}]`,
       "--config",
-      'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST"]',
+      'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL"]',
       "--config",
       "mcp_servers.minisago_media.required=true",
       "--config",
@@ -178,7 +180,10 @@ export function mediaMcpConfig(
       "--config",
       "mcp_servers.minisago_media.tool_timeout_sec=50",
     ],
-    environment: { MINISAGO_MEDIA_MANIFEST: manifestPath },
+    environment: {
+      MINISAGO_MEDIA_MANIFEST: manifestPath,
+      MINISAGO_SANDBOX_URL: sandboxUrl,
+    },
   };
 }
 
@@ -477,7 +482,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       versions: prompt.versions,
     });
     const mediaMcp = hasMediaTools
-      ? mediaMcpConfig(prepared.mediaManifestPath)
+      ? mediaMcpConfig(prepared.mediaManifestPath, options.sandboxUrl)
       : undefined;
     const codexArguments = [
       options.codexPath,
