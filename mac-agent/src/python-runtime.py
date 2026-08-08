@@ -93,6 +93,8 @@ def main() -> None:
         "PATH": "/opt/minisago-python/bin:/usr/bin:/bin",
         "TMPDIR": "/tmp",
         "MINISAGO_INPUTS_JSON": json.dumps(request["attachments"]),
+        "NUMBA_CACHE_DIR": "/opt/minisago-numba-cache",
+        "NUMBA_NUM_THREADS": "2",
         "U2NET_HOME": "/opt/minisago-models",
     }
     if output_path:
