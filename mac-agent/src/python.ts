@@ -8,7 +8,7 @@ const MAX_CODE_CHARACTERS = 20_000;
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_INPUT_BYTES = 40 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
-const SANDBOX_TIMEOUT_MS = 55_000;
+const SANDBOX_TIMEOUT_MS = 100_000;
 
 export const pythonArtifactExtensions = [
   "csv",

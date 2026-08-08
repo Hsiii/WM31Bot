@@ -9,7 +9,7 @@ from pathlib import Path
 
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_PROCESS_OUTPUT_BYTES = 64 * 1024
-PROCESS_TIMEOUT_SECONDS = 45
+PROCESS_TIMEOUT_SECONDS = 90
 PYTHON = "/opt/minisago-python/bin/python3"
 
 
@@ -57,7 +57,9 @@ def run(code: str, environment: dict[str, str]) -> tuple[str, str]:
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError("Python execution exceeded 45 seconds.")
+                raise TimeoutError(
+                    f"Python execution exceeded {PROCESS_TIMEOUT_SECONDS} seconds."
+                )
             for key, _ in selector.select(min(remaining, 0.25)):
                 chunk = os.read(key.fileobj.fileno(), 16 * 1024)
                 if not chunk:

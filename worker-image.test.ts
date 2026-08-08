@@ -38,7 +38,7 @@ test("worker image includes a minimal Python runtime", () => {
     expect(dockerfile).toContain(`    ${packageName} \\\n`);
   }
   expect(dockerfile).toContain("mac-agent/requirements-sandbox.txt");
-  expect(dockerfile).toContain('new_session("silueta")');
+  expect(dockerfile).toContain('new_session("u2netp")');
   expect(dockerfile).toContain("NUMBA_CACHE_DIR=/opt/minisago-numba-cache");
   expect(dockerfile).toContain("remove(Image.new");
   expect(sandboxRequirements.trim()).toBe(
@@ -87,7 +87,7 @@ test("generic Python runs behind a private container boundary", () => {
     "PidsLimit: 32",
     'SecurityOpt: ["no-new-privileges"]',
     "MAX_WORKSPACE_BYTES = 64 * 1024 * 1024",
-    "CONTAINER_TIMEOUT_MS = 52_000",
+    "CONTAINER_TIMEOUT_MS = 97_000",
   ]) {
     expect(sandboxBroker).toContain(guardrail);
   }
