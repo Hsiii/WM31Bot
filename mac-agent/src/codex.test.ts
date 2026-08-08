@@ -113,7 +113,7 @@ describe("Codex chatbot runner", () => {
         "--config",
         "mcp_servers.minisago_media.startup_timeout_sec=10",
         "--config",
-        "mcp_servers.minisago_media.tool_timeout_sec=50",
+        "mcp_servers.minisago_media.tool_timeout_sec=135",
       ],
       environment: {
         MINISAGO_MEDIA_MANIFEST: "/tmp/request/media-manifest.json",

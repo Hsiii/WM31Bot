@@ -18,6 +18,9 @@ const sandboxRequirements = await Bun.file(
 const pythonRuntime = await Bun.file(
   new URL("./mac-agent/src/python-runtime.py", import.meta.url),
 ).text();
+const pythonClient = await Bun.file(
+  new URL("./mac-agent/src/python.ts", import.meta.url),
+).text();
 
 test("worker image includes conservative media processing tools", () => {
   for (const packageName of [
@@ -87,8 +90,14 @@ test("generic Python runs behind a private container boundary", () => {
     "PidsLimit: 32",
     'SecurityOpt: ["no-new-privileges"]',
     "MAX_WORKSPACE_BYTES = 64 * 1024 * 1024",
-    "CONTAINER_TIMEOUT_MS = 97_000",
+    "CONTAINER_TIMEOUT_MS = 127_000",
   ]) {
     expect(sandboxBroker).toContain(guardrail);
   }
+});
+
+test("Python timeout margins outlive the 120-second runtime", () => {
+  expect(pythonRuntime).toContain("PROCESS_TIMEOUT_SECONDS = 120");
+  expect(sandboxBroker).toContain("CONTAINER_TIMEOUT_MS = 127_000");
+  expect(pythonClient).toContain("SANDBOX_TIMEOUT_MS = 130_000");
 });
