@@ -21,6 +21,12 @@ test("worker image includes conservative media processing tools", () => {
   }
 });
 
+test("worker image includes a minimal Python runtime", () => {
+  for (const packageName of ["python3", "python3-venv"]) {
+    expect(dockerfile).toContain(`    ${packageName} \\\n`);
+  }
+});
+
 test("images copy code from the consolidated source layout", () => {
   expect(dockerfile).toContain(
     "COPY --chown=bun:bun src/chatbot /app/src/chatbot",
