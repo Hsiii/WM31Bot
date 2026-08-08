@@ -46,7 +46,12 @@ test("worker image includes a minimal Python runtime", () => {
     'PYTHON = "/opt/minisago-python/bin/python3"',
   );
   expect(pythonRuntime).toContain('"U2NET_HOME": "/opt/minisago-models"');
+  expect(pythonRuntime).toContain('"HOME": "/tmp"');
   expect(sandboxBroker.match(/mode: 0o444/gu)).toHaveLength(2);
+  expect(sandboxBroker).toContain("await chmod(directory, 0o757)");
+  expect(sandboxBroker).toContain("removeWorkspace(directory)");
+  expect(sandboxBroker).toContain("if (isMissing(error)) continue");
+  expect(pythonRuntime).toContain("clean_workspace(output_path)");
 });
 
 test("images copy code from the consolidated source layout", () => {

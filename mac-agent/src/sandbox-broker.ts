@@ -136,6 +136,21 @@ function safeFilename(index: number, filename: string) {
   return `${index}-${name || "attachment"}`;
 }
 
+async function removeWorkspace(directory: string) {
+  await chmod(join(directory, "inputs"), 0o700).catch(() => {});
+  await chmod(directory, 0o700).catch(() => {});
+  await rm(directory, { recursive: true, force: true });
+}
+
+function isMissing(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
 async function prepareWorkspace(
   request: ReturnType<typeof pythonSandboxRequestSchema.parse>,
 ) {
@@ -170,10 +185,10 @@ async function prepareWorkspace(
       { mode: 0o444 },
     );
     await chmod(inputsDirectory, 0o555);
-    await chmod(directory, 0o733);
+    await chmod(directory, 0o757);
     return directory;
   } catch (error) {
-    await rm(directory, { recursive: true, force: true });
+    await removeWorkspace(directory);
     throw error;
   }
 }
@@ -184,13 +199,25 @@ async function workspaceUsage(directory: string) {
   let files = 0;
   while (pending.length) {
     const current = pending.pop()!;
-    for (const entry of await readdir(current, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch (error) {
+      if (isMissing(error)) continue;
+      throw error;
+    }
+    for (const entry of entries) {
       const path = join(current, entry.name);
       if (entry.isDirectory()) {
         pending.push(path);
       } else {
         files += 1;
-        bytes += (await lstat(path)).size;
+        try {
+          bytes += (await lstat(path)).size;
+        } catch (error) {
+          if (isMissing(error)) continue;
+          throw error;
+        }
       }
       if (files > MAX_WORKSPACE_FILES || bytes > MAX_WORKSPACE_BYTES) {
         throw new Error("Python workspace exceeded its limit.");
@@ -291,7 +318,7 @@ async function execute(
     return pythonSandboxResponseSchema.parse(JSON.parse(streams.stdout));
   } finally {
     if (containerId) await removeContainer(containerId);
-    await rm(directory, { recursive: true, force: true });
+    await removeWorkspace(directory);
   }
 }
 
@@ -317,7 +344,7 @@ const stale = await dockerJson<Array<{ Id: string }>>(
 await Promise.all(stale.map((item) => removeContainer(item.Id)));
 for (const entry of await readdir(jobsRoot)) {
   if (jobDirectoryPattern.test(entry)) {
-    await rm(join(jobsRoot, entry), { recursive: true, force: true });
+    await removeWorkspace(join(jobsRoot, entry));
   }
 }
 
