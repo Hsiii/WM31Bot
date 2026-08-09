@@ -15,8 +15,11 @@ const DEFAULT_STATE_FILE = ".data/gamer-forum-state.json";
 const DEFAULT_CHECK_TIMES = "08:30,20:30";
 const DEFAULT_TIMEZONE = "Asia/Taipei";
 const MESSAGE_LIMIT = 2_000;
-const USER_AGENT =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 MiniSago/0.1";
+export const GAMER_FORUM_READER_HEADERS = {
+  "User-Agent": "MiniSago/0.1",
+  "X-Cache-Tolerance": "300",
+  "X-Respond-With": "markdown",
+} as const;
 
 export type GamerForumPost = {
   id: string;
@@ -431,11 +434,7 @@ export function buildForumReaderUrl(
 
 async function fetchForumHtml(url: string, readerBaseUrl: string) {
   const response = await fetch(buildForumReaderUrl(url, readerBaseUrl), {
-    headers: {
-      "User-Agent": USER_AGENT,
-      "X-Cache-Tolerance": "300",
-      "X-Respond-With": "markdown",
-    },
+    headers: GAMER_FORUM_READER_HEADERS,
   });
 
   if (!response.ok) {
