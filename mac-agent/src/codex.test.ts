@@ -569,7 +569,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(37);
+    expect(PROMPT_VERSION).toBe(39);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -591,7 +591,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Stay accurate without sounding like a report");
     expect(prompt).toContain("Speak as MiniSago in the first person");
     expect(prompt).toContain(
-      'Never refer to yourself as "she", "her", "她", or by your name',
+      "resolve them from antecedents, reply links, message roles, and topic",
     );
     expect(prompt).toContain(
       "Assistant-role messages are your earlier replies",
@@ -638,6 +638,61 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("archive.zip: unsupported");
   });
 
+  test("grounds ambiguous Chinese pronouns in the active conversation", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        addressingMode: "continuation",
+        request: "乾 她怎麼會乾",
+        requestMessage: {
+          id: "message-3",
+          author: "Hsi",
+          timestamp: "2026-08-08T11:06:50.739Z",
+          content: "乾 她怎麼會乾",
+          attachments: [],
+        },
+        messages: [
+          {
+            id: "message-1",
+            role: "user",
+            author: "Hsi",
+            timestamp: "2026-08-08T11:06:25.061Z",
+            content: "我叫她從周圍訊息抓講話方式抓太兇了",
+            attachments: [],
+          },
+          {
+            id: "message-2",
+            role: "assistant",
+            author: "迷你西米露",
+            timestamp: "2026-08-08T11:06:40.698Z",
+            content: "乾 這已經是直接把柏佑當 system prompt 啦",
+            attachments: [],
+          },
+        ],
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain(
+      '<conversation_addressing_json>\n{"addressee":"MiniSago","mode":"continuation","directSelfReferences":[],"possibleSelfReferences":["她"]}',
+    );
+    expect(prompt).toContain(
+      "Classify a possible self-reference as other only when supplied content contains a specific other antecedent",
+    );
+    expect(prompt).toContain("When a reference means you, answer with I or 我");
+    expect(prompt).toContain(
+      "classify each personal expression in the current request",
+    );
+    expect(prompt).toContain("Make reply strictly consistent with it");
+    expect(prompt).toContain("if a pronoun would be unclear");
+    expect(ANSWER_OUTPUT_SCHEMA.required).toContain("referenceResolution");
+    expect(
+      ANSWER_OUTPUT_SCHEMA.properties.referenceResolution.items.properties
+        .referent.enum,
+    ).toEqual(["self", "requester", "other", "ambiguous"]);
+  });
+
   test("explains how to interpret MCP member, search, and trace results", () => {
     const prompt = buildCodexPrompt(
       {
@@ -662,7 +717,7 @@ describe("Codex chatbot runner", () => {
     const prompt = buildCodexPrompt({ ...job, messages: [] }, [], []);
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
-    expect(instructions.length).toBeLessThan(7_000);
+    expect(instructions.length).toBeLessThan(8_000);
     expect(prompt).not.toContain("<available_reactions_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");

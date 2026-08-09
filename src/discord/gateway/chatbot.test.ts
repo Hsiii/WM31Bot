@@ -4,6 +4,7 @@ import type { ChatbotAccessConfig } from "../../chatbot/access";
 import {
   ChatbotConversationTracker,
   canMemberSearchChannel,
+  chatbotAddressingMode,
   extractChatbotRequest,
   extractMentionRequest,
   executeChatbotAnswerDecision,
@@ -144,6 +145,57 @@ describe("Discord chatbot", () => {
     );
     expect(extractMentionRequest(`hello <@!${BOT_ID}>`, BOT_ID)).toBe("hello");
     expect(extractMentionRequest("summarize this", BOT_ID)).toBeNull();
+  });
+
+  test("labels how the current request addresses MiniSago", () => {
+    const base = {
+      id: "message-1",
+      channel_id: "channel-1",
+      guild_id: "917436845187563610",
+      content: `<@${BOT_ID}> 你怎麼看`,
+      timestamp: "2026-08-09T12:00:00.000Z",
+      author: { id: "member-1", username: "Member" },
+      mentions: [{ id: BOT_ID }],
+    };
+
+    expect(chatbotAddressingMode(base, BOT_ID, ACCESS_CONFIG)).toBe("mention");
+    expect(
+      chatbotAddressingMode(
+        {
+          ...base,
+          content: "她怎麼會這樣",
+          referenced_message: {
+            id: "bot-message-1",
+            channel_id: "channel-1",
+            content: "我剛剛看錯了",
+            timestamp: "2026-08-09T11:59:00.000Z",
+            author: { id: BOT_ID, username: "MiniSago", bot: true },
+          },
+        },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
+    ).toBe("reply");
+    expect(
+      chatbotAddressingMode(
+        {
+          ...base,
+          guild_id: undefined,
+          content: "妳怎麼看",
+          author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+          mentions: [],
+        },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
+    ).toBe("dm");
+    expect(
+      chatbotAddressingMode(
+        { ...base, content: "她怎麼會這樣", mentions: [] },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
+    ).toBeNull();
   });
 
   test("treats replies that ping MiniSago as chatbot requests", () => {
