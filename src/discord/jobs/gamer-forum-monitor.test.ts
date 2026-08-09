@@ -5,6 +5,7 @@ import {
   buildForumReaderUrl,
   buildGamerForumPostMessagePayload,
   formatGamerForumPostMessage,
+  GAMER_FORUM_READER_HEADERS,
   getForumCurrentPageNumber,
   getForumLastPageNumber,
   parseGamerForumMarkdownPosts,
@@ -75,6 +76,14 @@ describe("Gamer forum page helpers", () => {
     expect(buildForumReaderUrl(watchUrl, "https://reader.example.test")).toBe(
       `https://reader.example.test/${watchUrl}`,
     );
+  });
+
+  test("identifies honestly to the reader instead of impersonating a browser", () => {
+    expect(GAMER_FORUM_READER_HEADERS).toEqual({
+      "User-Agent": "MiniSago/0.1",
+      "X-Cache-Tolerance": "300",
+      "X-Respond-With": "markdown",
+    });
   });
 });
 
