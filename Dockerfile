@@ -16,6 +16,7 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
 COPY package.json bun.lock ./
+RUN apk add --no-cache git
 RUN bun install --frozen-lockfile --production
 
 COPY --from=builder --chown=bun:bun /app/src ./src

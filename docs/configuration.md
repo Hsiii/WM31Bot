@@ -25,6 +25,7 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | `MINISAGO_AMBIENT_ATTENTION_CHANCE`    | No        | Chance from 0 to 1 that a burst schedules evaluation    |
 | `MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR` | No        | Hourly ambient model-call ceiling; defaults to 4        |
 | `MINISAGO_REMINDER_STATE_FILE`         | No        | Persistent reminder state                               |
+| `MINISAGO_GUILD_MEMORY_DIRECTORY`      | No        | Per-server Markdown memory and local Git history        |
 | `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticate the fixed Mac worker profile               |
 | `MINISAGO_WORKER_BRIDGE_SECRET`        | Chatbot   | Authenticate the fixed Oracle worker profile            |
 | `GITHUB_WEBHOOK_SECRET`                | PR bridge | Verify GitHub's `X-Hub-Signature-256`                   |
@@ -84,8 +85,14 @@ Production state must live under `/app/state` on the persistent
 - `GAMER_FORUM_STATE_FILE`
 - `X_POST_STATE_FILE`
 - `MINISAGO_REMINDER_STATE_FILE`
+- `MINISAGO_GUILD_MEMORY_DIRECTORY`
 
 Do not place these files on the container's ephemeral filesystem.
+
+Server memory defaults to `.data/guild-memory` outside production. The
+directory is an independent local-only Git repository with no configured
+remote. Its files and Git history must never be committed to the application
+repository. Each guild file is capped at 4,000 characters.
 
 ## Current deployment-specific defaults
 

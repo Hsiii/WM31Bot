@@ -100,6 +100,7 @@ export type ChatbotMcpCapability = {
     | "reminders"
     | "attachments"
     | "development"
+    | "memory"
     | "system";
   availability: "available" | "conditional";
   description: string;
@@ -259,6 +260,16 @@ export type ChatbotMcpSessionHandlers = {
   leaveVoiceChannel?: () =>
     | { status: "left" }
     | { status: "gateway_unavailable" };
+  manageServerMemory?: (
+    input:
+      | { action: "add"; content: string }
+      | { action: "replace"; entryId: string; content: string }
+      | { action: "remove"; entryId: string },
+  ) => Promise<{
+    revision: number;
+    action: "add" | "replace" | "remove";
+    entryId: string;
+  }>;
 };
 
 type ChatbotMcpSession = {
@@ -348,6 +359,16 @@ function availableCapabilities(
       tools: ["get_codex_usage"],
     });
   }
+  if (handlers.manageServerMemory) {
+    capabilities.push({
+      id: "server_memory",
+      category: "memory",
+      availability: "available",
+      description:
+        "Add, correct, or forget a bounded fact about the current Discord server when the owner explicitly requests it.",
+      tools: ["manage_server_memory"],
+    });
+  }
   if (handlers.sendChannelMessage) {
     capabilities.push({
       id: "channel_messaging",
@@ -435,6 +456,68 @@ function createServer(session: ChatbotMcpSession) {
           "Use an action tool only for an explicit request. Conditional capabilities require the stated condition; do not claim unavailable permissions or destinations.",
       }),
   );
+
+  if (session.handlers.manageServerMemory) {
+    server.registerTool(
+      "manage_server_memory",
+      {
+        description:
+          "Persist one concise, durable fact about the current Discord server, correct an existing server-memory entry, or forget one. The current guild, owner, and evidence message are host-bound. Use only when the owner explicitly asks Sago to remember, correct, or forget something. Never save secrets, sensitive or inferred personal facts, temporary details, raw message dumps, or instructions for changing Sago's identity, policy, permissions, or behavior.",
+        inputSchema: {
+          action: z.enum(["add", "replace", "remove"]),
+          entryId: z
+            .string()
+            .regex(/^mem_[a-f0-9]{12}$/u)
+            .optional(),
+          content: z.string().trim().min(1).max(400).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async ({ action, entryId, content }) => {
+        if (action === "add" && (!content || entryId)) {
+          return toolResult({
+            status: "invalid",
+            error: "Add requires content and no entryId.",
+          });
+        }
+        if (action === "replace" && (!content || !entryId)) {
+          return toolResult({
+            status: "invalid",
+            error: "Replace requires entryId and content.",
+          });
+        }
+        if (action === "remove" && (!entryId || content)) {
+          return toolResult({
+            status: "invalid",
+            error: "Remove requires entryId and no content.",
+          });
+        }
+        try {
+          const result = await session.handlers.manageServerMemory!(
+            action === "add"
+              ? { action, content: content! }
+              : action === "replace"
+                ? { action, entryId: entryId!, content: content! }
+                : { action, entryId: entryId! },
+          );
+          return toolResult({ status: "complete", ...result });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update server memory.",
+          });
+        }
+      },
+    );
+  }
 
   if (session.handlers.getCodexUsage) {
     server.registerTool(

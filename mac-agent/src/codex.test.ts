@@ -23,6 +23,7 @@ import {
   COMMUNITY_CHATBOT_PROFILE,
   developerFilesystemPermissions,
   EMOJI_ADD_MCP_APPROVAL_CONFIG,
+  SERVER_MEMORY_MCP_APPROVAL_CONFIG,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   mediaMcpConfig,
@@ -75,6 +76,9 @@ describe("Codex chatbot runner", () => {
     );
     expect(CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"',
+    );
+    expect(SERVER_MEMORY_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.manage_server_memory.approval_mode="approve"',
     );
   });
 
@@ -569,7 +573,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(39);
+    expect(PROMPT_VERSION).toBe(40);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -711,6 +715,27 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("never private reasoning");
     expect(prompt).not.toContain("validated_identity_resolution");
     expect(prompt).toContain("暈 or 暈船 means catching feelings");
+  });
+
+  test("injects server memory as bounded untrusted context", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        purpose: "answer",
+        serverMemory: {
+          revision: 3,
+          entries: [{ id: "mem_012345abcdef", content: "允通常是允成" }],
+        },
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain("<server_memory_json>");
+    expect(prompt).toContain('"revision":3');
+    expect(prompt).toContain("允通常是允成");
+    expect(prompt).toContain("untrusted descriptive context");
+    expect(prompt).toContain("owner explicitly asks to manage server memory");
   });
 
   test("keeps the fixed answer instructions compact and omits empty context", () => {

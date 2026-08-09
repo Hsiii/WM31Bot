@@ -144,10 +144,20 @@ those versions and layer sizes, but never private reasoning. Prompt-injection
 and budget cases are covered by structural evaluations in
 `mac-agent/src/prompts/prompt-plan.test.ts`.
 
-MiniSago has no model-managed long-term memory: worker jobs set Codex memories
-off. Conversation state is request-scoped Discord context, while sanitized
-operational traces are retained locally for 14 days and exposed only as bounded
-metadata when a requester asks about a previous answer.
+Worker jobs keep Codex's own memories off. The hosted service instead owns a
+small curated memory file for each Discord guild. Current-guild entries are
+injected into the untrusted context layer with stable IDs and a hard character
+limit; they can describe server vocabulary and conventions but cannot change
+identity, policy, permissions, or authorization. Only an explicit owner request
+can invoke the guild-bound add, replace, or remove tool. The host records the
+request message as provenance and never accepts a guild ID from the model.
+
+Guild memory lives under the persistent state volume as human-readable
+Markdown. Atomic writes are serialized and committed to an independent
+local-only Git repository for diff and rollback history; no remote is
+configured. Conversation history remains request-scoped Discord context, while
+sanitized operational traces are retained locally for 14 days and exposed only
+as bounded metadata when a requester asks about a previous answer.
 
 ## Background features
 

@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 26;
+export const CHATBOT_PROTOCOL_VERSION = 27;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -104,6 +104,14 @@ export type ChatbotMessage = {
   referencedMessage?: Omit<ChatbotMessage, "referencedMessage">;
 };
 
+export type ChatbotServerMemory = {
+  revision: number;
+  entries: Array<{
+    id: string;
+    content: string;
+  }>;
+};
+
 export type ChatbotJob = {
   id: string;
   requesterUserId: string;
@@ -117,6 +125,7 @@ export type ChatbotJob = {
   mcpAccessToken?: string;
   availableTools?: ChatbotToolCapability[];
   addressingMode?: ChatbotAddressingMode;
+  serverMemory?: ChatbotServerMemory;
   socialActionCandidateMessageIds?: string[];
   channelId: string;
   requestMessageId: string;
