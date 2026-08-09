@@ -36,6 +36,8 @@ export const EMOJI_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"';
+export const SERVER_MEMORY_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.manage_server_memory.approval_mode="approve"';
 export const COMMUNITY_CHATBOT_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "high",
@@ -563,6 +565,8 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         EMOJI_ADD_MCP_APPROVAL_CONFIG,
         "--config",
         CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
+        "--config",
+        SERVER_MEMORY_MCP_APPROVAL_CONFIG,
         "--config",
         "mcp_servers.minisago.startup_timeout_sec=10",
         "--config",

@@ -8,6 +8,7 @@ import {
   type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
 } from "../../chatbot/mcp";
+import { getGuildMemoryStore } from "../../chatbot/guild-memory";
 import type {
   ChatbotAddressingMode,
   ChatbotExecutionMode,
@@ -70,6 +71,7 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
+const guildMemoryStore = getGuildMemoryStore();
 
 function supplementalCapabilities({
   isOwner,
@@ -563,6 +565,23 @@ export async function handleChatbotMention({
             botUserId,
             discordRequest,
           });
+      let serverMemory: ChatbotJob["serverMemory"];
+      if (message.guild_id) {
+        try {
+          const snapshot = await guildMemoryStore.load(message.guild_id);
+          if (snapshot.entries.length) {
+            serverMemory = {
+              revision: snapshot.revision,
+              entries: snapshot.entries.map(({ id, content }) => ({
+                id,
+                content,
+              })),
+            };
+          }
+        } catch {
+          console.warn("Discord server memory unavailable.");
+        }
+      }
       let executionMode: ChatbotExecutionMode = "chat";
       let executionTarget: ChatbotExecutionTarget = "default";
       let mutationScope: ChatbotMutationScope | undefined;
@@ -820,6 +839,32 @@ export async function handleChatbotMention({
               }) => sendChannelMessage({ ...input, discordRequest }),
             }
           : {}),
+        ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
+          ? {
+              manageServerMemory: async (
+                input:
+                  | { action: "add"; content: string }
+                  | {
+                      action: "replace";
+                      entryId: string;
+                      content: string;
+                    }
+                  | { action: "remove"; entryId: string },
+              ) => {
+                const result = await guildMemoryStore.mutate(
+                  message.guild_id!,
+                  input,
+                  message.id,
+                  requesterUserId,
+                );
+                return {
+                  revision: result.revision,
+                  action: result.action,
+                  entryId: result.entryId,
+                };
+              },
+            }
+          : {}),
         ...(reminderScheduler
           ? {
               createReminder: async (input) => {
@@ -896,6 +941,7 @@ export async function handleChatbotMention({
         ...(reactionCapabilities?.tools.length
           ? { availableTools: reactionCapabilities.tools }
           : {}),
+        ...(serverMemory ? { serverMemory } : {}),
       };
       const dispatch = workflow.dispatch(job);
 

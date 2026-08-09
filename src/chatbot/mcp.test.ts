@@ -282,6 +282,52 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes owner-bound server memory without a caller-controlled guild", async () => {
+    const mutations: unknown[] = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      manageServerMemory: async (input) => {
+        mutations.push(input);
+        return {
+          revision: 1,
+          action: input.action,
+          entryId: "entryId" in input ? input.entryId : "mem_012345abcdef",
+        };
+      },
+    });
+    const client = await connect(session.token);
+    const tool = (await client.listTools()).tools.find(
+      ({ name }) => name === "manage_server_memory",
+    );
+
+    expect(tool?.inputSchema).not.toHaveProperty("properties.guildId");
+    expect(tool?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: false,
+    });
+    const invalid = await client.callTool({
+      name: "manage_server_memory",
+      arguments: { action: "remove" },
+    });
+    expect(invalid.structuredContent).toMatchObject({ status: "invalid" });
+
+    const result = await client.callTool({
+      name: "manage_server_memory",
+      arguments: { action: "add", content: "允通常是允成" },
+    });
+    expect(result.structuredContent).toEqual({
+      status: "complete",
+      revision: 1,
+      action: "add",
+      entryId: "mem_012345abcdef",
+    });
+    expect(mutations).toEqual([{ action: "add", content: "允通常是允成" }]);
+
+    await client.close();
+    session.revoke();
+  });
+
   test("exposes the owner-bound guild emoji tool", async () => {
     const additions: unknown[] = [];
     const session = registerChatbotMcpSession({

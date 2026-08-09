@@ -74,6 +74,10 @@ test("images copy code from the consolidated source layout", () => {
   expect(hostedDockerfile).not.toContain("/app/data");
 });
 
+test("hosted image includes Git for local server-memory history", () => {
+  expect(hostedDockerfile).toContain("RUN apk add --no-cache git");
+});
+
 test("generic Python runs behind a private container boundary", () => {
   const sandboxOffset = workerCompose.indexOf("\n  sandbox:\n");
   const worker = workerCompose.slice(0, sandboxOffset);
