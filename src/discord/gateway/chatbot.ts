@@ -5,6 +5,7 @@ import { macAgentBridge, type MacAgentJobResult } from "../../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
 import {
   registerChatbotMcpSession,
+  type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
 } from "../../chatbot/mcp";
 import type {
@@ -68,6 +69,106 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
+
+function supplementalCapabilities({
+  isOwner,
+  hasAttachments,
+  hasReactions,
+  availableRepositories,
+  chatbotRepository,
+  executionMode,
+  executionTarget,
+}: {
+  isOwner: boolean;
+  hasAttachments: boolean;
+  hasReactions: boolean;
+  availableRepositories: string[];
+  chatbotRepository?: string;
+  executionMode: ChatbotExecutionMode;
+  executionTarget: ChatbotExecutionTarget;
+}): ChatbotMcpCapability[] {
+  const capabilities: ChatbotMcpCapability[] = [
+    {
+      id: "conversation",
+      category: "conversation",
+      availability: "available",
+      description:
+        "Answer, explain, write, reason, and use the supplied nearby Discord conversation while matching the requester's language.",
+    },
+  ];
+
+  if (hasReactions) {
+    capabilities.push({
+      id: "message_reactions",
+      category: "discord",
+      availability: "available",
+      description:
+        "React to the current Discord message with one host-approved Unicode or custom emoji when a reaction is useful.",
+    });
+  }
+  capabilities.push(
+    {
+      id: "attachment_understanding",
+      category: "attachments",
+      availability: hasAttachments ? "available" : "conditional",
+      description:
+        "Read supported extracted text and attachment metadata supplied with a request.",
+      ...(!hasAttachments
+        ? { condition: "The request must include or reply to an attachment." }
+        : {}),
+    },
+    {
+      id: "media_processing",
+      category: "attachments",
+      availability: "conditional",
+      description:
+        "Inspect or transform request-local images, audio, and video with bounded offline tools, including image conversion, video frames, transcoding, and Python-based analysis.",
+      condition:
+        "A supported attachment and a compatible chat worker are required; outputs are temporary and bounded.",
+    },
+  );
+  if (isOwner && availableRepositories.length > 0) {
+    capabilities.push({
+      id: "repository_work",
+      category: "development",
+      availability: executionMode === "dev" ? "available" : "conditional",
+      description:
+        "Inspect configured repositories and handle debugging, tests, builds, code changes, commits, feature-branch pushes, and draft pull requests within the routed permission scope.",
+      condition:
+        executionMode === "dev"
+          ? "This request has already been routed to development mode."
+          : "The owner must make an explicit request that identifies a configured repository.",
+    });
+  }
+  if (isOwner && chatbotRepository) {
+    capabilities.push({
+      id: "self_development",
+      category: "development",
+      availability: executionMode === "dev" ? "available" : "conditional",
+      description:
+        "Inspect or change MiniSago's own behavior and implementation through her configured chatbot repository.",
+      condition:
+        executionMode === "dev"
+          ? "This request has already been routed to development mode."
+          : "The owner must explicitly request a change to MiniSago.",
+    });
+  }
+  if (isOwner) {
+    capabilities.push({
+      id: "mac_file_delivery",
+      category: "attachments",
+      availability: executionTarget === "mac" ? "available" : "conditional",
+      description:
+        "Find and send one requested file from the owner's allowlisted Mac folders without reading its contents.",
+      condition:
+        executionTarget === "mac"
+          ? "This request has already been routed to the connected Mac."
+          : "The owner must explicitly request a file and a compatible Mac worker must be connected.",
+    });
+  }
+
+  return capabilities;
+}
 
 type ActiveConversation = {
   requesterUserId: string;
@@ -740,6 +841,18 @@ export async function handleChatbotMention({
               leaveVoiceChannel: () => leaveVoiceChannel(message.guild_id!),
             }
           : {}),
+        describeCapabilities: () =>
+          supplementalCapabilities({
+            isOwner: requesterUserId === accessConfig.ownerUserId,
+            hasAttachments:
+              requestMessage.attachments.length > 0 ||
+              Boolean(requestMessage.referencedMessage?.attachments.length),
+            hasReactions: Boolean(reactionCapabilities?.tools.length),
+            availableRepositories: workflow.availableRepositories,
+            chatbotRepository: workflow.chatbotRepository,
+            executionMode,
+            executionTarget,
+          }),
       });
 
       const job: ChatbotJob = {

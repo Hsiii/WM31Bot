@@ -271,6 +271,8 @@ describe("Codex chatbot runner", () => {
 
     expect(prompt).toContain("MiniSago MCP");
     expect(prompt).toContain("nearby context is insufficient");
+    expect(prompt).toContain("always call describe_capabilities");
+    expect(prompt).toContain("catalog as authoritative");
     expect(prompt).toContain("use only the structured reaction field");
     expect(prompt).toContain("host validates it");
     expect(prompt).toContain("<available_reactions_json>");
@@ -567,7 +569,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(36);
+    expect(PROMPT_VERSION).toBe(37);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -660,7 +662,7 @@ describe("Codex chatbot runner", () => {
     const prompt = buildCodexPrompt({ ...job, messages: [] }, [], []);
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
-    expect(instructions.length).toBeLessThan(6_500);
+    expect(instructions.length).toBeLessThan(7_000);
     expect(prompt).not.toContain("<available_reactions_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");

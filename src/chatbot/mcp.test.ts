@@ -127,6 +127,7 @@ describe("MiniSago MCP server", () => {
     const tools = await client.listTools();
 
     expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "describe_capabilities",
       "get_previous_trace",
       "resolve_context",
     ]);
@@ -168,9 +169,73 @@ describe("MiniSago MCP server", () => {
     const tools = await client.listTools();
 
     expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "describe_capabilities",
       "get_previous_trace",
       "resolve_context",
     ]);
+
+    await client.close();
+    session.revoke();
+  });
+
+  test("describes only request-scoped and conditional capabilities", async () => {
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      describeCapabilities: () => [
+        {
+          id: "repository_work",
+          category: "development",
+          availability: "conditional",
+          description: "Work in a configured repository for the owner.",
+          condition: "The owner must make an explicit repository request.",
+        },
+      ],
+      sendChannelMessage: async () => ({
+        id: "message-1",
+        channelId: "channel-1",
+        guildId: "guild-1",
+        jumpUrl: "https://discord.com/channels/guild-1/channel-1/message-1",
+      }),
+    });
+    const client = await connect(session.token);
+    const tool = (await client.listTools()).tools.find(
+      ({ name }) => name === "describe_capabilities",
+    );
+
+    expect(tool?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+    const result = await client.callTool({
+      name: "describe_capabilities",
+      arguments: {},
+    });
+    expect(result.structuredContent).toMatchObject({
+      status: "complete",
+      scope: "current_request",
+      capabilities: [
+        {
+          id: "repository_work",
+          availability: "conditional",
+        },
+        {
+          id: "capability_discovery",
+          tools: ["describe_capabilities"],
+        },
+        {
+          id: "discord_context",
+          tools: ["resolve_context", "get_previous_trace"],
+        },
+        {
+          id: "channel_messaging",
+          tools: ["send_channel_message"],
+        },
+      ],
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain(
+      "custom_emojis",
+    );
 
     await client.close();
     session.revoke();
