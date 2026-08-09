@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 25;
+export const CHATBOT_PROTOCOL_VERSION = 26;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -28,6 +28,7 @@ export type ChatbotReaction = {
 export type ChatbotExecutionMode = "chat" | "dev";
 export type ChatbotExecutionTarget = "default" | "mac";
 export type ChatbotMutationScope = "code" | "issue" | "deploy";
+export type ChatbotAddressingMode = "mention" | "reply" | "dm" | "continuation";
 
 export type CodexUsageWindow = {
   label: string;
@@ -115,6 +116,7 @@ export type ChatbotJob = {
   chatbotRepository?: string;
   mcpAccessToken?: string;
   availableTools?: ChatbotToolCapability[];
+  addressingMode?: ChatbotAddressingMode;
   socialActionCandidateMessageIds?: string[];
   channelId: string;
   requestMessageId: string;

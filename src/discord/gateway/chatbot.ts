@@ -9,6 +9,7 @@ import {
   type ChatbotMcpSessionSnapshot,
 } from "../../chatbot/mcp";
 import type {
+  ChatbotAddressingMode,
   ChatbotExecutionMode,
   ChatbotExecutionTarget,
   ChatbotMutationScope,
@@ -316,6 +317,26 @@ export function extractChatbotRequest(
     : null;
 }
 
+export function chatbotAddressingMode(
+  message: ChatbotMention,
+  botUserId: string,
+  accessConfig: ChatbotAccessConfig,
+): ChatbotAddressingMode | null {
+  if (
+    message.referenced_message?.author?.id === botUserId &&
+    message.mentions?.some((user) => user.id === botUserId)
+  ) {
+    return "reply";
+  }
+  if (extractMentionRequest(message.content ?? "", botUserId) !== null) {
+    return "mention";
+  }
+  if (!message.guild_id && message.author?.id === accessConfig.ownerUserId) {
+    return "dm";
+  }
+  return null;
+}
+
 export function isChatbotAuthorized(
   userId: string,
   accessConfig: ChatbotAccessConfig,
@@ -469,9 +490,11 @@ export async function handleChatbotMention({
     return false;
   }
 
+  let addressingMode = chatbotAddressingMode(message, botUserId, accessConfig);
   let request = extractChatbotRequest(message, botUserId, accessConfig);
   if (request === null && conversationTracker?.take(message)) {
     request = message.content?.trim() ?? "";
+    addressingMode = "continuation";
   }
   if (request === null) {
     return false;
@@ -866,6 +889,7 @@ export async function handleChatbotMention({
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,
+        ...(addressingMode ? { addressingMode } : {}),
         requestMessage,
         messages,
         mcpAccessToken: mcpSession.token,

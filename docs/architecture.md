@@ -130,6 +130,15 @@ oversized items, and emits `context_omissions_json` metadata rather than hiding
 loss. Taiwanese slang reference material is loaded only when Chinese appears in
 the active context; identity, trust, and output policy always remain loaded.
 
+Answer jobs also carry host-derived addressing metadata that records whether
+the current request reached MiniSago through a mention, reply, owner DM, or
+active-conversation continuation. The prompt uses that signal together with
+message roles, reply links, and antecedents to resolve second- and third-person
+references without treating Chinese grammatical gender as identity evidence.
+The answer schema requires a bounded `referenceResolution` classification so
+the reply stays consistent with that decision; the gateway consumes only the
+reply and reaction fields and does not post the classification to Discord.
+
 Policy, task, and context formats have independent versions. Traces record
 those versions and layer sizes, but never private reasoning. Prompt-injection
 and budget cases are covered by structural evaluations in

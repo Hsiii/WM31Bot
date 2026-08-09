@@ -13,6 +13,23 @@ function block(name: string, value: unknown) {
   return `<${name}>\n${content}\n</${name}>`;
 }
 
+function uniqueMatches(value: string, pattern: RegExp) {
+  return [...new Set(value.match(pattern) ?? [])];
+}
+
+function addressingReferences(request: string) {
+  return {
+    directSelfReferences: uniqueMatches(
+      request,
+      /你|妳|您|MiniSago|Sago|\byou(?:r|rs|rself)?\b/giu,
+    ),
+    possibleSelfReferences: uniqueMatches(
+      request,
+      /她|他|\b(?:she|her|hers|he|him|his)\b/giu,
+    ),
+  };
+}
+
 function promptAttachment({
   id,
   filename,
@@ -88,6 +105,15 @@ export function requestContext(
 
   if (currentMessage) {
     sections.push(block("current_message_context_json", currentMessage));
+  }
+  if (job.addressingMode) {
+    sections.push(
+      block("conversation_addressing_json", {
+        addressee: "MiniSago",
+        mode: job.addressingMode,
+        ...addressingReferences(request),
+      }),
+    );
   }
 
   const budgeted = budgetMessages(job.messages);
