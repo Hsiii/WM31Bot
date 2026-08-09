@@ -91,6 +91,22 @@ export type ChatbotMcpSearchQuery = z.infer<typeof searchQuery>;
 
 export type ChatbotMcpStatus = "complete" | "not_found" | "unavailable";
 
+export type ChatbotMcpCapability = {
+  id: string;
+  category:
+    | "conversation"
+    | "context"
+    | "discord"
+    | "reminders"
+    | "attachments"
+    | "development"
+    | "system";
+  availability: "available" | "conditional";
+  description: string;
+  tools?: string[];
+  condition?: string;
+};
+
 export type ChatbotMcpContextResult = {
   history: {
     status: "complete" | "unavailable";
@@ -147,6 +163,7 @@ export function budgetResolvedContext(
 }
 
 export type ChatbotMcpSessionHandlers = {
+  describeCapabilities?: () => ChatbotMcpCapability[];
   getPreviousTrace: () => Promise<{
     status: ChatbotMcpStatus;
     trace?: ChatbotTraceContext;
@@ -298,6 +315,91 @@ function unavailable(_error: unknown) {
   });
 }
 
+function availableCapabilities(
+  session: ChatbotMcpSession,
+): ChatbotMcpCapability[] {
+  const { handlers } = session;
+  const capabilities: ChatbotMcpCapability[] = [
+    {
+      id: "capability_discovery",
+      category: "system",
+      availability: "available",
+      description:
+        "Describe MiniSago's abilities and request-scoped limitations without performing an action.",
+      tools: ["describe_capabilities"],
+    },
+    {
+      id: "discord_context",
+      category: "context",
+      availability: "available",
+      description:
+        "Read more current-channel history and, when the request is in a server, search accessible messages or resolve member aliases. Inspect bounded metadata about the previous answer when explicitly asked how it was produced.",
+      tools: ["resolve_context", "get_previous_trace"],
+    },
+  ];
+
+  if (handlers.getCodexUsage) {
+    capabilities.push({
+      id: "codex_usage",
+      category: "system",
+      availability: "available",
+      description:
+        "Read the answering worker's current Codex usage, remaining capacity, and reset times.",
+      tools: ["get_codex_usage"],
+    });
+  }
+  if (handlers.sendChannelMessage) {
+    capabilities.push({
+      id: "channel_messaging",
+      category: "discord",
+      availability: "available",
+      description:
+        "Send an explicitly requested message to an exact Discord channel for the owner.",
+      tools: ["send_channel_message"],
+    });
+  }
+  if (handlers.joinVoiceChannel && handlers.leaveVoiceChannel) {
+    capabilities.push({
+      id: "voice_presence",
+      category: "discord",
+      availability: "available",
+      description:
+        "Join the requester's current voice channel muted and deafened, or leave the current server's voice channel.",
+      tools: ["join_voice_channel", "leave_voice_channel"],
+    });
+  }
+  if (
+    handlers.listSharedGuilds &&
+    handlers.listGuildEmojis &&
+    handlers.addGuildEmoji
+  ) {
+    capabilities.push({
+      id: "custom_emojis",
+      category: "discord",
+      availability: "available",
+      description:
+        "List shared servers and custom emojis, then add an attached image or copy an existing custom emoji when the owner asks.",
+      tools: ["list_shared_guilds", "list_guild_emojis", "add_guild_emoji"],
+    });
+  }
+  if (
+    handlers.createReminder &&
+    handlers.listReminders &&
+    handlers.cancelReminder
+  ) {
+    capabilities.push({
+      id: "reminders",
+      category: "reminders",
+      availability: "available",
+      description:
+        "Create one-time or recurring reminders and list or cancel reminders bound to this requester and channel.",
+      tools: ["create_reminder", "list_reminders", "cancel_reminder"],
+    });
+  }
+
+  return [...(handlers.describeCapabilities?.() ?? []), ...capabilities];
+}
+
 function createServer(session: ChatbotMcpSession) {
   const server = new McpServer(
     {
@@ -315,6 +417,24 @@ function createServer(session: ChatbotMcpSession) {
     idempotentHint: true,
     openWorldHint: false,
   } as const;
+
+  server.registerTool(
+    "describe_capabilities",
+    {
+      description:
+        "Describe every MiniSago capability available or conditionally available to the current requester, including non-tool abilities and request-scoped limitations. Use when someone asks what Sago can do, whether she supports a kind of task, or when deciding how to approach an unusual request. This tool is read-only and performs no action.",
+      inputSchema: {},
+      annotations: readAnnotations,
+    },
+    async () =>
+      toolResult({
+        status: "complete",
+        scope: "current_request",
+        capabilities: availableCapabilities(session),
+        guidance:
+          "Use an action tool only for an explicit request. Conditional capabilities require the stated condition; do not claim unavailable permissions or destinations.",
+      }),
+  );
 
   if (session.handlers.getCodexUsage) {
     server.registerTool(
