@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -91,6 +91,45 @@ describe("developer workspace", () => {
       ),
     ).toBe(true);
     expect(commands[1]!.command.at(-1)).toBe("minisago/job-123");
+  });
+
+  test("preserves and reuses a coding task workspace", async () => {
+    const workspaceOptions = await options();
+    const commands: string[][] = [];
+    const taskJob = {
+      ...job("code"),
+      developerTask: { id: "task-456" },
+    };
+    const first = await prepareDeveloperWorkspace(
+      taskJob,
+      workspaceOptions,
+      async (command) => {
+        commands.push(command);
+        if (command.slice(0, 3).join(" ") === "gh repo clone") {
+          await mkdir(command[4]!, { recursive: true });
+        }
+      },
+    );
+    await first.cleanup();
+
+    const resumed = await prepareDeveloperWorkspace(
+      {
+        ...taskJob,
+        id: "turn-2",
+        developerTask: {
+          id: "task-456",
+          resumeSessionId: "019-session",
+        },
+      },
+      workspaceOptions,
+      async (command) => {
+        commands.push(command);
+      },
+    );
+
+    expect(resumed.directory).toBe(first.directory);
+    expect(commands).toHaveLength(2);
+    await resumed.cleanup();
   });
 
   test("blocks GitHub mutations outside the selected scope", async () => {

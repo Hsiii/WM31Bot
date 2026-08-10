@@ -14,12 +14,13 @@ A Discord companion for chat, links, community access, and updates.
 - Creates reminders when asked to and pings you when the reminder expires.
 - Listen to GitHub activities and maintains PR review threads for certain repo in configured server.
 - Find files in my Mac and send it in chat when asked by me.
-- Codes and publishes PR when asked by me.
- 
+- Runs coding tasks in dedicated Discord threads with progress reports,
+  steering, stop, and continuation, then publishes a draft PR when authorized.
+
 > [!TIP]
 > When mentioning her, choose MiniSago under **Members/Apps**, not role.  
 > When quoting her messages, disable reply ping to prevent triggering another reply.  
-> She searches only channels the requester can access, so feel free to continue to talk behind someone's back.  
+> She searches only channels the requester can access, so feel free to continue to talk behind someone's back.
 
 ## Self-host MiniSago
 

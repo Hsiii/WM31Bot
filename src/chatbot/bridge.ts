@@ -7,6 +7,7 @@ import {
   CHATBOT_PROTOCOL_VERSION,
   type ChatbotJob,
   type ChatbotOutgoingFile,
+  type ChatbotTaskProgress,
   type ChatbotWorkerCapability,
   type CodexUsageSnapshot,
   type MacAgentClientMessage,
@@ -24,6 +25,8 @@ type PendingJob = {
   workflowId?: string;
   resolve: (result: MacAgentJobResult) => void;
   timer: ReturnType<typeof setTimeout>;
+  onProgress?: (progress: ChatbotTaskProgress) => void;
+  stopping?: boolean;
 };
 
 type PendingUsageRequest = {
@@ -57,7 +60,7 @@ type Workflow = {
 
 export type MacAgentJobResult =
   | { ok: true; content: string; files?: ChatbotOutgoingFile[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; stopped?: boolean };
 
 export type DispatchResult =
   | { status: "offline" }
@@ -72,7 +75,11 @@ export type WorkerSelectionResult =
 export type WorkflowLease = {
   availableRepositories: string[];
   chatbotRepository?: string;
-  dispatch: (job: ChatbotJob) => DispatchResult;
+  dispatch: (
+    job: ChatbotJob,
+    onProgress?: (progress: ChatbotTaskProgress) => void,
+  ) => DispatchResult;
+  stop: (jobId: string) => boolean;
   route: (
     capabilities: ChatbotWorkerCapability[],
     repository?: string,
@@ -179,6 +186,22 @@ function validCodexUsage(value: unknown): value is CodexUsageSnapshot | null {
               Number.isFinite(Date.parse(window.resetsAt)))),
       ),
     )
+  );
+}
+
+function validTaskProgress(value: unknown): value is ChatbotTaskProgress {
+  if (!value || typeof value !== "object") return false;
+  const progress = value as ChatbotTaskProgress;
+  return (
+    ["preparing", "exploring", "implementing", "testing", "reviewing"].includes(
+      progress.phase,
+    ) &&
+    typeof progress.summary === "string" &&
+    progress.summary.length > 0 &&
+    progress.summary.length <= 600 &&
+    (progress.sessionId === undefined ||
+      (typeof progress.sessionId === "string" &&
+        /^[a-z0-9._-]{1,128}$/iu.test(progress.sessionId)))
   );
 }
 
@@ -297,7 +320,9 @@ export class MacAgentBridge {
       status: "accepted",
       workflow: {
         ...repositoryCapabilities,
-        dispatch: (job) => this.dispatchWorkflowJob(job, workflowId),
+        dispatch: (job, onProgress) =>
+          this.dispatchWorkflowJob(job, workflowId, onProgress),
+        stop: (jobId) => this.stopJob(jobId, workflowId),
         route: (requiredCapabilities, repository) =>
           this.routeWorkflow(workflowId, requiredCapabilities, repository),
         getCodexUsage: () => this.getWorkflowCodexUsage(workflowId),
@@ -379,6 +404,17 @@ export class MacAgentBridge {
       return;
     }
 
+    if (message.type === "progress") {
+      const pendingJob = this.pendingJobs.get(message.jobId);
+      if (
+        pendingJob?.workerId === worker.id &&
+        validTaskProgress(message.progress)
+      ) {
+        pendingJob.onProgress?.(message.progress);
+      }
+      return;
+    }
+
     if (message.type === "result") {
       this.finishJob(worker, message);
       return;
@@ -435,17 +471,19 @@ export class MacAgentBridge {
   private dispatchWorkflowJob(
     job: ChatbotJob,
     workflowId: string,
+    onProgress?: (progress: ChatbotTaskProgress) => void,
   ): DispatchResult {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) return { status: "offline" };
     if (workflow.activeJobId) return { status: "busy" };
-    return this.dispatchJob(job, workflow.workerId, workflowId);
+    return this.dispatchJob(job, workflow.workerId, workflowId, onProgress);
   }
 
   private dispatchJob(
     job: ChatbotJob,
     workerId: string,
     workflowId?: string,
+    onProgress?: (progress: ChatbotTaskProgress) => void,
   ): DispatchResult {
     const worker = this.workers.get(workerId);
     if (!worker?.available) return { status: "offline" };
@@ -477,7 +515,14 @@ export class MacAgentBridge {
         resolve({ ok: false, error: "Local Codex timed out." });
       }, timeoutMs);
 
-      const pendingJob = { id: job.id, workerId, workflowId, resolve, timer };
+      const pendingJob = {
+        id: job.id,
+        workerId,
+        workflowId,
+        resolve,
+        timer,
+        onProgress,
+      };
       this.pendingJobs.set(job.id, pendingJob);
       if (workflowId) {
         const workflow = this.workflows.get(workflowId);
@@ -487,6 +532,26 @@ export class MacAgentBridge {
 
     send(worker.socket, { type: "job", job });
     return { status: "accepted", result };
+  }
+
+  private stopJob(jobId: string, workflowId: string) {
+    const pendingJob = this.pendingJobs.get(jobId);
+    if (!pendingJob || pendingJob.workflowId !== workflowId) return false;
+    if (pendingJob.stopping) return true;
+    const worker = this.workers.get(pendingJob.workerId);
+    clearTimeout(pendingJob.timer);
+    pendingJob.stopping = true;
+    pendingJob.timer = setTimeout(() => {
+      if (this.pendingJobs.get(jobId) !== pendingJob) return;
+      this.deletePendingJob(pendingJob);
+      pendingJob.resolve({
+        ok: false,
+        error: "Task stopped without a worker acknowledgement.",
+        stopped: true,
+      });
+    }, 10_000);
+    if (worker) send(worker.socket, { type: "cancel", jobId });
+    return true;
   }
 
   private routeWorkflow(
@@ -625,7 +690,11 @@ export class MacAgentBridge {
             content: message.content,
             ...(message.files?.length ? { files: message.files } : {}),
           }
-        : { ok: false, error: message.error },
+        : {
+            ok: false,
+            error: message.error,
+            ...(message.stopped ? { stopped: true } : {}),
+          },
     );
   }
 

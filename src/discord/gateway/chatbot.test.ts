@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import type { ServerWebSocket } from "bun";
 
 import type { ChatbotAccessConfig } from "../../chatbot/access";
+import { macAgentBridge, type MacAgentSocketData } from "../../chatbot/bridge";
+import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
 import {
   ChatbotConversationTracker,
   canMemberSearchChannel,
@@ -8,6 +11,7 @@ import {
   extractChatbotRequest,
   extractMentionRequest,
   executeChatbotAnswerDecision,
+  developerThreadName,
   formatDiscordAnswer,
   formatDiscordAnswers,
   getNearbyHumanMessages,
@@ -38,7 +42,238 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
   channelIds: new Set(["1517766866964316201"]),
 };
 
+async function waitFor<T>(value: () => T | undefined): Promise<T> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = value();
+    if (result !== undefined) return result;
+    await Bun.sleep(1);
+  }
+  throw new Error("Timed out waiting for test event");
+}
+
 describe("Discord chatbot", () => {
+  test("creates concise coding task thread names", () => {
+    expect(
+      developerThreadName(
+        "Hsiii/mini-sago",
+        "  add   progress reports and let me continue chatting  ",
+      ),
+    ).toBe("mini-sago · add progress reports and let me continue chatting");
+    expect(
+      developerThreadName("Hsiii/mini-sago", "x".repeat(200)).length,
+    ).toBeLessThanOrEqual(100);
+  });
+
+  test("detaches developer work into a steerable Discord thread", async () => {
+    const oldWorkerSecret = process.env.MINISAGO_WORKER_BRIDGE_SECRET;
+    const oldMacSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET;
+    const secret = "coding-thread-test-secret-at-least-32-bytes";
+    process.env.MINISAGO_WORKER_BRIDGE_SECRET = secret;
+    delete process.env.MINISAGO_MAC_BRIDGE_SECRET;
+    const sent: string[] = [];
+    const socket = {
+      data: { authenticated: false },
+      send: (message: string) => sent.push(message),
+      close: () => undefined,
+    } as unknown as ServerWebSocket<MacAgentSocketData>;
+    const discordCalls: Array<{
+      path: string;
+      method?: string;
+      body: unknown;
+    }> = [];
+
+    try {
+      macAgentBridge.open(socket);
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "authenticate",
+          protocolVersion: CHATBOT_PROTOCOL_VERSION,
+          secret,
+          workerId: "oracle",
+          repositories: ["Hsiii/mini-sago"],
+          chatbotRepository: "Hsiii/mini-sago",
+        }),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({ type: "availability", available: true, capacity: 1 }),
+      );
+
+      const handled = handleChatbotMention({
+        message: {
+          id: "coding-request",
+          channel_id: "channel-1",
+          guild_id: "917436845187563610",
+          content: `<@${BOT_ID}> add progress reports`,
+          timestamp: "2026-08-10T12:00:00.000Z",
+          author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+          mentions: [{ id: BOT_ID }],
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest: async (path, options) => {
+          discordCalls.push({
+            path,
+            method: options?.method,
+            body: options?.body,
+          });
+          if (path.includes("?around=")) return [] as never;
+          if (path.endsWith("/threads"))
+            return { id: "coding-thread" } as never;
+          if (path === "/channels/coding-thread/messages") {
+            return { id: "coding-status" } as never;
+          }
+          return undefined as never;
+        },
+      });
+
+      const routeJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" && value.job.purpose === "execution_route",
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: routeJob.job.id,
+          ok: true,
+          content: JSON.stringify({
+            mode: "dev",
+            repository: "Hsiii/mini-sago",
+            mutationScope: "code",
+          }),
+        }),
+      );
+      const traceJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" && value.job.purpose === "trace_lookup",
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: traceJob.job.id,
+          ok: true,
+          content: '{"status":"not_found"}',
+        }),
+      );
+
+      expect(await handled).toBe(true);
+      const answerJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) => value.type === "job" && value.job.purpose === "answer",
+          ),
+      );
+      expect(answerJob.job.channelId).toBe("coding-thread");
+      expect(answerJob.job.developerTask.id).toBeString();
+      expect(
+        discordCalls.find(
+          ({ path }) =>
+            path === "/channels/channel-1/messages/coding-request/threads",
+        )?.body,
+      ).toMatchObject({ auto_archive_duration: 4320 });
+
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "progress",
+          jobId: answerJob.job.id,
+          progress: {
+            phase: "preparing",
+            summary: "Codex session started.",
+            sessionId: "019-coding-session",
+          },
+        }),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: answerJob.job.id,
+          ok: true,
+          content: '{"reply":"done","reaction":null}',
+        }),
+      );
+      await waitFor(() =>
+        discordCalls.find(
+          ({ path, body }) =>
+            path === "/channels/coding-thread/messages" &&
+            (body as { content?: string })?.content === "done",
+        ),
+      );
+
+      expect(
+        await handleChatbotMention({
+          message: {
+            id: "steering-message",
+            channel_id: "coding-thread",
+            guild_id: "917436845187563610",
+            content: "also update the docs",
+            timestamp: "2026-08-10T12:01:00.000Z",
+            author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+          },
+          botUserId: BOT_ID,
+          accessConfig: ACCESS_CONFIG,
+          discordRequest: async (path, options) => {
+            discordCalls.push({
+              path,
+              method: options?.method,
+              body: options?.body,
+            });
+            return { id: "thread-message" } as never;
+          },
+        }),
+      ).toBe(true);
+      const resumedJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" &&
+              value.job.purpose === "answer" &&
+              value.job.id !== answerJob.job.id,
+          ),
+      );
+      expect(resumedJob.job.developerTask.resumeSessionId).toBe(
+        "019-coding-session",
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: resumedJob.job.id,
+          ok: true,
+          content: '{"reply":"docs updated","reaction":null}',
+        }),
+      );
+      await waitFor(() =>
+        discordCalls.find(
+          ({ body }) =>
+            (body as { content?: string })?.content === "docs updated",
+        ),
+      );
+    } finally {
+      macAgentBridge.close(socket);
+      if (oldWorkerSecret === undefined)
+        delete process.env.MINISAGO_WORKER_BRIDGE_SECRET;
+      else process.env.MINISAGO_WORKER_BRIDGE_SECRET = oldWorkerSecret;
+      if (oldMacSecret === undefined)
+        delete process.env.MINISAGO_MAC_BRIDGE_SECRET;
+      else process.env.MINISAGO_MAC_BRIDGE_SECRET = oldMacSecret;
+    }
+  });
+
   test("continues the original requester's next message after an answer", () => {
     let now = 1_000;
     const conversations = new ChatbotConversationTracker(90_000, () => now);

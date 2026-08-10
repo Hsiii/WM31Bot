@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 
 import type { ChatbotAccessConfig } from "../../chatbot/access";
-import { macAgentBridge, type MacAgentJobResult } from "../../chatbot/bridge";
+import {
+  macAgentBridge,
+  type MacAgentJobResult,
+  type WorkflowLease,
+} from "../../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
 import {
   registerChatbotMcpSession,
@@ -19,6 +23,7 @@ import type {
   ChatbotMemberResult,
   ChatbotMessage,
   ChatbotTraceContext,
+  ChatbotTaskProgress,
 } from "../../chatbot/protocol";
 import {
   DiscordReactionBroker,
@@ -71,6 +76,8 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
+const TASK_STATUS_THROTTLE_MS = 5_000;
+const DEVELOPER_TASK_TTL_MS = 3 * 24 * 60 * 60_000;
 const guildMemoryStore = getGuildMemoryStore();
 
 function supplementalCapabilities({
@@ -497,6 +504,285 @@ export async function postChatbotResponse(
   }
 }
 
+type DeveloperTask = {
+  id: string;
+  threadId: string;
+  requesterUserId: string;
+  repository: string;
+  request: string;
+  job: ChatbotJob;
+  workflow?: WorkflowLease;
+  statusMessageId: string;
+  state: "running" | "stopping" | "stopped" | "completed" | "failed";
+  summary: string;
+  sessionId?: string;
+  activeJobId?: string;
+  steering?: string;
+  lastStatusAt: number;
+  statusTimer?: ReturnType<typeof setTimeout>;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
+  revokeMcp: () => void;
+  extendMcp: () => void;
+  discordRequest: DiscordRequest;
+};
+
+export function developerThreadName(repository: string, request: string) {
+  const repositoryName = repository.split("/").at(-1) ?? repository;
+  const requestName = request.replace(/\s+/gu, " ").trim().slice(0, 72);
+  return `${repositoryName} · ${requestName || "coding task"}`.slice(0, 100);
+}
+
+async function createDeveloperThread(
+  message: DiscordMessage,
+  repository: string,
+  request: string,
+  discordRequest: DiscordRequest,
+) {
+  const thread = await discordRequest<{ id: string }>(
+    `/channels/${message.channel_id}/messages/${message.id}/threads`,
+    {
+      method: "POST",
+      body: {
+        name: developerThreadName(repository, request),
+        auto_archive_duration: 4320,
+      },
+    },
+  );
+  return thread.id;
+}
+
+class DeveloperTaskRegistry {
+  private tasks = new Map<string, DeveloperTask>();
+
+  has(threadId: string) {
+    return this.tasks.has(threadId);
+  }
+
+  start(task: DeveloperTask) {
+    this.tasks.set(task.threadId, task);
+    this.launch(task, task.request);
+  }
+
+  async handle(message: DiscordMessage) {
+    const task = this.tasks.get(message.channel_id);
+    if (!task || message.author?.id !== task.requesterUserId) return false;
+    if (message.author.bot || message.webhook_id) return false;
+    const request = message.content?.trim() ?? "";
+    if (!request) return true;
+
+    if (/^(?:stop|pause|停止|暫停)[.!。！\s]*$/iu.test(request)) {
+      if (task.state === "running" && task.activeJobId && task.workflow) {
+        task.state = "stopping";
+        task.summary =
+          "Stopping after the current operation; work is preserved.";
+        await this.updateStatus(task, true);
+        task.workflow.stop(task.activeJobId);
+      } else {
+        await this.post(task, "This coding task is not currently running.");
+      }
+      return true;
+    }
+
+    if (/^(?:status|進度|狀態)[?？\s]*$/iu.test(request)) {
+      await this.post(task, this.status(task));
+      return true;
+    }
+
+    task.steering = task.steering ? `${task.steering}\n${request}` : request;
+    await this.post(task, "Got it. I’ll apply that direction to this task.");
+    if (task.state === "running" && task.activeJobId && task.workflow) {
+      task.state = "stopping";
+      task.summary = "Applying new direction; work is preserved.";
+      await this.updateStatus(task, true);
+      task.workflow.stop(task.activeJobId);
+    } else if (task.state !== "stopping") {
+      const steering = task.steering;
+      task.steering = undefined;
+      this.launch(task, steering);
+    }
+    return true;
+  }
+
+  private launch(task: DeveloperTask, request: string) {
+    void this.run(task, request).catch(async (error) => {
+      task.state = "failed";
+      task.summary = `Failed: ${
+        error instanceof Error
+          ? error.message.slice(0, 500)
+          : "unexpected error"
+      }`;
+      this.releaseWorkflow(task);
+      await this.updateStatus(task, true);
+      this.scheduleCleanup(task);
+    });
+  }
+
+  private async run(task: DeveloperTask, request: string) {
+    if (task.cleanupTimer) {
+      clearTimeout(task.cleanupTimer);
+      task.cleanupTimer = undefined;
+    }
+    if (!task.sessionId && request !== task.request) {
+      request = `${task.request}\n\nAdditional direction: ${request}`;
+    }
+    task.extendMcp();
+    if (!task.workflow) {
+      const acquired = macAgentBridge.acquireWorkflow(["dev"]);
+      if (acquired.status !== "accepted") {
+        task.state = "stopped";
+        task.summary =
+          acquired.status === "busy"
+            ? "Waiting for an available coding worker. Reply `continue` to retry."
+            : "The coding worker is offline. Reply `continue` when it is back.";
+        await this.updateStatus(task, true);
+        this.scheduleCleanup(task);
+        return;
+      }
+      task.workflow = acquired.workflow;
+      const route = task.workflow.route(["dev"], task.repository);
+      if (route.status !== "accepted") {
+        task.workflow.release();
+        task.workflow = undefined;
+        task.state = "stopped";
+        task.summary = "The repository is not available on the coding worker.";
+        await this.updateStatus(task, true);
+        this.scheduleCleanup(task);
+        return;
+      }
+    }
+
+    const job: ChatbotJob = {
+      ...task.job,
+      id: randomUUID(),
+      channelId: task.threadId,
+      request,
+      developerTask: {
+        id: task.id,
+        ...(task.sessionId ? { resumeSessionId: task.sessionId } : {}),
+      },
+    };
+    task.state = "running";
+    task.activeJobId = job.id;
+    task.summary = task.sessionId
+      ? "Continuing the preserved coding task."
+      : "Preparing an isolated workspace.";
+    await this.updateStatus(task, true);
+    const dispatch = task.workflow.dispatch(job, (progress) =>
+      this.onProgress(task, progress),
+    );
+    if (dispatch.status !== "accepted") {
+      task.state = "stopped";
+      task.summary = "The coding worker could not start this turn.";
+      this.releaseWorkflow(task);
+      await this.updateStatus(task, true);
+      this.scheduleCleanup(task);
+      return;
+    }
+
+    const result = await dispatch.result;
+    delete task.activeJobId;
+    if (!result.ok && result.stopped) {
+      const steering = task.steering;
+      task.steering = undefined;
+      if (steering) {
+        await this.run(task, steering);
+        return;
+      }
+      task.state = "stopped";
+      task.summary = "Stopped. The workspace and Codex session are preserved.";
+      this.releaseWorkflow(task);
+      await this.updateStatus(task, true);
+      this.scheduleCleanup(task);
+      return;
+    }
+
+    if (!result.ok) {
+      task.state = "failed";
+      task.summary = `Failed: ${result.error.slice(0, 500)}`;
+      this.releaseWorkflow(task);
+      await this.updateStatus(task, true);
+      this.scheduleCleanup(task);
+      return;
+    }
+
+    task.state = "completed";
+    task.summary = "Completed. Reply in this thread to continue the same task.";
+    this.releaseWorkflow(task);
+    await this.updateStatus(task, true);
+    this.scheduleCleanup(task);
+    const decision = parseChatbotAnswerDecision(result.content);
+    if (decision.reply) {
+      for (const answer of formatDiscordAnswers(decision.reply)) {
+        await this.post(task, answer);
+      }
+    }
+  }
+
+  private onProgress(task: DeveloperTask, progress: ChatbotTaskProgress) {
+    if (progress.sessionId) task.sessionId = progress.sessionId;
+    task.summary = progress.summary;
+    void this.updateStatus(task);
+  }
+
+  private releaseWorkflow(task: DeveloperTask) {
+    task.workflow?.release();
+    task.workflow = undefined;
+  }
+
+  private scheduleCleanup(task: DeveloperTask) {
+    if (task.cleanupTimer) clearTimeout(task.cleanupTimer);
+    task.cleanupTimer = setTimeout(() => {
+      if (task.statusTimer) clearTimeout(task.statusTimer);
+      task.revokeMcp();
+      this.tasks.delete(task.threadId);
+    }, DEVELOPER_TASK_TTL_MS);
+    task.cleanupTimer.unref?.();
+  }
+
+  private status(task: DeveloperTask) {
+    const state =
+      task.state === "running"
+        ? "Working"
+        : task.state === "stopping"
+          ? "Stopping"
+          : task.state === "stopped"
+            ? "Stopped"
+            : task.state === "completed"
+              ? "Complete"
+              : "Failed";
+    return `**${state} · ${task.repository}**\n${task.summary}\n\nReply here to steer me. Say \`stop\` to pause or \`status\` for an update.`;
+  }
+
+  private async updateStatus(task: DeveloperTask, immediate = false) {
+    const elapsed = Date.now() - task.lastStatusAt;
+    if (!immediate && elapsed < TASK_STATUS_THROTTLE_MS) {
+      if (!task.statusTimer) {
+        task.statusTimer = setTimeout(() => {
+          task.statusTimer = undefined;
+          void this.updateStatus(task, true);
+        }, TASK_STATUS_THROTTLE_MS - elapsed);
+      }
+      return;
+    }
+    task.lastStatusAt = Date.now();
+    await task
+      .discordRequest(
+        `/channels/${task.threadId}/messages/${task.statusMessageId}`,
+        { method: "PATCH", body: { content: this.status(task) } },
+      )
+      .catch(() => undefined);
+  }
+
+  private async post(task: DeveloperTask, content: string) {
+    await task.discordRequest(`/channels/${task.threadId}/messages`, {
+      method: "POST",
+      body: { content, allowed_mentions: { parse: [] } },
+    });
+  }
+}
+
+const developerTasks = new DeveloperTaskRegistry();
+
 async function withTyping<T>(
   channelId: string,
   discordRequest: DiscordRequest,
@@ -537,6 +823,10 @@ export async function handleChatbotMention({
 
   if (!requesterUserId || message.author?.bot || message.webhook_id) {
     return false;
+  }
+
+  if (developerTasks.has(message.channel_id)) {
+    return developerTasks.handle(message);
   }
 
   let addressingMode = chatbotAddressingMode(message, botUserId, accessConfig);
@@ -591,6 +881,7 @@ export async function handleChatbotMention({
 
   const { workflow } = acquired;
   let result: MacAgentJobResult;
+  let deferredDeveloperTask = false;
   let mcpSession: ReturnType<typeof registerChatbotMcpSession> | undefined;
   let mcpSnapshot: ChatbotMcpSessionSnapshot = {
     searchUnavailable: false,
@@ -969,6 +1260,7 @@ export async function handleChatbotMention({
             executionTarget,
           }),
       });
+      if (executionMode === "dev") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
 
       const job: ChatbotJob = {
         id: randomUUID(),
@@ -990,6 +1282,44 @@ export async function handleChatbotMention({
           : {}),
         ...(serverMemory ? { serverMemory } : {}),
       };
+
+      if (executionMode === "dev" && selectedRepository && message.guild_id) {
+        const taskId = randomUUID();
+        const threadId = await createDeveloperThread(
+          message,
+          selectedRepository,
+          request,
+          discordRequest,
+        );
+        const status = await discordRequest<{ id: string }>(
+          `/channels/${threadId}/messages`,
+          {
+            method: "POST",
+            body: {
+              content: `**Working · ${selectedRepository}**\nPreparing an isolated workspace.\n\nReply here to steer me. Say \`stop\` to pause or \`status\` for an update.`,
+              allowed_mentions: { parse: [] },
+            },
+          },
+        );
+        deferredDeveloperTask = true;
+        developerTasks.start({
+          id: taskId,
+          threadId,
+          requesterUserId,
+          repository: selectedRepository,
+          request,
+          job: { ...job, developerTask: { id: taskId } },
+          workflow,
+          statusMessageId: status.id,
+          state: "running",
+          summary: "Preparing an isolated workspace.",
+          lastStatusAt: Date.now(),
+          revokeMcp: () => mcpSession?.revoke(),
+          extendMcp: () => mcpSession?.extend(DEVELOPER_TASK_TTL_MS),
+          discordRequest,
+        });
+        return { ok: true as const, content: "" };
+      }
       const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
@@ -1006,12 +1336,13 @@ export async function handleChatbotMention({
     console.error(`Chatbot request ${message.id} failed:`, error);
     result = { ok: false, error: "聊天機器人請求失敗" };
   } finally {
-    if (mcpSession) {
+    if (mcpSession && !deferredDeveloperTask) {
       mcpSnapshot = mcpSession.snapshot();
       mcpSession.revoke();
     }
-    workflow.release();
+    if (!deferredDeveloperTask) workflow.release();
   }
+  if (deferredDeveloperTask) return true;
   let reacted = false;
   let reply: string | null = null;
   const files = result.ok ? (result.files ?? []) : [];

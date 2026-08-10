@@ -31,6 +31,7 @@ import {
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
   parseFinalResponse,
+  progressForCodexEvent,
   PROMPT_VERSION,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
   SOCIAL_ACTION_PROFILE,
@@ -70,6 +71,30 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
+  test("turns Codex JSONL into bounded public progress", () => {
+    expect(
+      progressForCodexEvent(
+        JSON.stringify({ type: "thread.started", thread_id: "019-session" }),
+      ),
+    ).toEqual({
+      phase: "preparing",
+      summary: "Codex session started.",
+      sessionId: "019-session",
+    });
+    expect(
+      progressForCodexEvent(
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "file_change" },
+        }),
+      ),
+    ).toEqual({
+      phase: "implementing",
+      summary: "Updated the working tree.",
+    });
+    expect(progressForCodexEvent("not-json")).toBeUndefined();
+  });
+
   test("pre-approves owner-bound MCP mutations", () => {
     expect(EMOJI_ADD_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"',

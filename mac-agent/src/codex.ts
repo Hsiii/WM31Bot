@@ -9,6 +9,7 @@ import type {
   ChatbotJob,
   ChatbotMcpTraceCall,
   ChatbotPromptTelemetry,
+  ChatbotTaskProgress,
 } from "../../src/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
@@ -69,8 +70,86 @@ type CodexRunOptions = {
   chatbotAccess: ChatbotAccessConfig;
   onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
   onPromptCompiled?: (telemetry: ChatbotPromptTelemetry) => void;
+  onProgress?: (progress: ChatbotTaskProgress) => void;
   signal?: AbortSignal;
 };
+
+export function progressForCodexEvent(
+  value: string,
+): ChatbotTaskProgress | undefined {
+  try {
+    const event = JSON.parse(value) as {
+      type?: string;
+      thread_id?: string;
+      item?: { type?: string; text?: string; command?: string };
+    };
+    if (event.type === "thread.started" && event.thread_id) {
+      return {
+        phase: "preparing",
+        summary: "Codex session started.",
+        sessionId: event.thread_id,
+      };
+    }
+    if (
+      event.type === "item.started" &&
+      event.item?.type === "command_execution"
+    ) {
+      const checks = /\b(?:test|check|build|lint|typecheck|pytest)\b/iu.test(
+        event.item.command ?? "",
+      );
+      return checks
+        ? { phase: "testing", summary: "Running repository checks." }
+        : { phase: "exploring", summary: "Inspecting the repository." };
+    }
+    if (event.type !== "item.completed") return undefined;
+    if (event.item?.type === "file_change") {
+      return { phase: "implementing", summary: "Updated the working tree." };
+    }
+    if (event.item?.type === "command_execution") {
+      return { phase: "exploring", summary: "Finished a repository command." };
+    }
+    if (event.item?.type === "agent_message" && event.item.text?.trim()) {
+      return {
+        phase: "reviewing",
+        summary: "Preparing the task summary.",
+      };
+    }
+  } catch {
+    // The final parser will report malformed JSONL with full context.
+  }
+  return undefined;
+}
+
+async function consumeCodexOutput(
+  stream: ReadableStream<Uint8Array>,
+  onProgress?: CodexRunOptions["onProgress"],
+) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let output = "";
+  let pending = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = decoder.decode(value, { stream: true });
+    output += text;
+    pending += text;
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      const progress = progressForCodexEvent(line);
+      if (progress) onProgress?.(progress);
+    }
+  }
+  const tail = decoder.decode();
+  output += tail;
+  pending += tail;
+  if (pending) {
+    const progress = progressForCodexEvent(pending);
+    if (progress) onProgress?.(progress);
+  }
+  return output;
+}
 
 export function developerFilesystemPermissions(
   readPaths: string[],
@@ -466,6 +545,12 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   try {
     prepared = await prepareAttachments(job, timeoutController.signal);
     if (hasDeveloperAccess) {
+      options.onProgress?.({
+        phase: "preparing",
+        summary: job.developerTask?.resumeSessionId
+          ? "Restoring the coding task."
+          : "Preparing an isolated workspace.",
+      });
       developerWorkspace = await prepareDeveloperWorkspace(job, {
         ...options,
         signal: timeoutController.signal,
@@ -490,7 +575,6 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       options.codexPath,
       "exec",
       "--json",
-      "--ephemeral",
       "--skip-git-repo-check",
       "--ignore-user-config",
       "--strict-config",
@@ -586,7 +670,16 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       codexArguments.push("--image", imagePath);
     }
 
-    codexArguments.push(prompt.taskInstruction);
+    if (job.developerTask?.resumeSessionId) {
+      codexArguments.push(
+        "resume",
+        job.developerTask.resumeSessionId,
+        prompt.taskInstruction,
+      );
+    } else {
+      if (!job.developerTask) codexArguments.push("--ephemeral");
+      codexArguments.push(prompt.taskInstruction);
+    }
 
     const command = usesOuterSeatbelt(hasDeveloperAccess, hasMacFileAccess)
       ? [
@@ -626,7 +719,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     child.stdin.end();
 
     const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
+      consumeCodexOutput(child.stdout, options.onProgress),
       new Response(child.stderr).text(),
       child.exited,
     ]);
