@@ -372,9 +372,56 @@ export function formatDiscordAnswer(content: string) {
   return limitDiscordMessage(normalizeDiscordAnswer(content));
 }
 
+function splitDiscordAnswer(content: string) {
+  const parts: string[] = [];
+  let part: string[] = [];
+  let fence: { marker: string; length: number } | undefined;
+
+  const flush = () => {
+    const value = part.join("\n").trim();
+    if (value) {
+      parts.push(value);
+    }
+    part = [];
+  };
+
+  for (const line of content.split(/\r?\n/u)) {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/u);
+
+    if (fence) {
+      part.push(line);
+      const closingFence = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u)?.[1];
+      if (
+        closingFence?.startsWith(fence.marker) &&
+        closingFence.length >= fence.length
+      ) {
+        fence = undefined;
+      }
+      continue;
+    }
+
+    if (fenceMatch?.[1]) {
+      fence = {
+        marker: fenceMatch[1][0]!,
+        length: fenceMatch[1].length,
+      };
+      part.push(line);
+      continue;
+    }
+
+    if (line.trim()) {
+      part.push(line);
+    } else {
+      flush();
+    }
+  }
+
+  flush();
+  return parts;
+}
+
 export function formatDiscordAnswers(content: string) {
-  return normalizeDiscordAnswer(content)
-    .split(/\n{2,}/u)
+  return splitDiscordAnswer(normalizeDiscordAnswer(content))
     .map((part) => limitDiscordMessage(part.trim()))
     .filter(Boolean);
 }

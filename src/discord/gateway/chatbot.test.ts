@@ -559,6 +559,20 @@ describe("Discord chatbot", () => {
     ]);
   });
 
+  test("keeps fenced code blocks together across blank lines", () => {
+    expect(
+      formatDiscordAnswers("前言\n\n```text\n第一行\n\n第二行\n```\n\n結尾"),
+    ).toEqual(["前言", "```text\n第一行\n\n第二行\n```", "結尾"]);
+
+    expect(
+      formatDiscordAnswers(
+        "~~~ts\nconst first = 1;\n```not a closing fence\n\nconst second = 2;\n~~~",
+      ),
+    ).toEqual([
+      "~~~ts\nconst first = 1;\n```not a closing fence\n\nconst second = 2;\n~~~",
+    ]);
+  });
+
   test("uploads a Mac file with the first Discord response", async () => {
     let uploaded: FormData | undefined;
     const message = {
