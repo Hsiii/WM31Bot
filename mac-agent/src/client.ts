@@ -242,6 +242,8 @@ export class MacAgentClient {
                 onMcpToolCall: (call) => toolCalls.push(call),
                 onPromptCompiled: (prompt) =>
                   this.traceStore.recordPrompt(job.id, prompt),
+                onProgress: (progress) =>
+                  this.send({ type: "progress", jobId: job.id, progress }),
                 signal: controller.signal,
               });
               this.traceStore.finish(
@@ -276,13 +278,18 @@ export class MacAgentClient {
           error instanceof Error ? error.message : "Codex failed.",
         );
       }
-      if (!controller.signal.aborted && this.authenticated) {
+      if (this.authenticated) {
         this.currentJobs.delete(job.id);
         this.send({
           type: "result",
           jobId: job.id,
           ok: false,
-          error: error instanceof Error ? error.message : "Codex failed.",
+          error: controller.signal.aborted
+            ? "Task stopped."
+            : error instanceof Error
+              ? error.message
+              : "Codex failed.",
+          ...(controller.signal.aborted ? { stopped: true } : {}),
         });
       }
       console.error(`Job ${job.id} failed after ${Date.now() - startedAt} ms.`);

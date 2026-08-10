@@ -244,6 +244,80 @@ describe("Mac agent bridge", () => {
     expect(bridge.getStatus()).toBe("available");
   });
 
+  test("forwards bounded progress and stops a workflow job", async () => {
+    useWorker();
+    const bridge = new MacAgentBridge();
+    const { socket, sent } = connectWorker(bridge);
+    const acquired = bridge.acquireWorkflow();
+    if (acquired.status !== "accepted") throw new Error("Expected workflow");
+    const progress: unknown[] = [];
+    const job: ChatbotJob = {
+      id: "coding-1",
+      requesterUserId: "test-user",
+      purpose: "answer",
+      executionMode: "dev",
+      repository: "Hsiii/mini-sago",
+      channelId: "thread-1",
+      requestMessageId: "message-1",
+      request: "Fix it",
+      messages: [],
+    };
+    const dispatch = acquired.workflow.dispatch(job, (value) =>
+      progress.push(value),
+    );
+    if (dispatch.status !== "accepted") throw new Error("Expected dispatch");
+
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "progress",
+        jobId: job.id,
+        progress: {
+          phase: "implementing",
+          summary: "Updated the working tree.",
+          sessionId: "019-session",
+        },
+      }),
+    );
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "progress",
+        jobId: job.id,
+        progress: { phase: "secret", summary: "invalid" },
+      }),
+    );
+
+    expect(progress).toEqual([
+      {
+        phase: "implementing",
+        summary: "Updated the working tree.",
+        sessionId: "019-session",
+      },
+    ]);
+    expect(acquired.workflow.stop(job.id)).toBe(true);
+    expect(JSON.parse(sent.at(-1)!)).toEqual({
+      type: "cancel",
+      jobId: job.id,
+    });
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "result",
+        jobId: job.id,
+        ok: false,
+        error: "Task stopped.",
+        stopped: true,
+      }),
+    );
+    expect(await dispatch.result).toEqual({
+      ok: false,
+      error: "Task stopped.",
+      stopped: true,
+    });
+    acquired.workflow.release();
+  });
+
   test("reads Codex usage from the worker reserved by a workflow", async () => {
     useWorker();
     const bridge = new MacAgentBridge();

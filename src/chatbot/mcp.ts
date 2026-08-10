@@ -903,18 +903,32 @@ function bearerToken(request: Request) {
   return match?.[1];
 }
 
-export function registerChatbotMcpSession(handlers: ChatbotMcpSessionHandlers) {
+export function registerChatbotMcpSession(
+  handlers: ChatbotMcpSessionHandlers,
+  options: { ttlMs?: number } = {},
+) {
   pruneSessions();
   const token = randomBytes(32).toString("base64url");
   const session: ChatbotMcpSession = {
-    expiresAt: Date.now() + MCP_SESSION_TTL_MS,
+    expiresAt:
+      Date.now() +
+      Math.max(
+        1,
+        Math.min(options.ttlMs ?? MCP_SESSION_TTL_MS, 3 * 24 * 60 * 60_000),
+      ),
     handlers,
     searchUnavailable: false,
   };
   sessions.set(token, session);
 
+  const extend = (ttlMs: number) => {
+    session.expiresAt =
+      Date.now() + Math.max(1, Math.min(ttlMs, 3 * 24 * 60 * 60_000));
+  };
+
   return {
     token,
+    extend,
     snapshot: (): ChatbotMcpSessionSnapshot => ({
       searchUnavailable: session.searchUnavailable,
     }),

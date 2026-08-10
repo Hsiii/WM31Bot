@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 27;
+export const CHATBOT_PROTOCOL_VERSION = 28;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -76,6 +76,12 @@ export type ChatbotPromptTelemetry = {
   contextCharacters: number;
 };
 
+export type ChatbotTaskProgress = {
+  phase: "preparing" | "exploring" | "implementing" | "testing" | "reviewing";
+  summary: string;
+  sessionId?: string;
+};
+
 export type ChatbotTraceContext = {
   historyCount?: number;
   contextMessageCount: number;
@@ -132,6 +138,10 @@ export type ChatbotJob = {
   request: string;
   requestMessage?: ChatbotMessage;
   messages: ChatbotMessage[];
+  developerTask?: {
+    id: string;
+    resumeSessionId?: string;
+  };
 };
 
 export type MacAgentClientMessage =
@@ -157,6 +167,11 @@ export type MacAgentClientMessage =
       usage: CodexUsageSnapshot | null;
     }
   | {
+      type: "progress";
+      jobId: string;
+      progress: ChatbotTaskProgress;
+    }
+  | {
       type: "result";
       jobId: string;
       ok: true;
@@ -168,6 +183,7 @@ export type MacAgentClientMessage =
       jobId: string;
       ok: false;
       error: string;
+      stopped?: boolean;
     };
 
 export type MacAgentServerMessage =

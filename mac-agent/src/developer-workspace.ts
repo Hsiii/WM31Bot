@@ -1,4 +1,4 @@
-import { chmod, mkdir, rm } from "node:fs/promises";
+import { access, chmod, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import type { ChatbotJob } from "../../src/chatbot/protocol";
@@ -9,6 +9,23 @@ type DeveloperWorkspaceOptions = {
   githubWorktreeRoot: string;
   signal?: AbortSignal;
 };
+
+const PRESERVED_WORKSPACE_TTL_MS = 3 * 24 * 60 * 60_000;
+const preservedWorkspaceTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+
+function preserveThenRemove(path: string) {
+  const previous = preservedWorkspaceTimers.get(path);
+  if (previous) clearTimeout(previous);
+  const timer = setTimeout(() => {
+    preservedWorkspaceTimers.delete(path);
+    void rm(path, { recursive: true, force: true });
+  }, PRESERVED_WORKSPACE_TTL_MS);
+  timer.unref?.();
+  preservedWorkspaceTimers.set(path, timer);
+}
 
 export type DeveloperWorkspace = {
   directory: string;
@@ -160,50 +177,68 @@ export async function prepareDeveloperWorkspace(
   const mode = developerMode(job);
   const scope = mutationScope(job);
   const repository = selectedRepository(job, options.githubRepositories);
-  const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(job.id));
+  const workspaceId = job.developerTask?.id ?? job.id;
+  const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(workspaceId));
   const directory = join(jobRoot, ...repository.split("/"));
   const binDirectory = join(jobRoot, "bin");
-  const branch = `minisago/${safeJobId(job.id)}`;
+  const branch = `minisago/${safeJobId(workspaceId)}`;
   const preparationEnvironment = {
     GH_CONFIG_DIR: options.githubConfigDir,
     GH_HOST: "github.com",
     GH_PROMPT_DISABLED: "1",
     GIT_TERMINAL_PROMPT: "0",
   };
+  const preservedTimer = preservedWorkspaceTimers.get(jobRoot);
+  if (preservedTimer) {
+    clearTimeout(preservedTimer);
+    preservedWorkspaceTimers.delete(jobRoot);
+  }
 
-  await rm(jobRoot, { recursive: true, force: true });
-  await mkdir(jobRoot, { recursive: true, mode: 0o700 });
+  const resume = Boolean(job.developerTask?.resumeSessionId);
+  if (resume) {
+    try {
+      await access(directory);
+      await access(binDirectory);
+    } catch {
+      throw new Error("The preserved coding workspace is unavailable.");
+    }
+  } else {
+    await rm(jobRoot, { recursive: true, force: true });
+    await mkdir(jobRoot, { recursive: true, mode: 0o700 });
+  }
   try {
-    await runCommand(
-      [
-        "gh",
-        "repo",
-        "clone",
-        repository,
-        directory,
-        "--",
-        "--filter=blob:none",
-      ],
-      preparationEnvironment,
-      options.signal,
-    );
-    if (mode === "dev" && scope === "code") {
+    if (!resume) {
       await runCommand(
-        ["git", "-C", directory, "switch", "-c", branch],
+        [
+          "gh",
+          "repo",
+          "clone",
+          repository,
+          directory,
+          "--",
+          "--filter=blob:none",
+        ],
         preparationEnvironment,
         options.signal,
       );
+      if (mode === "dev" && scope === "code") {
+        await runCommand(
+          ["git", "-C", directory, "switch", "-c", branch],
+          preparationEnvironment,
+          options.signal,
+        );
+      }
+      await mkdir(binDirectory, { mode: 0o700 });
+      const ghWrapper = join(binDirectory, "gh");
+      const gitWrapper = join(binDirectory, "git");
+      await Promise.all([
+        Bun.write(ghWrapper, GH_WRAPPER),
+        Bun.write(gitWrapper, GIT_WRAPPER),
+      ]);
+      await Promise.all([chmod(ghWrapper, 0o700), chmod(gitWrapper, 0o700)]);
     }
-    await mkdir(binDirectory, { mode: 0o700 });
-    const ghWrapper = join(binDirectory, "gh");
-    const gitWrapper = join(binDirectory, "git");
-    await Promise.all([
-      Bun.write(ghWrapper, GH_WRAPPER),
-      Bun.write(gitWrapper, GIT_WRAPPER),
-    ]);
-    await Promise.all([chmod(ghWrapper, 0o700), chmod(gitWrapper, 0o700)]);
   } catch (error) {
-    await rm(jobRoot, { recursive: true, force: true });
+    if (!resume) await rm(jobRoot, { recursive: true, force: true });
     throw error;
   }
 
@@ -221,6 +256,11 @@ export async function prepareDeveloperWorkspace(
     environment,
     sandboxReadPaths: [binDirectory, resolve(options.githubConfigDir)],
     sandboxWritePaths: [resolve(directory, ".git")],
-    cleanup: () => rm(jobRoot, { recursive: true, force: true }),
+    cleanup: job.developerTask
+      ? () => {
+          preserveThenRemove(jobRoot);
+          return Promise.resolve();
+        }
+      : () => rm(jobRoot, { recursive: true, force: true }),
   };
 }
