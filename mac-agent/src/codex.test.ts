@@ -95,7 +95,7 @@ describe("Codex chatbot runner", () => {
     expect(progressForCodexEvent("not-json")).toBeUndefined();
   });
 
-  test("pre-approves owner-bound MCP mutations", () => {
+  test("pre-approves bounded MCP mutations", () => {
     expect(EMOJI_ADD_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"',
     );
@@ -760,7 +760,8 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain('"revision":3');
     expect(prompt).toContain("允通常是允成");
     expect(prompt).toContain("untrusted descriptive context");
-    expect(prompt).toContain("owner explicitly asks to manage server memory");
+    expect(prompt).toContain("when any member teaches or corrects");
+    expect(prompt).toContain("proactively use manage_server_memory");
   });
 
   test("keeps the fixed answer instructions compact and omits empty context", () => {

@@ -1177,7 +1177,7 @@ export async function handleChatbotMention({
               }) => sendChannelMessage({ ...input, discordRequest }),
             }
           : {}),
-        ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
+        ...(message.guild_id
           ? {
               manageServerMemory: async (
                 input:

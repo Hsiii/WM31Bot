@@ -282,7 +282,7 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("exposes owner-bound server memory without a caller-controlled guild", async () => {
+  test("exposes proactive server memory without a caller-controlled guild", async () => {
     const mutations: unknown[] = [];
     const session = registerChatbotMcpSession({
       ...handlers(),
@@ -301,6 +301,10 @@ describe("MiniSago MCP server", () => {
     );
 
     expect(tool?.inputSchema).not.toHaveProperty("properties.guildId");
+    expect(tool?.description).toContain("Save proactively");
+    expect(tool?.description).toContain(
+      "member explicitly teaches or corrects",
+    );
     expect(tool?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,
@@ -323,6 +327,19 @@ describe("MiniSago MCP server", () => {
       entryId: "mem_012345abcdef",
     });
     expect(mutations).toEqual([{ action: "add", content: "允通常是允成" }]);
+
+    const capabilities = await client.callTool({
+      name: "describe_capabilities",
+      arguments: {},
+    });
+    expect(capabilities.structuredContent).toMatchObject({
+      capabilities: expect.arrayContaining([
+        expect.objectContaining({
+          id: "server_memory",
+          description: expect.stringContaining("when a member teaches Sago"),
+        }),
+      ]),
+    });
 
     await client.close();
     session.revoke();
