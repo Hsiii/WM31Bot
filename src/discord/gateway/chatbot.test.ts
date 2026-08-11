@@ -4,6 +4,7 @@ import type { ServerWebSocket } from "bun";
 import type { ChatbotAccessConfig } from "../../chatbot/access";
 import { macAgentBridge, type MacAgentSocketData } from "../../chatbot/bridge";
 import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
+import { ChannelQuietTracker } from "./channel-quiet";
 import {
   ChatbotConversationTracker,
   canMemberSearchChannel,
@@ -28,6 +29,7 @@ import {
   postChatbotResponse,
   searchGuildMessages,
   toChatbotMessage,
+  type DiscordRequest,
 } from "./chatbot";
 
 const BOT_ID = "123456789012345678";
@@ -315,6 +317,59 @@ describe("Discord chatbot", () => {
     conversations.activate("channel-1", "member-1");
     now += 90_000;
     expect(conversations.take({ ...followUp, id: "follow-up-5" })).toBe(false);
+  });
+
+  test("stays silent while paused until an addressed wake request", async () => {
+    const quietTracker = new ChannelQuietTracker();
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const discordRequest: DiscordRequest = async (path, options) => {
+      requests.push({ path, body: options?.body });
+      return undefined as never;
+    };
+    quietTracker.pause("channel-1", 30);
+
+    expect(
+      await handleChatbotMention({
+        message: {
+          id: "quiet-mention",
+          channel_id: "channel-1",
+          guild_id: "917436845187563610",
+          content: `<@${BOT_ID}> what time is it?`,
+          timestamp: "2026-08-11T04:00:00.000Z",
+          author: { id: "member-1", username: "Member" },
+          mentions: [{ id: BOT_ID }],
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest,
+        quietTracker,
+      }),
+    ).toBe(true);
+    expect(requests).toEqual([]);
+    expect(quietTracker.isPaused("channel-1")).toBe(true);
+
+    expect(
+      await handleChatbotMention({
+        message: {
+          id: "wake-mention",
+          channel_id: "channel-1",
+          guild_id: "917436845187563610",
+          content: `<@${BOT_ID}> wake up and reply again`,
+          timestamp: "2026-08-11T04:01:00.000Z",
+          author: { id: "member-1", username: "Member" },
+          mentions: [{ id: BOT_ID }],
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest,
+        quietTracker,
+      }),
+    ).toBe(true);
+    expect(quietTracker.isPaused("channel-1")).toBe(false);
+    expect(requests.at(-1)).toMatchObject({
+      path: "/channels/channel-1/messages",
+      body: { content: "我現在沒接上工作機 晚點再叫我一次 💤" },
+    });
   });
 
   test("accepts reply-only, reaction-only, and combined mention decisions", () => {

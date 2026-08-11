@@ -13,6 +13,7 @@ import {
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
   CHATBOT_MODEL_VERBOSITY,
+  CHANNEL_QUIET_MCP_APPROVAL_CONFIG,
   CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
   canUseMacFiles as canUseMacFilesWithConfig,
   canUseMediaTools,
@@ -104,6 +105,9 @@ describe("Codex chatbot runner", () => {
     );
     expect(SERVER_MEMORY_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.manage_server_memory.approval_mode="approve"',
+    );
+    expect(CHANNEL_QUIET_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.pause_channel_activity.approval_mode="approve"',
     );
   });
 
