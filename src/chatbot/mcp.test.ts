@@ -193,6 +193,9 @@ describe("MiniSago MCP server", () => {
 
     expect(tools.tools.map((tool) => tool.name)).toContain("read_trip_plan");
     expect(tools.tools.map((tool) => tool.name)).toContain("edit_trip_plan");
+    expect(
+      tools.tools.find((tool) => tool.name === "read_trip_plan")?.description,
+    ).toContain("Required source of truth");
     const read = await client.callTool({
       name: "read_trip_plan",
       arguments: { date: "2026-11-01" },
