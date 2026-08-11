@@ -16,6 +16,7 @@ import type {
   ChatbotTraceContext,
   CodexUsageSnapshot,
 } from "./protocol";
+import type { TripPlanEditInput, TripPlanReadInput } from "./trip-planner";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
@@ -101,6 +102,7 @@ export type ChatbotMcpCapability = {
     | "attachments"
     | "development"
     | "memory"
+    | "travel"
     | "system";
   availability: "available" | "conditional";
   description: string;
@@ -270,6 +272,8 @@ export type ChatbotMcpSessionHandlers = {
     action: "add" | "replace" | "remove";
     entryId: string;
   }>;
+  readTripPlan?: (input: TripPlanReadInput) => Promise<Record<string, unknown>>;
+  editTripPlan?: (input: TripPlanEditInput) => Promise<Record<string, unknown>>;
 };
 
 type ChatbotMcpSession = {
@@ -369,6 +373,19 @@ function availableCapabilities(
       tools: ["manage_server_memory"],
     });
   }
+  if (handlers.readTripPlan) {
+    capabilities.push({
+      id: "kyushu_trip",
+      category: "travel",
+      availability: "available",
+      description:
+        "Read the shared Kyushu itinerary and, when configured, make explicit schedule changes for this Discord server.",
+      tools: [
+        "read_trip_plan",
+        ...(handlers.editTripPlan ? ["edit_trip_plan"] : []),
+      ],
+    });
+  }
   if (handlers.sendChannelMessage) {
     capabilities.push({
       id: "channel_messaging",
@@ -456,6 +473,100 @@ function createServer(session: ChatbotMcpSession) {
           "Use action tools only for explicit requests, except manage_server_memory may be used proactively according to its description. Conditional capabilities require the stated condition; do not claim unavailable permissions or destinations.",
       }),
   );
+
+  if (session.handlers.readTripPlan) {
+    server.registerTool(
+      "read_trip_plan",
+      {
+        description:
+          "Read the shared Kyushu trip plan. With no filters, return a compact overview. Use date for full schedule details on YYYY-MM-DD, or query to search places, notes, candidates, and rules. planId may be a plan id or exact plan name.",
+        inputSchema: {
+          planId: z.string().trim().min(1).max(100).optional(),
+          date: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/u)
+            .optional(),
+          query: z.string().trim().min(1).max(100).optional(),
+        },
+        annotations: { ...readAnnotations, openWorldHint: true },
+      },
+      async (input) => {
+        try {
+          return toolResult(await session.handlers.readTripPlan!(input));
+        } catch (error) {
+          return toolResult({
+            status: "unavailable",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not read the trip plan.",
+          });
+        }
+      },
+    );
+  }
+
+  if (session.handlers.editTripPlan) {
+    server.registerTool(
+      "edit_trip_plan",
+      {
+        description:
+          "Edit the shared Kyushu itinerary only when a member explicitly asks. Add, update, or remove one schedule item, or update a day's city/summary. Read the relevant date first when itemId or context is unknown. Fixed items cannot be changed.",
+        inputSchema: {
+          action: z.enum([
+            "add_item",
+            "update_item",
+            "remove_item",
+            "update_day",
+          ]),
+          planId: z.string().trim().min(1).max(100),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+          itemId: z.string().trim().min(1).max(100).optional(),
+          time: z.string().trim().min(1).max(40).optional(),
+          title: z.string().trim().min(1).max(200).optional(),
+          subtitle: z.string().trim().min(1).max(300).optional(),
+          kind: z
+            .enum([
+              "arrival",
+              "departure",
+              "stay",
+              "place",
+              "food",
+              "transit",
+              "concert",
+              "game",
+              "karaoke",
+              "friend",
+              "open",
+            ])
+            .optional(),
+          duration: z.string().trim().max(100).optional(),
+          detail: z.string().trim().max(1_000).optional(),
+          city: z.string().trim().min(1).max(100).optional(),
+          summary: z.string().trim().min(1).max(500).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult(await session.handlers.editTripPlan!(input));
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not edit the trip plan.",
+          });
+        }
+      },
+    );
+  }
 
   if (session.handlers.manageServerMemory) {
     server.registerTool(
