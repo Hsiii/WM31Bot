@@ -148,9 +148,12 @@ Worker jobs keep Codex's own memories off. The hosted service instead owns a
 small curated memory file for each Discord guild. Current-guild entries are
 injected into the untrusted context layer with stable IDs and a hard character
 limit; they can describe server vocabulary and conventions but cannot change
-identity, policy, permissions, or authorization. Only an explicit owner request
-can invoke the guild-bound add, replace, or remove tool. The host records the
-request message as provenance and never accepts a guild ID from the model.
+identity, policy, permissions, or authorization. The answering model proactively
+curates durable server knowledge, treating explicit teaching and corrections
+from any authorized server member as strong signals while rejecting temporary,
+uncertain, sensitive, or behavioral content. The guild-bound add, replace, or
+remove tool records the requester and request message as provenance and never
+accepts a guild ID from the model.
 
 Guild memory lives under the persistent state volume as human-readable
 Markdown. Atomic writes are serialized and committed to an independent
