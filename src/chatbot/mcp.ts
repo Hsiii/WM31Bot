@@ -241,6 +241,10 @@ export type ChatbotMcpSessionHandlers = {
     }>
   >;
   cancelReminder?: (reminderId: string) => Promise<boolean>;
+  pauseChannelActivity?: (durationMinutes?: number) => {
+    pausedUntil: string;
+    durationMinutes: number;
+  };
   getCodexUsage?: () => Promise<CodexUsageSnapshot | null>;
   sendChannelMessage?: (input: {
     content: string;
@@ -396,6 +400,16 @@ function availableCapabilities(
       tools: ["send_channel_message"],
     });
   }
+  if (handlers.pauseChannelActivity) {
+    capabilities.push({
+      id: "channel_quiet_mode",
+      category: "conversation",
+      availability: "available",
+      description:
+        "Pause Sago's replies and automatic activity in the current Discord thread or channel for a bounded time.",
+      tools: ["pause_channel_activity"],
+    });
+  }
   if (handlers.joinVoiceChannel && handlers.leaveVoiceChannel) {
     capabilities.push({
       id: "voice_presence",
@@ -473,6 +487,31 @@ function createServer(session: ChatbotMcpSession) {
           "Use action tools only for explicit requests, except manage_server_memory may be used proactively according to its description. Conditional capabilities require the stated condition; do not claim unavailable permissions or destinations.",
       }),
   );
+
+  if (session.handlers.pauseChannelActivity) {
+    server.registerTool(
+      "pause_channel_activity",
+      {
+        description:
+          "Immediately pause Sago's current reply and later automatic activity in this Discord thread or channel when someone explicitly asks her to be quiet, stop talking, shut up, or pause for a while. Omit durationMinutes for a short default pause. Convert an explicitly requested duration to whole minutes. Do not add a farewell or acknowledgement after calling this tool: the current response will be suppressed. A later explicit mention or reply telling Sago to wake up, reply, or talk again can end the pause early.",
+        inputSchema: {
+          durationMinutes: z.number().int().min(1).max(1_440).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async ({ durationMinutes }) =>
+        toolResult({
+          status: "complete",
+          ...session.handlers.pauseChannelActivity!(durationMinutes),
+          currentReply: "suppressed",
+        }),
+    );
+  }
 
   if (session.handlers.readTripPlan) {
     server.registerTool(

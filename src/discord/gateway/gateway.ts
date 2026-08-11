@@ -4,6 +4,7 @@ import {
   createDiscordRequest,
   handleChatbotMention,
 } from "./chatbot";
+import { ChannelQuietTracker } from "./channel-quiet";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
@@ -175,6 +176,7 @@ class InstagramGatewayClient implements VoiceGateway {
   private ambientReactions: AmbientReactionController;
   private channelTasks = new ChannelTaskQueue();
   private conversations = new ChatbotConversationTracker();
+  private quietChannels = new ChannelQuietTracker();
   private quickReplyNudges = new QuickReplyNudgeTracker();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -460,7 +462,9 @@ class InstagramGatewayClient implements VoiceGateway {
   }
 
   private async handleMessageCreate(message: DiscordMessageCreate) {
-    const shouldNudgeQuickReply = this.quickReplyNudges.observe(message);
+    const shouldNudgeQuickReply =
+      !this.quietChannels.isPaused(message.channel_id) &&
+      this.quickReplyNudges.observe(message);
 
     if (shouldNudgeQuickReply) {
       try {
@@ -486,6 +490,7 @@ class InstagramGatewayClient implements VoiceGateway {
           accessConfig: this.config.chatbotAccess,
           reactionBroker: this.reactionBroker,
           conversationTracker: this.conversations,
+          quietTracker: this.quietChannels,
         });
 
         if (handled) {
@@ -493,6 +498,10 @@ class InstagramGatewayClient implements VoiceGateway {
         }
       } catch (error) {
         console.error(`Failed to handle chatbot mention ${message.id}:`, error);
+        return;
+      }
+
+      if (this.quietChannels.isPaused(message.channel_id)) {
         return;
       }
 

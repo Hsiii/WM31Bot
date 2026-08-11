@@ -58,6 +58,7 @@ import {
   parseExecutionRoute,
   parsePreviousTraceLookup,
 } from "./chatbot-routing";
+import { ChannelQuietTracker, isChannelWakeRequest } from "./channel-quiet";
 
 export {
   canMemberSearchChannel,
@@ -815,6 +816,7 @@ export async function handleChatbotMention({
   accessConfig,
   reactionBroker,
   conversationTracker,
+  quietTracker,
 }: {
   message: ChatbotMention;
   botUserId: string;
@@ -822,6 +824,7 @@ export async function handleChatbotMention({
   accessConfig: ChatbotAccessConfig;
   reactionBroker?: DiscordReactionBroker;
   conversationTracker?: ChatbotConversationTracker;
+  quietTracker?: ChannelQuietTracker;
 }) {
   const requesterUserId = message.author?.id;
 
@@ -861,6 +864,17 @@ export async function handleChatbotMention({
       discordRequest,
     );
     return true;
+  }
+
+  if (quietTracker?.isPaused(message.channel_id)) {
+    if (
+      addressingMode !== "continuation" &&
+      isChannelWakeRequest(request || message.content || "")
+    ) {
+      quietTracker.wake(message.channel_id);
+    } else {
+      return true;
+    }
   }
 
   const acquired = macAgentBridge.acquireWorkflow();
@@ -1057,6 +1071,12 @@ export async function handleChatbotMention({
       mcpSession = registerChatbotMcpSession({
         getPreviousTrace: async () => previousTrace,
         getCodexUsage: () => workflow.getCodexUsage(),
+        ...(quietTracker
+          ? {
+              pauseChannelActivity: (durationMinutes?: number) =>
+                quietTracker.pause(message.channel_id, durationMinutes),
+            }
+          : {}),
         ...(tripPlanner
           ? {
               readTripPlan: tripPlanner.read,
@@ -1356,6 +1376,7 @@ export async function handleChatbotMention({
     if (!deferredDeveloperTask) workflow.release();
   }
   if (deferredDeveloperTask) return true;
+  if (quietTracker?.isPaused(message.channel_id)) return true;
   let reacted = false;
   let reply: string | null = null;
   const files = result.ok ? (result.files ?? []) : [];

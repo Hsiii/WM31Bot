@@ -159,6 +159,37 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes a request-bound channel quiet action", async () => {
+    const pauses: Array<number | undefined> = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      pauseChannelActivity: (durationMinutes?: number) => {
+        pauses.push(durationMinutes);
+        return {
+          pausedUntil: "2026-08-11T04:30:00.000Z",
+          durationMinutes: durationMinutes ?? 10,
+        };
+      },
+    });
+    const client = await connect(session.token);
+
+    const result = await client.callTool({
+      name: "pause_channel_activity",
+      arguments: { durationMinutes: 30 },
+    });
+
+    expect(pauses).toEqual([30]);
+    expect(result.structuredContent).toEqual({
+      status: "complete",
+      pausedUntil: "2026-08-11T04:30:00.000Z",
+      durationMinutes: 30,
+      currentReply: "suppressed",
+    });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("hides guild tools when no guild-scoped handlers exist", async () => {
     const baseHandlers = handlers();
     const session = registerChatbotMcpSession({
