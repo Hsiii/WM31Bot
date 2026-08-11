@@ -12,6 +12,10 @@ import {
   type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
 } from "../../chatbot/mcp";
+import {
+  createTripPlannerClient,
+  tripPlannerAvailableForGuild,
+} from "../../chatbot/trip-planner";
 import { getGuildMemoryStore } from "../../chatbot/guild-memory";
 import type {
   ChatbotAddressingMode,
@@ -1046,10 +1050,19 @@ export async function handleChatbotMention({
             })
         : undefined;
       const reminderScheduler = getChatbotReminderScheduler();
+      const tripPlanner = tripPlannerAvailableForGuild(message.guild_id)
+        ? createTripPlannerClient(process.env, `minisago-${message.id}`)
+        : undefined;
 
       mcpSession = registerChatbotMcpSession({
         getPreviousTrace: async () => previousTrace,
         getCodexUsage: () => workflow.getCodexUsage(),
+        ...(tripPlanner
+          ? {
+              readTripPlan: tripPlanner.read,
+              ...(tripPlanner.edit ? { editTripPlan: tripPlanner.edit } : {}),
+            }
+          : {}),
         resolveContext: async ({
           historyCount,
           includePreviousTrace,

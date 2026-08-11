@@ -47,6 +47,12 @@ skills, plugins, and user-configured MCP servers. Chat jobs have restricted
 filesystem access and no general network permission outside Codex's own web
 search and MiniSago's MCP server.
 
+Kyushu itinerary access is exposed only when the host-bound Discord guild is
+`1282936453134815275`. Reads use the public planner endpoint; edits require a
+dedicated service token kept by the hosted service. The model receives typed
+read and edit tools, never the token or raw database access. Locked schedule
+items remain immutable.
+
 The Linux worker uses Codex's Bubblewrap sandbox inside the container.
 Production allows only its required namespace and mount syscalls and loads the
 dedicated AppArmor profile. The worker process remains unprivileged.

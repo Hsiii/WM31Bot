@@ -87,7 +87,10 @@ The consolidated `resolve_context` tool can request, in parallel:
 - bounded metadata about the previous answer.
 
 Other tools cover Codex usage, reminders, voice, owner channel messages, and
-owner emoji creation. The read-only `describe_capabilities` tool reports the
+owner emoji creation. In the configured Kyushu guild, host-bound trip tools
+read the shared itinerary and apply typed schedule edits through the planner
+API; they never expose database credentials or accept a guild argument. The
+read-only `describe_capabilities` tool reports the
 exact MCP surface exposed to the active request together with request-scoped
 conversation, attachment, reaction, development, and Mac capabilities. Owner
 features are omitted for other requesters, and capabilities that need a routed

@@ -178,6 +178,51 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("exposes host-bound trip read and edit tools", async () => {
+    const edits: unknown[] = [];
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      readTripPlan: async (input) => ({ status: "complete", input }),
+      editTripPlan: async (input) => {
+        edits.push(input);
+        return { status: "complete", action: input.action };
+      },
+    });
+    const client = await connect(session.token);
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name)).toContain("read_trip_plan");
+    expect(tools.tools.map((tool) => tool.name)).toContain("edit_trip_plan");
+    const read = await client.callTool({
+      name: "read_trip_plan",
+      arguments: { date: "2026-11-01" },
+    });
+    expect(read.structuredContent).toMatchObject({
+      status: "complete",
+      input: { date: "2026-11-01" },
+    });
+    await client.callTool({
+      name: "edit_trip_plan",
+      arguments: {
+        action: "update_day",
+        planId: "balanced",
+        date: "2026-11-01",
+        summary: "Updated",
+      },
+    });
+    expect(edits).toEqual([
+      {
+        action: "update_day",
+        planId: "balanced",
+        date: "2026-11-01",
+        summary: "Updated",
+      },
+    ]);
+
+    await client.close();
+    session.revoke();
+  });
+
   test("describes only request-scoped and conditional capabilities", async () => {
     const session = registerChatbotMcpSession({
       ...handlers(),
