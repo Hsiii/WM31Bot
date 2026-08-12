@@ -49,6 +49,7 @@ export function parseExecutionRoute(
   target: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
+  threadTitle?: string;
 } {
   const advertisedRepositories = new Map(
     availableRepositories.map((repository) => [
@@ -67,6 +68,7 @@ export function parseExecutionRoute(
       target?: unknown;
       repository?: unknown;
       mutationScope?: unknown;
+      threadTitle?: unknown;
     };
     if (payload.mode === "dev" || payload.mode === "chat") {
       const mutationScope = ["code", "issue", "deploy"].includes(
@@ -82,11 +84,16 @@ export function parseExecutionRoute(
               payload.repository.toLocaleLowerCase("en-US"),
             )
           : undefined;
+      const threadTitle =
+        typeof payload.threadTitle === "string"
+          ? payload.threadTitle.replace(/\s+/gu, " ").trim().slice(0, 100)
+          : undefined;
       return {
         mode,
         target,
         ...(mutationScope ? { mutationScope } : {}),
         ...(mode === "dev" && repository ? { repository } : {}),
+        ...(mode === "dev" && threadTitle ? { threadTitle } : {}),
       };
     }
   } catch {

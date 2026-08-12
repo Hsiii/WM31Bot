@@ -18,6 +18,7 @@ import {
   prepareOutgoingFiles,
 } from "./outgoing-files";
 import { buildPromptPlan, outputSchemaForJob } from "./prompts";
+import type { CodexAppServerManager } from "./codex-app-server";
 
 export {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
@@ -60,6 +61,7 @@ export const SOCIAL_ACTION_PROFILE = {
 export const CHATBOT_MODEL_VERBOSITY = "medium";
 
 type CodexRunOptions = {
+  appServer?: CodexAppServerManager;
   codexHome: string;
   codexPath: string;
   githubConfigDir: string;
@@ -90,6 +92,18 @@ export function progressForCodexEvent(
         phase: "preparing",
         summary: "Codex session started.",
         sessionId: event.thread_id,
+      };
+    }
+    if (
+      event.type === "item.completed" &&
+      (event.item?.type === "reasoning" ||
+        event.item?.type === "agent_message") &&
+      event.item.text?.trim()
+    ) {
+      return {
+        phase: event.item.type === "reasoning" ? "exploring" : "reviewing",
+        summary: event.item.text.trim().slice(0, 2_000),
+        kind: "trace",
       };
     }
     if (
@@ -589,6 +603,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       `model_verbosity="${CHATBOT_MODEL_VERBOSITY}"`,
       "--config",
+      'model_reasoning_summary="detailed"',
+      "--config",
+      "hide_agent_reasoning=false",
+      "--config",
       'approval_policy="never"',
       "--config",
       'web_search="live"',
@@ -663,6 +681,42 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     }
 
     if (mediaMcp) codexArguments.push(...mediaMcp.arguments);
+
+    if (hasDeveloperAccess && job.developerTask && options.appServer) {
+      const content = await options.appServer.run({
+        jobId: job.id,
+        taskId: job.developerTask.id,
+        resumeThreadId: job.developerTask.resumeSessionId,
+        title: job.developerTask.title,
+        command: [
+          options.codexPath,
+          "app-server",
+          "--strict-config",
+          ...codexArguments.slice(codexArguments.indexOf("--config")),
+        ],
+        cwd: developerWorkspace!.directory,
+        environment: codexEnvironment(
+          options.codexHome,
+          options.codexPath,
+          true,
+          {
+            ...developerWorkspace!.environment,
+            MINISAGO_GITHUB_REPOSITORY: job.repository!,
+            MINISAGO_JOB_ID: job.id,
+          },
+          { MINISAGO_MCP_TOKEN: job.mcpAccessToken! },
+        ),
+        model: profile.model,
+        effort: profile.reasoningEffort,
+        developerInstructions: prompt.developerInstructions,
+        prompt: `${prompt.taskInstruction}\n\n${prompt.context}`.trim(),
+        imagePaths: prepared.imagePaths,
+        onProgress: options.onProgress,
+        onMcpToolCall: options.onMcpToolCall,
+        signal: timeoutController.signal,
+      });
+      return { content, files: [] };
+    }
 
     if (outputSchema) {
       const schemaPath = join(prepared.directory, "output-schema.json");

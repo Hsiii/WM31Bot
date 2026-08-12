@@ -4,6 +4,7 @@ import {
   ANSWER_OUTPUT_SCHEMA,
   ANSWER_TASK_INSTRUCTION,
   buildAnswerDeveloperInstructions,
+  CODEX_THREAD_TASK_INSTRUCTION,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   PROMPT_VERSION,
 } from "./answer";
@@ -98,7 +99,7 @@ export function buildPromptPlan(
   return promptPlan(
     "answer",
     buildAnswerDeveloperInstructions(job, developerPolicy, macFileRoots),
-    ANSWER_TASK_INSTRUCTION,
+    job.developerTask ? CODEX_THREAD_TASK_INSTRUCTION : ANSWER_TASK_INSTRUCTION,
     answerContext(job, attachmentText, ignoredAttachments),
   );
 }
@@ -126,6 +127,7 @@ export function outputSchemaForJob(job: ChatbotJob) {
   if (job.purpose === "execution_route") return EXECUTION_ROUTE_OUTPUT_SCHEMA;
   if (job.purpose === "social_action") return SOCIAL_ACTION_OUTPUT_SCHEMA;
   if (job.purpose === "answer") {
+    if (job.developerTask) return undefined;
     if (job.executionTarget === "mac") return MAC_FILE_ANSWER_OUTPUT_SCHEMA;
     return job.executionMode === "dev"
       ? ANSWER_OUTPUT_SCHEMA

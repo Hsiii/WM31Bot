@@ -55,15 +55,11 @@ async function waitFor<T>(value: () => T | undefined): Promise<T> {
 
 describe("Discord chatbot", () => {
   test("creates concise coding task thread names", () => {
-    expect(
-      developerThreadName(
-        "Hsiii/mini-sago",
-        "  add   progress reports and let me continue chatting  ",
-      ),
-    ).toBe("mini-sago · add progress reports and let me continue chatting");
-    expect(
-      developerThreadName("Hsiii/mini-sago", "x".repeat(200)).length,
-    ).toBeLessThanOrEqual(100);
+    expect(developerThreadName("  Add   live Codex traces  ")).toBe(
+      "Add live Codex traces",
+    );
+    expect(developerThreadName("x".repeat(200)).length).toBe(100);
+    expect(developerThreadName()).toBe("Coding task");
   });
 
   test("detaches developer work into a steerable Discord thread", async () => {
@@ -83,6 +79,7 @@ describe("Discord chatbot", () => {
       method?: string;
       body: unknown;
     }> = [];
+    let codingMessageCount = 0;
 
     try {
       macAgentBridge.open(socket);
@@ -124,7 +121,8 @@ describe("Discord chatbot", () => {
           if (path.endsWith("/threads"))
             return { id: "coding-thread" } as never;
           if (path === "/channels/coding-thread/messages") {
-            return { id: "coding-status" } as never;
+            codingMessageCount += 1;
+            return { id: `coding-message-${codingMessageCount}` } as never;
           }
           return undefined as never;
         },
@@ -146,8 +144,11 @@ describe("Discord chatbot", () => {
           ok: true,
           content: JSON.stringify({
             mode: "dev",
+            target: "default",
             repository: "Hsiii/mini-sago",
             mutationScope: "code",
+            threadTitle: "Stream Codex task progress",
+            reason: "code change",
           }),
         }),
       );
@@ -185,6 +186,12 @@ describe("Discord chatbot", () => {
             path === "/channels/channel-1/messages/coding-request/threads",
         )?.body,
       ).toMatchObject({ auto_archive_duration: 4320 });
+      expect(
+        discordCalls.find(
+          ({ path }) =>
+            path === "/channels/channel-1/messages/coding-request/threads",
+        )?.body,
+      ).toMatchObject({ name: "Stream Codex task progress" });
 
       macAgentBridge.message(
         socket,
@@ -201,10 +208,22 @@ describe("Discord chatbot", () => {
       macAgentBridge.message(
         socket,
         JSON.stringify({
+          type: "progress",
+          jobId: answerJob.job.id,
+          progress: {
+            phase: "exploring",
+            summary: "Inspecting the Discord task bridge.",
+            kind: "trace",
+          },
+        }),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
           type: "result",
           jobId: answerJob.job.id,
           ok: true,
-          content: '{"reply":"done","reaction":null}',
+          content: "done",
         }),
       );
       await waitFor(() =>
@@ -214,6 +233,13 @@ describe("Discord chatbot", () => {
             (body as { content?: string })?.content === "done",
         ),
       );
+      expect(
+        discordCalls.some(
+          ({ path, method }) =>
+            path === "/channels/coding-thread/messages/coding-message-1" &&
+            method === "DELETE",
+        ),
+      ).toBe(true);
 
       expect(
         await handleChatbotMention({
@@ -253,16 +279,156 @@ describe("Discord chatbot", () => {
       macAgentBridge.message(
         socket,
         JSON.stringify({
+          type: "progress",
+          jobId: resumedJob.job.id,
+          progress: {
+            phase: "exploring",
+            summary: "Updating the docs.",
+            kind: "trace",
+          },
+        }),
+      );
+      const steeringHandled = handleChatbotMention({
+        message: {
+          id: "active-steering-message",
+          channel_id: "coding-thread",
+          guild_id: "917436845187563610",
+          content: "focus on the setup guide",
+          timestamp: "2026-08-10T12:01:30.000Z",
+          author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest: async () => ({ id: "unused" }) as never,
+      });
+      const steerMessage = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "steer" &&
+              value.jobId === resumedJob.job.id &&
+              value.request === "focus on the setup guide",
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "steer_result",
+          jobId: resumedJob.job.id,
+          requestId: steerMessage.requestId,
+          accepted: true,
+        }),
+      );
+      expect(await steeringHandled).toBe(true);
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
           type: "result",
           jobId: resumedJob.job.id,
           ok: true,
-          content: '{"reply":"docs updated","reaction":null}',
+          content: "docs updated",
         }),
       );
       await waitFor(() =>
         discordCalls.find(
           ({ body }) =>
             (body as { content?: string })?.content === "docs updated",
+        ),
+      );
+      expect(
+        discordCalls.some(({ body }) =>
+          (body as { content?: string })?.content?.includes("Got it"),
+        ),
+      ).toBe(false);
+      expect(
+        discordCalls.some(
+          ({ path, method }) =>
+            path === "/channels/coding-thread/messages/coding-message-3" &&
+            method === "DELETE",
+        ),
+      ).toBe(true);
+
+      await handleChatbotMention({
+        message: {
+          id: "next-turn-message",
+          channel_id: "coding-thread",
+          guild_id: "917436845187563610",
+          content: "review the examples",
+          timestamp: "2026-08-10T12:02:00.000Z",
+          author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest: async () => ({ id: "unused" }) as never,
+      });
+      const nextTurnJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" &&
+              value.job.purpose === "answer" &&
+              value.job.request === "review the examples",
+          ),
+      );
+      const lateSteering = handleChatbotMention({
+        message: {
+          id: "late-steering-message",
+          channel_id: "coding-thread",
+          guild_id: "917436845187563610",
+          content: "include edge cases",
+          timestamp: "2026-08-10T12:02:30.000Z",
+          author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+        },
+        botUserId: BOT_ID,
+        accessConfig: ACCESS_CONFIG,
+        discordRequest: async () => ({ id: "unused" }) as never,
+      });
+      await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "steer" && value.jobId === nextTurnJob.job.id,
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: nextTurnJob.job.id,
+          ok: true,
+          content: "examples reviewed",
+        }),
+      );
+      expect(await lateSteering).toBe(true);
+      const fallbackJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" &&
+              value.job.purpose === "answer" &&
+              value.job.request === "include edge cases",
+          ),
+      );
+      expect(fallbackJob.job.developerTask.resumeSessionId).toBe(
+        "019-coding-session",
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: fallbackJob.job.id,
+          ok: true,
+          content: "edge cases included",
+        }),
+      );
+      await waitFor(() =>
+        discordCalls.find(
+          ({ body }) =>
+            (body as { content?: string })?.content === "edge cases included",
         ),
       );
     } finally {
@@ -1065,13 +1231,14 @@ describe("Discord chatbot", () => {
     const repositories = ["Hsiii/mini-sago", "Kiwi/backend"];
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","mutationScope":null,"reason":"PR review"}',
+        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","mutationScope":null,"threadTitle":"  Review   pull request  ","reason":"PR review"}',
         repositories,
       ),
     ).toEqual({
       mode: "dev",
       target: "default",
       repository: "Hsiii/mini-sago",
+      threadTitle: "Review pull request",
     });
     expect(
       parseExecutionRoute(

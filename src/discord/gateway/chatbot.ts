@@ -82,7 +82,6 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
-const TASK_STATUS_THROTTLE_MS = 5_000;
 const DEVELOPER_TASK_TTL_MS = 3 * 24 * 60 * 60_000;
 const guildMemoryStore = getGuildMemoryStore();
 
@@ -518,30 +517,26 @@ type DeveloperTask = {
   request: string;
   job: ChatbotJob;
   workflow?: WorkflowLease;
-  statusMessageId: string;
   state: "running" | "stopping" | "stopped" | "completed" | "failed";
   summary: string;
   sessionId?: string;
   activeJobId?: string;
-  steering?: string;
-  lastStatusAt: number;
-  statusTimer?: ReturnType<typeof setTimeout>;
+  nextRequest?: string;
+  traceMessageIds: string[];
+  messageQueue: Promise<void>;
   cleanupTimer?: ReturnType<typeof setTimeout>;
   revokeMcp: () => void;
   extendMcp: () => void;
   discordRequest: DiscordRequest;
 };
 
-export function developerThreadName(repository: string, request: string) {
-  const repositoryName = repository.split("/").at(-1) ?? repository;
-  const requestName = request.replace(/\s+/gu, " ").trim().slice(0, 72);
-  return `${repositoryName} · ${requestName || "coding task"}`.slice(0, 100);
+export function developerThreadName(title?: string) {
+  return title?.replace(/\s+/gu, " ").trim().slice(0, 100) || "Coding task";
 }
 
 async function createDeveloperThread(
   message: DiscordMessage,
-  repository: string,
-  request: string,
+  title: string | undefined,
   discordRequest: DiscordRequest,
 ) {
   const thread = await discordRequest<{ id: string }>(
@@ -549,7 +544,7 @@ async function createDeveloperThread(
     {
       method: "POST",
       body: {
-        name: developerThreadName(repository, request),
+        name: developerThreadName(title),
         auto_archive_duration: 4320,
       },
     },
@@ -581,7 +576,6 @@ class DeveloperTaskRegistry {
         task.state = "stopping";
         task.summary =
           "Stopping after the current operation; work is preserved.";
-        await this.updateStatus(task, true);
         task.workflow.stop(task.activeJobId);
       } else {
         await this.post(task, "This coding task is not currently running.");
@@ -594,17 +588,22 @@ class DeveloperTaskRegistry {
       return true;
     }
 
-    task.steering = task.steering ? `${task.steering}\n${request}` : request;
-    await this.post(task, "Got it. I’ll apply that direction to this task.");
     if (task.state === "running" && task.activeJobId && task.workflow) {
-      task.state = "stopping";
-      task.summary = "Applying new direction; work is preserved.";
-      await this.updateStatus(task, true);
-      task.workflow.stop(task.activeJobId);
+      const activeJobId = task.activeJobId;
+      if (await task.workflow.steer(activeJobId, request)) {
+        task.summary = "Applying new direction to the active turn.";
+      } else {
+        task.nextRequest = task.nextRequest
+          ? `${task.nextRequest}\n${request}`
+          : request;
+        if (task.activeJobId !== activeJobId && task.state !== "running") {
+          const nextRequest = task.nextRequest;
+          task.nextRequest = undefined;
+          this.launch(task, nextRequest);
+        }
+      }
     } else if (task.state !== "stopping") {
-      const steering = task.steering;
-      task.steering = undefined;
-      this.launch(task, steering);
+      this.launch(task, request);
     }
     return true;
   }
@@ -618,7 +617,7 @@ class DeveloperTaskRegistry {
           : "unexpected error"
       }`;
       this.releaseWorkflow(task);
-      await this.updateStatus(task, true);
+      await this.finishWithoutAnswer(task, task.summary);
       this.scheduleCleanup(task);
     });
   }
@@ -640,7 +639,7 @@ class DeveloperTaskRegistry {
           acquired.status === "busy"
             ? "Waiting for an available coding worker. Reply `continue` to retry."
             : "The coding worker is offline. Reply `continue` when it is back.";
-        await this.updateStatus(task, true);
+        await this.finishWithoutAnswer(task, task.summary);
         this.scheduleCleanup(task);
         return;
       }
@@ -651,7 +650,7 @@ class DeveloperTaskRegistry {
         task.workflow = undefined;
         task.state = "stopped";
         task.summary = "The repository is not available on the coding worker.";
-        await this.updateStatus(task, true);
+        await this.finishWithoutAnswer(task, task.summary);
         this.scheduleCleanup(task);
         return;
       }
@@ -664,6 +663,9 @@ class DeveloperTaskRegistry {
       request,
       developerTask: {
         id: task.id,
+        ...(task.job.developerTask?.title
+          ? { title: task.job.developerTask.title }
+          : {}),
         ...(task.sessionId ? { resumeSessionId: task.sessionId } : {}),
       },
     };
@@ -672,7 +674,6 @@ class DeveloperTaskRegistry {
     task.summary = task.sessionId
       ? "Continuing the preserved coding task."
       : "Preparing an isolated workspace.";
-    await this.updateStatus(task, true);
     const dispatch = task.workflow.dispatch(job, (progress) =>
       this.onProgress(task, progress),
     );
@@ -680,7 +681,7 @@ class DeveloperTaskRegistry {
       task.state = "stopped";
       task.summary = "The coding worker could not start this turn.";
       this.releaseWorkflow(task);
-      await this.updateStatus(task, true);
+      await this.finishWithoutAnswer(task, task.summary);
       this.scheduleCleanup(task);
       return;
     }
@@ -688,16 +689,11 @@ class DeveloperTaskRegistry {
     const result = await dispatch.result;
     delete task.activeJobId;
     if (!result.ok && result.stopped) {
-      const steering = task.steering;
-      task.steering = undefined;
-      if (steering) {
-        await this.run(task, steering);
-        return;
-      }
+      await this.settleTrace(task, false);
       task.state = "stopped";
       task.summary = "Stopped. The workspace and Codex session are preserved.";
       this.releaseWorkflow(task);
-      await this.updateStatus(task, true);
+      await this.post(task, task.summary);
       this.scheduleCleanup(task);
       return;
     }
@@ -706,28 +702,33 @@ class DeveloperTaskRegistry {
       task.state = "failed";
       task.summary = `Failed: ${result.error.slice(0, 500)}`;
       this.releaseWorkflow(task);
-      await this.updateStatus(task, true);
+      await this.finishWithoutAnswer(task, task.summary);
       this.scheduleCleanup(task);
       return;
     }
 
     task.state = "completed";
     task.summary = "Completed. Reply in this thread to continue the same task.";
-    this.releaseWorkflow(task);
-    await this.updateStatus(task, true);
-    this.scheduleCleanup(task);
-    const decision = parseChatbotAnswerDecision(result.content);
-    if (decision.reply) {
-      for (const answer of formatDiscordAnswers(decision.reply)) {
+    await this.settleTrace(task, true);
+    if (result.content.trim()) {
+      for (const answer of formatDiscordAnswers(result.content)) {
         await this.post(task, answer);
       }
     }
+    const nextRequest = task.nextRequest;
+    task.nextRequest = undefined;
+    if (nextRequest) {
+      await this.run(task, nextRequest);
+      return;
+    }
+    this.releaseWorkflow(task);
+    this.scheduleCleanup(task);
   }
 
   private onProgress(task: DeveloperTask, progress: ChatbotTaskProgress) {
     if (progress.sessionId) task.sessionId = progress.sessionId;
     task.summary = progress.summary;
-    void this.updateStatus(task);
+    if (progress.kind === "trace") this.postTrace(task, progress.summary);
   }
 
   private releaseWorkflow(task: DeveloperTask) {
@@ -738,7 +739,6 @@ class DeveloperTaskRegistry {
   private scheduleCleanup(task: DeveloperTask) {
     if (task.cleanupTimer) clearTimeout(task.cleanupTimer);
     task.cleanupTimer = setTimeout(() => {
-      if (task.statusTimer) clearTimeout(task.statusTimer);
       task.revokeMcp();
       this.tasks.delete(task.threadId);
     }, DEVELOPER_TASK_TTL_MS);
@@ -759,24 +759,43 @@ class DeveloperTaskRegistry {
     return `**${state} · ${task.repository}**\n${task.summary}\n\nReply here to steer me. Say \`stop\` to pause or \`status\` for an update.`;
   }
 
-  private async updateStatus(task: DeveloperTask, immediate = false) {
-    const elapsed = Date.now() - task.lastStatusAt;
-    if (!immediate && elapsed < TASK_STATUS_THROTTLE_MS) {
-      if (!task.statusTimer) {
-        task.statusTimer = setTimeout(() => {
-          task.statusTimer = undefined;
-          void this.updateStatus(task, true);
-        }, TASK_STATUS_THROTTLE_MS - elapsed);
-      }
-      return;
-    }
-    task.lastStatusAt = Date.now();
-    await task
-      .discordRequest(
-        `/channels/${task.threadId}/messages/${task.statusMessageId}`,
-        { method: "PATCH", body: { content: this.status(task) } },
-      )
+  private postTrace(task: DeveloperTask, content: string) {
+    task.messageQueue = task.messageQueue
+      .then(async () => {
+        const message = await task.discordRequest<{ id: string }>(
+          `/channels/${task.threadId}/messages`,
+          {
+            method: "POST",
+            body: {
+              content: formatDiscordAnswer(content),
+              allowed_mentions: { parse: [] },
+            },
+          },
+        );
+        task.traceMessageIds.push(message.id);
+      })
       .catch(() => undefined);
+  }
+
+  private async settleTrace(task: DeveloperTask, removeMessages: boolean) {
+    await task.messageQueue.catch(() => undefined);
+    task.messageQueue = Promise.resolve();
+    const messageIds = task.traceMessageIds.splice(0);
+    if (!removeMessages) return;
+    await Promise.all(
+      messageIds.map((messageId) =>
+        task
+          .discordRequest(`/channels/${task.threadId}/messages/${messageId}`, {
+            method: "DELETE",
+          })
+          .catch(() => undefined),
+      ),
+    );
+  }
+
+  private async finishWithoutAnswer(task: DeveloperTask, content: string) {
+    await this.settleTrace(task, false);
+    await this.post(task, content);
   }
 
   private async post(task: DeveloperTask, content: string) {
@@ -943,6 +962,7 @@ export async function handleChatbotMention({
       let executionTarget: ChatbotExecutionTarget = "default";
       let mutationScope: ChatbotMutationScope | undefined;
       let selectedRepository: string | undefined;
+      let developerThreadTitle: string | undefined;
 
       if (requesterUserId === accessConfig.ownerUserId) {
         const routeJob: ChatbotJob = {
@@ -972,6 +992,7 @@ export async function handleChatbotMention({
         executionTarget = route.target;
         mutationScope = route.mutationScope;
         selectedRepository = route.repository;
+        developerThreadTitle = route.threadTitle;
 
         const missingRepository = missingDeveloperRepositoryResponse(
           executionMode,
@@ -1345,19 +1366,8 @@ export async function handleChatbotMention({
         const taskId = randomUUID();
         const threadId = await createDeveloperThread(
           message,
-          selectedRepository,
-          request,
+          developerThreadTitle,
           discordRequest,
-        );
-        const status = await discordRequest<{ id: string }>(
-          `/channels/${threadId}/messages`,
-          {
-            method: "POST",
-            body: {
-              content: `**Working · ${selectedRepository}**\nPreparing an isolated workspace.\n\nReply here to steer me. Say \`stop\` to pause or \`status\` for an update.`,
-              allowed_mentions: { parse: [] },
-            },
-          },
         );
         deferredDeveloperTask = true;
         developerTasks.start({
@@ -1366,12 +1376,18 @@ export async function handleChatbotMention({
           requesterUserId,
           repository: selectedRepository,
           request,
-          job: { ...job, developerTask: { id: taskId } },
+          job: {
+            ...job,
+            developerTask: {
+              id: taskId,
+              title: developerThreadName(developerThreadTitle),
+            },
+          },
           workflow,
-          statusMessageId: status.id,
           state: "running",
           summary: "Preparing an isolated workspace.",
-          lastStatusAt: Date.now(),
+          traceMessageIds: [],
+          messageQueue: Promise.resolve(),
           revokeMcp: () => mcpSession?.revoke(),
           extendMcp: () => mcpSession?.extend(DEVELOPER_TASK_TTL_MS),
           discordRequest,

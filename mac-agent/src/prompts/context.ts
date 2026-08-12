@@ -109,7 +109,7 @@ export function requestContext(
   if (job.addressingMode) {
     sections.push(
       block("conversation_addressing_json", {
-        addressee: "MiniSago",
+        addressee: job.developerTask ? "Codex" : "MiniSago",
         mode: job.addressingMode,
         ...addressingReferences(request),
       }),
