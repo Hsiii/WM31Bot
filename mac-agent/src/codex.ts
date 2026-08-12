@@ -33,8 +33,8 @@ export {
 const LOCAL_CHAT_TIMEOUT_MS = 150_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
 const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media-mcp.ts");
-export const EMOJI_ADD_MCP_APPROVAL_CONFIG =
-  'mcp_servers.minisago.tools.add_guild_emoji.approval_mode="approve"';
+export const EXPRESSION_ADD_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"';
 export const SERVER_MEMORY_MCP_APPROVAL_CONFIG =
@@ -648,7 +648,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "--config",
         'mcp_servers.minisago.default_tools_approval_mode="auto"',
         "--config",
-        EMOJI_ADD_MCP_APPROVAL_CONFIG,
+        EXPRESSION_ADD_MCP_APPROVAL_CONFIG,
         "--config",
         CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
         "--config",

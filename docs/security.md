@@ -6,15 +6,15 @@ permissions.
 
 ## Capability boundary
 
-| Capability                                 | Community | Owner                    |
-| ------------------------------------------ | --------- | ------------------------ |
-| Conversation and public web research       | Yes       | Yes                      |
-| Permission-filtered Discord context        | Yes       | Yes                      |
-| Host-bound reminders and voice actions     | Yes       | Yes                      |
-| Cross-channel messaging and emoji creation | No        | Yes                      |
-| Repository checkout and developer commands | No        | Yes                      |
-| GitHub mutation                            | No        | Owner-routed tasks only  |
-| Mac file search and upload                 | No        | Explicit Mac target only |
+| Capability                                      | Community | Owner                    |
+| ----------------------------------------------- | --------- | ------------------------ |
+| Conversation and public web research            | Yes       | Yes                      |
+| Permission-filtered Discord context             | Yes       | Yes                      |
+| Host-bound reminders and voice actions          | Yes       | Yes                      |
+| Cross-channel messaging and expression creation | No        | Yes                      |
+| Repository checkout and developer commands      | No        | Yes                      |
+| GitHub mutation                                 | No        | Owner-routed tasks only  |
+| Mac file search and upload                      | No        | Explicit Mac target only |
 
 The hosted service checks requester identity before dispatch. The worker checks
 the declared capabilities again before Codex runs. Authorization never depends

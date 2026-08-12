@@ -313,7 +313,7 @@ describe("MiniSago MCP server", () => {
       ],
     });
     expect(JSON.stringify(result.structuredContent)).not.toContain(
-      "custom_emojis",
+      "custom_expressions",
     );
 
     await client.close();
@@ -424,7 +424,7 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("exposes the owner-bound guild emoji tool", async () => {
+  test("exposes the owner-bound guild expression tool", async () => {
     const additions: unknown[] = [];
     const session = registerChatbotMcpSession({
       ...handlers(),
@@ -451,9 +451,10 @@ describe("MiniSago MCP server", () => {
           },
         ],
       }),
-      addGuildEmoji: async (input) => {
+      addGuildExpression: async (input) => {
         additions.push(input);
         return {
+          kind: input.kind ?? "emoji",
           id: "876543210987654321",
           name: input.name ?? "wave",
           animated: false,
@@ -477,7 +478,9 @@ describe("MiniSago MCP server", () => {
       "list_shared_guilds",
     );
     expect(tools.tools.map((tool) => tool.name)).toContain("list_guild_emojis");
-    expect(tools.tools.map((tool) => tool.name)).toContain("add_guild_emoji");
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "add_guild_expression",
+    );
 
     const inventory = await client.callTool({
       name: "list_guild_emojis",
@@ -490,7 +493,7 @@ describe("MiniSago MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "add_guild_emoji",
+      name: "add_guild_expression",
       arguments: {
         emoji: "<:wave:123456789012345678>",
         sourceGuild: "Source",
@@ -500,10 +503,11 @@ describe("MiniSago MCP server", () => {
     });
     expect(result.structuredContent).toMatchObject({
       status: "complete",
-      emoji: { name: "hello", guild: { name: "Target" } },
+      expression: { name: "hello", guild: { name: "Target" } },
     });
     expect(additions).toEqual([
       {
+        kind: "emoji",
         emoji: "<:wave:123456789012345678>",
         sourceGuild: "Source",
         destinationGuild: "Target",
@@ -512,10 +516,20 @@ describe("MiniSago MCP server", () => {
     ]);
 
     await client.callTool({
-      name: "add_guild_emoji",
+      name: "add_guild_expression",
       arguments: { name: "from_image" },
     });
-    expect(additions.at(-1)).toEqual({ name: "from_image" });
+    expect(additions.at(-1)).toEqual({ kind: "emoji", name: "from_image" });
+
+    await client.callTool({
+      name: "add_guild_expression",
+      arguments: { kind: "sticker", name: "from_sticker", tags: "🎉" },
+    });
+    expect(additions.at(-1)).toEqual({
+      kind: "sticker",
+      name: "from_sticker",
+      tags: "🎉",
+    });
 
     await client.close();
     session.revoke();

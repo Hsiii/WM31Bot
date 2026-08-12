@@ -3,6 +3,7 @@ import type { DiscordRequest } from "../gateway/chatbot";
 const CREATE_GUILD_EXPRESSIONS = 1n << 43n;
 const ADMINISTRATOR = 1n << 3n;
 const MAX_EMOJI_BYTES = 256 * 1024;
+const MAX_STICKER_BYTES = 512 * 1024;
 const DISCORD_CDN_HOSTS = new Set([
   "cdn.discordapp.com",
   "media.discordapp.net",
@@ -15,6 +16,12 @@ const IMAGE_CONTENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+]);
+const STICKER_CONTENT_TYPES = new Set([
+  "application/json",
+  "image/apng",
+  "image/gif",
+  "image/png",
 ]);
 
 type DiscordGuild = {
@@ -30,9 +37,9 @@ export type SharedGuildEmoji = {
   available?: boolean;
 };
 
-type EmojiFetch = (input: string | URL | Request) => Promise<Response>;
+type ExpressionFetch = (input: string | URL | Request) => Promise<Response>;
 
-export type EmojiImageAttachment = {
+export type ExpressionAttachment = {
   id: string;
   filename: string;
   contentType?: string;
@@ -139,7 +146,7 @@ function resolveEmoji(emojis: SharedGuildEmoji[], value: string) {
   return matches[0]!;
 }
 
-function attachmentContentType(attachment: EmojiImageAttachment) {
+function attachmentContentType(attachment: ExpressionAttachment) {
   const declared = attachment.contentType?.toLocaleLowerCase();
   if (declared && IMAGE_CONTENT_TYPES.has(declared)) return declared;
 
@@ -151,17 +158,34 @@ function attachmentContentType(attachment: EmojiImageAttachment) {
       : undefined;
 }
 
-export function selectEmojiImageAttachment({
+function stickerContentType(attachment: ExpressionAttachment) {
+  const declared = attachment.contentType?.toLocaleLowerCase();
+  if (declared && STICKER_CONTENT_TYPES.has(declared)) return declared;
+
+  const extension = attachment.filename.split(".").at(-1)?.toLocaleLowerCase();
+  return extension === "json"
+    ? "application/json"
+    : extension && STICKER_CONTENT_TYPES.has(`image/${extension}`)
+      ? `image/${extension}`
+      : undefined;
+}
+
+export function selectExpressionAttachment({
   attachments,
   referencedAttachments = [],
   selector,
+  kind = "emoji",
 }: {
-  attachments: EmojiImageAttachment[];
-  referencedAttachments?: EmojiImageAttachment[];
+  attachments: ExpressionAttachment[];
+  referencedAttachments?: ExpressionAttachment[];
   selector?: string;
+  kind?: "emoji" | "sticker";
 }) {
   const images = [...attachments, ...referencedAttachments].filter(
-    (attachment) => attachmentContentType(attachment) !== undefined,
+    (attachment) =>
+      (kind === "sticker" ? stickerContentType : attachmentContentType)(
+        attachment,
+      ) !== undefined,
   );
   if (selector) {
     const query = selector.trim().toLocaleLowerCase();
@@ -187,6 +211,17 @@ export function selectEmojiImageAttachment({
   return images[0]!;
 }
 
+function assertDiscordAttachment(attachment: ExpressionAttachment) {
+  const imageUrl = new URL(attachment.url);
+  if (
+    imageUrl.protocol !== "https:" ||
+    !DISCORD_CDN_HOSTS.has(imageUrl.hostname)
+  ) {
+    throw new Error("The file must be a Discord attachment.");
+  }
+  return imageUrl;
+}
+
 function defaultEmojiName(filename: string) {
   const stem = filename.replace(/\.[^.]*$/u, "");
   const normalized = stem
@@ -204,10 +239,10 @@ export async function addGuildEmojiFromAttachment({
   fetchEmoji = fetch,
 }: {
   destinationGuild: string;
-  attachment: EmojiImageAttachment;
+  attachment: ExpressionAttachment;
   name?: string;
   discordRequest: DiscordRequest;
-  fetchEmoji?: EmojiFetch;
+  fetchEmoji?: ExpressionFetch;
 }) {
   const destination = resolveGuild(
     await listSharedEmojiGuilds(discordRequest),
@@ -229,13 +264,7 @@ export async function addGuildEmojiFromAttachment({
   if (!contentType) {
     throw new Error("Discord emoji images must be PNG, JPEG, GIF, or WebP.");
   }
-  const imageUrl = new URL(attachment.url);
-  if (
-    imageUrl.protocol !== "https:" ||
-    !DISCORD_CDN_HOSTS.has(imageUrl.hostname)
-  ) {
-    throw new Error("The image must be a Discord attachment.");
-  }
+  const imageUrl = assertDiscordAttachment(attachment);
 
   const imageResponse = await fetchEmoji(imageUrl);
   if (!imageResponse.ok) {
@@ -259,9 +288,97 @@ export async function addGuildEmojiFromAttachment({
     },
   );
   return {
+    kind: "emoji" as const,
     id: created.id,
     name: created.name,
     animated: created.animated ?? contentType === "image/gif",
+    guild: destination,
+  };
+}
+
+export async function addGuildStickerFromAttachment({
+  destinationGuild,
+  attachment,
+  name,
+  description = "",
+  tags,
+  discordRequest,
+  fetchSticker = fetch,
+}: {
+  destinationGuild: string;
+  attachment: ExpressionAttachment;
+  name?: string;
+  description?: string;
+  tags: string;
+  discordRequest: DiscordRequest;
+  fetchSticker?: ExpressionFetch;
+}) {
+  const destination = resolveGuild(
+    await listSharedEmojiGuilds(discordRequest),
+    destinationGuild,
+  );
+  if (!destination.canCreateExpressions) {
+    throw new Error(
+      `Sago needs the Create Expressions permission in ${destination.name}.`,
+    );
+  }
+
+  const destinationName = name?.trim() || defaultEmojiName(attachment.filename);
+  if (destinationName.length < 2 || destinationName.length > 30) {
+    throw new Error("Give the sticker a 2-30 character name.");
+  }
+  if (description.length === 1 || description.length > 100) {
+    throw new Error("Sticker descriptions must be empty or 2-100 characters.");
+  }
+  if (!tags.trim() || tags.length > 200) {
+    throw new Error(
+      "Give the sticker a related emoji or tag (max 200 characters).",
+    );
+  }
+  const contentType = stickerContentType(attachment);
+  if (!contentType) {
+    throw new Error("Discord stickers must be PNG, APNG, GIF, or Lottie JSON.");
+  }
+
+  const fileUrl = assertDiscordAttachment(attachment);
+  const fileResponse = await fetchSticker(fileUrl);
+  if (!fileResponse.ok) {
+    throw new Error("Discord could not download the attached sticker.");
+  }
+  const file = new Uint8Array(await fileResponse.arrayBuffer());
+  if (file.byteLength > MAX_STICKER_BYTES) {
+    throw new Error(
+      "The attached sticker is larger than Discord's 512 KiB limit.",
+    );
+  }
+
+  const formData = new FormData();
+  formData.append("name", destinationName);
+  formData.append("description", description);
+  formData.append("tags", tags.trim());
+  formData.append(
+    "file",
+    new Blob([file], { type: contentType }),
+    attachment.filename,
+  );
+  const created = await discordRequest<{
+    id: string;
+    name: string;
+    description?: string | null;
+    tags: string;
+    format_type: number;
+  }>(`/guilds/${destination.id}/stickers`, {
+    method: "POST",
+    formData,
+  });
+
+  return {
+    kind: "sticker" as const,
+    id: created.id,
+    name: created.name,
+    description: created.description ?? "",
+    tags: created.tags,
+    formatType: created.format_type,
     guild: destination,
   };
 }
@@ -279,7 +396,7 @@ export async function copyGuildEmoji({
   emoji: string;
   name?: string;
   discordRequest: DiscordRequest;
-  fetchEmoji?: EmojiFetch;
+  fetchEmoji?: ExpressionFetch;
 }) {
   const guilds = await listSharedEmojiGuilds(discordRequest);
   const source = resolveGuild(guilds, sourceGuild);
@@ -328,6 +445,7 @@ export async function copyGuildEmoji({
   );
 
   return {
+    kind: "emoji" as const,
     id: created.id,
     name: created.name,
     animated: created.animated ?? animated,

@@ -3,15 +3,16 @@ import { describe, expect, test } from "bun:test";
 import type { DiscordRequest } from "../gateway/chatbot";
 import {
   addGuildEmojiFromAttachment,
+  addGuildStickerFromAttachment,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
-  selectEmojiImageAttachment,
+  selectExpressionAttachment,
 } from "./emojis";
 
 const CREATE_EXPRESSIONS = (1n << 43n).toString();
 
-describe("cross-guild emoji tools", () => {
+describe("guild expression tools", () => {
   test("lists every shared guild and reports create permission", async () => {
     const guilds = await listSharedEmojiGuilds(
       async () =>
@@ -134,7 +135,7 @@ describe("cross-guild emoji tools", () => {
     };
 
     expect(
-      selectEmojiImageAttachment({
+      selectExpressionAttachment({
         attachments: [],
         referencedAttachments: [attachment],
       }),
@@ -149,11 +150,11 @@ describe("cross-guild emoji tools", () => {
       url: `https://cdn.discordapp.com/attachments/1/2/${filename}`,
     }));
 
-    expect(() => selectEmojiImageAttachment({ attachments: images })).toThrow(
+    expect(() => selectExpressionAttachment({ attachments: images })).toThrow(
       "specify the exact filename",
     );
     expect(
-      selectEmojiImageAttachment({
+      selectExpressionAttachment({
         attachments: images,
         selector: "second.webp",
       }),
@@ -197,6 +198,7 @@ describe("cross-guild emoji tools", () => {
     });
 
     expect(result).toMatchObject({
+      kind: "emoji",
       name: "party_parrot",
       guild: { id: "target", name: "Target" },
     });
@@ -207,6 +209,57 @@ describe("cross-guild emoji tools", () => {
         image: "data:image/png;base64,AQID",
       },
     });
+  });
+
+  test("adds an attached sticker with multipart metadata", async () => {
+    let uploaded: FormData | undefined;
+    const result = await addGuildStickerFromAttachment({
+      destinationGuild: "Target",
+      attachment: {
+        id: "sticker-1",
+        filename: "party-parrot.png",
+        contentType: "image/png",
+        url: "https://cdn.discordapp.com/attachments/1/2/party-parrot.png",
+      },
+      description: "A parrot celebrates.",
+      tags: "🎉",
+      discordRequest: async (path, options) => {
+        if (path === "/users/@me/guilds") {
+          return [
+            {
+              id: "target",
+              name: "Target",
+              permissions: CREATE_EXPRESSIONS,
+            },
+          ] as never;
+        }
+        uploaded = options?.formData;
+        return {
+          id: "987654321098765432",
+          name: "party_parrot",
+          description: "A parrot celebrates.",
+          tags: "🎉",
+          format_type: 1,
+        } as never;
+      },
+      fetchSticker: async () => new Response(new Uint8Array([1, 2, 3])),
+    });
+
+    expect(result).toMatchObject({
+      kind: "sticker",
+      name: "party_parrot",
+      description: "A parrot celebrates.",
+      tags: "🎉",
+      formatType: 1,
+      guild: { id: "target", name: "Target" },
+    });
+    expect(uploaded?.get("name")).toBe("party_parrot");
+    expect(uploaded?.get("description")).toBe("A parrot celebrates.");
+    expect(uploaded?.get("tags")).toBe("🎉");
+    const file = uploaded?.get("file") as File;
+    expect(file.name).toBe("party-parrot.png");
+    expect(file.type).toBe("image/png");
+    expect([...new Uint8Array(await file.arrayBuffer())]).toEqual([1, 2, 3]);
   });
 
   test("rejects non-Discord attachment URLs", async () => {

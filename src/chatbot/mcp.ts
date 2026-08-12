@@ -198,16 +198,23 @@ export type ChatbotMcpSessionHandlers = {
       available: boolean;
     }>;
   }>;
-  addGuildEmoji?: (input: {
+  addGuildExpression?: (input: {
+    kind?: "emoji" | "sticker";
     emoji?: string;
     sourceGuild?: string;
     destinationGuild?: string;
     name?: string;
     attachment?: string;
+    description?: string;
+    tags?: string;
   }) => Promise<{
+    kind: "emoji" | "sticker";
     id: string;
     name: string;
-    animated: boolean;
+    animated?: boolean;
+    description?: string;
+    tags?: string;
+    formatType?: number;
     sourceGuild?: {
       id: string;
       name: string;
@@ -423,15 +430,19 @@ function availableCapabilities(
   if (
     handlers.listSharedGuilds &&
     handlers.listGuildEmojis &&
-    handlers.addGuildEmoji
+    handlers.addGuildExpression
   ) {
     capabilities.push({
-      id: "custom_emojis",
+      id: "custom_expressions",
       category: "discord",
       availability: "available",
       description:
-        "List shared servers and custom emojis, then add an attached image or copy an existing custom emoji when the owner asks.",
-      tools: ["list_shared_guilds", "list_guild_emojis", "add_guild_emoji"],
+        "List shared servers and custom emojis, then add an attached emoji or sticker, or copy an existing custom emoji, when the owner asks.",
+      tools: [
+        "list_shared_guilds",
+        "list_guild_emojis",
+        "add_guild_expression",
+      ],
     });
   }
   if (
@@ -856,7 +867,7 @@ function createServer(session: ChatbotMcpSession) {
   if (
     session.handlers.listSharedGuilds &&
     session.handlers.listGuildEmojis &&
-    session.handlers.addGuildEmoji
+    session.handlers.addGuildExpression
   ) {
     server.registerTool(
       "list_shared_guilds",
@@ -907,16 +918,19 @@ function createServer(session: ChatbotMcpSession) {
     );
 
     server.registerTool(
-      "add_guild_emoji",
+      "add_guild_expression",
       {
         description:
-          "Add a custom emoji to a Discord server. For an image attached to the request or its replied-to message, omit sourceGuild and emoji; use attachment only to select an exact filename when multiple images exist. For an existing custom emoji, provide both sourceGuild and emoji. destinationGuild defaults to the current server. Only call this when the requester clearly asks to add or copy the emoji. If it returns invalid, report that error accurately; never call it cancelled.",
+          "Add a custom emoji or sticker to a Discord server. Set kind to sticker for a new sticker and provide tags as a related Unicode emoji or search term; description is optional alt text. For an attachment, omit sourceGuild and emoji; use attachment only to select an exact filename when multiple compatible files exist. Copying an existing custom emoji requires kind emoji plus both sourceGuild and emoji. destinationGuild defaults to the current server. Only call this when the requester clearly asks to add or copy the expression. If it returns invalid, report that error accurately; never call it cancelled.",
         inputSchema: {
+          kind: z.enum(["emoji", "sticker"]).default("emoji"),
           emoji: z.string().trim().min(1).max(100).optional(),
           sourceGuild: z.string().trim().min(1).max(100).optional(),
           destinationGuild: z.string().trim().min(1).max(100).optional(),
           name: z.string().trim().min(2).max(32).optional(),
           attachment: z.string().trim().min(1).max(255).optional(),
+          description: z.string().max(100).optional(),
+          tags: z.string().trim().min(1).max(200).optional(),
         },
         annotations: {
           readOnlyHint: false,
@@ -929,13 +943,15 @@ function createServer(session: ChatbotMcpSession) {
         try {
           return toolResult({
             status: "complete",
-            emoji: await session.handlers.addGuildEmoji!(input),
+            expression: await session.handlers.addGuildExpression!(input),
           });
         } catch (error) {
           return toolResult({
             status: "invalid",
             error:
-              error instanceof Error ? error.message : "Could not add emoji.",
+              error instanceof Error
+                ? error.message
+                : "Could not add Discord expression.",
           });
         }
       },
