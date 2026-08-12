@@ -15,6 +15,7 @@ import {
 import { SessionMonitor } from "./session-monitor";
 import { ChatbotTraceStore } from "./trace-store";
 import { readCodexUsage } from "./codex-usage";
+import { CodexAppServerManager } from "./codex-app-server";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const AUTH_RETRY_MS = 30_000;
@@ -29,6 +30,7 @@ function parseServerMessage(value: unknown) {
 }
 
 export class MacAgentClient {
+  private appServer = new CodexAppServerManager();
   private authenticated = false;
   private authRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private currentJobs = new Map<string, AbortController>();
@@ -70,6 +72,7 @@ export class MacAgentClient {
     this.unlocked = false;
     this.clearTimers();
     this.abortAllJobs();
+    this.appServer.close();
     this.socket?.close(1000, "Helper stopped");
     this.socket = null;
     this.sessionMonitor?.stop();
@@ -82,6 +85,7 @@ export class MacAgentClient {
       this.authenticated = false;
       this.clearTimers();
       this.abortAllJobs();
+      this.appServer.close();
       this.socket?.close(1000, "Mac locked or sleeping");
       this.socket = null;
       console.log("Mac locked; worker unavailable.");
@@ -145,6 +149,7 @@ export class MacAgentClient {
       this.authenticated = false;
       this.stopHeartbeat();
       this.abortAllJobs();
+      this.appServer.close();
       this.scheduleReconnect();
     });
     socket.addEventListener("error", () => {
@@ -184,6 +189,29 @@ export class MacAgentClient {
 
     if (message.type === "cancel") {
       this.currentJobs.get(message.jobId)?.abort();
+      return;
+    }
+
+    if (message.type === "steer") {
+      let accepted = false;
+      try {
+        accepted = await this.appServer.steer(message.jobId, message.request);
+      } catch (error) {
+        console.warn(
+          `Job ${message.jobId} steering failed: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        );
+      }
+      this.send({
+        type: "steer_result",
+        jobId: message.jobId,
+        requestId: message.requestId,
+        accepted,
+      });
+      if (!accepted) {
+        console.warn(`Job ${message.jobId} could not be steered.`);
+      }
       return;
     }
 
@@ -239,6 +267,7 @@ export class MacAgentClient {
               });
               const answer = await runCodexJob(job, {
                 ...this.config,
+                appServer: this.appServer,
                 onMcpToolCall: (call) => toolCalls.push(call),
                 onPromptCompiled: (prompt) =>
                   this.traceStore.recordPrompt(job.id, prompt),

@@ -521,7 +521,7 @@ type DeveloperTask = {
   summary: string;
   sessionId?: string;
   activeJobId?: string;
-  steering?: string;
+  nextRequest?: string;
   traceMessageIds: string[];
   messageQueue: Promise<void>;
   cleanupTimer?: ReturnType<typeof setTimeout>;
@@ -588,15 +588,22 @@ class DeveloperTaskRegistry {
       return true;
     }
 
-    task.steering = task.steering ? `${task.steering}\n${request}` : request;
     if (task.state === "running" && task.activeJobId && task.workflow) {
-      task.state = "stopping";
-      task.summary = "Applying new direction; work is preserved.";
-      task.workflow.stop(task.activeJobId);
+      const activeJobId = task.activeJobId;
+      if (await task.workflow.steer(activeJobId, request)) {
+        task.summary = "Applying new direction to the active turn.";
+      } else {
+        task.nextRequest = task.nextRequest
+          ? `${task.nextRequest}\n${request}`
+          : request;
+        if (task.activeJobId !== activeJobId && task.state !== "running") {
+          const nextRequest = task.nextRequest;
+          task.nextRequest = undefined;
+          this.launch(task, nextRequest);
+        }
+      }
     } else if (task.state !== "stopping") {
-      const steering = task.steering;
-      task.steering = undefined;
-      this.launch(task, steering);
+      this.launch(task, request);
     }
     return true;
   }
@@ -656,6 +663,9 @@ class DeveloperTaskRegistry {
       request,
       developerTask: {
         id: task.id,
+        ...(task.job.developerTask?.title
+          ? { title: task.job.developerTask.title }
+          : {}),
         ...(task.sessionId ? { resumeSessionId: task.sessionId } : {}),
       },
     };
@@ -680,12 +690,6 @@ class DeveloperTaskRegistry {
     delete task.activeJobId;
     if (!result.ok && result.stopped) {
       await this.settleTrace(task, false);
-      const steering = task.steering;
-      task.steering = undefined;
-      if (steering) {
-        await this.run(task, steering);
-        return;
-      }
       task.state = "stopped";
       task.summary = "Stopped. The workspace and Codex session are preserved.";
       this.releaseWorkflow(task);
@@ -705,14 +709,20 @@ class DeveloperTaskRegistry {
 
     task.state = "completed";
     task.summary = "Completed. Reply in this thread to continue the same task.";
-    this.releaseWorkflow(task);
-    this.scheduleCleanup(task);
     await this.settleTrace(task, true);
     if (result.content.trim()) {
       for (const answer of formatDiscordAnswers(result.content)) {
         await this.post(task, answer);
       }
     }
+    const nextRequest = task.nextRequest;
+    task.nextRequest = undefined;
+    if (nextRequest) {
+      await this.run(task, nextRequest);
+      return;
+    }
+    this.releaseWorkflow(task);
+    this.scheduleCleanup(task);
   }
 
   private onProgress(task: DeveloperTask, progress: ChatbotTaskProgress) {
@@ -1366,7 +1376,13 @@ export async function handleChatbotMention({
           requesterUserId,
           repository: selectedRepository,
           request,
-          job: { ...job, developerTask: { id: taskId } },
+          job: {
+            ...job,
+            developerTask: {
+              id: taskId,
+              title: developerThreadName(developerThreadTitle),
+            },
+          },
           workflow,
           state: "running",
           summary: "Preparing an isolated workspace.",

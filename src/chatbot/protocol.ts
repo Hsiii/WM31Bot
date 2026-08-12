@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 29;
+export const CHATBOT_PROTOCOL_VERSION = 30;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -141,6 +141,7 @@ export type ChatbotJob = {
   messages: ChatbotMessage[];
   developerTask?: {
     id: string;
+    title?: string;
     resumeSessionId?: string;
   };
 };
@@ -173,6 +174,12 @@ export type MacAgentClientMessage =
       progress: ChatbotTaskProgress;
     }
   | {
+      type: "steer_result";
+      jobId: string;
+      requestId: string;
+      accepted: boolean;
+    }
+  | {
       type: "result";
       jobId: string;
       ok: true;
@@ -199,6 +206,12 @@ export type MacAgentServerMessage =
   | {
       type: "cancel";
       jobId: string;
+    }
+  | {
+      type: "steer";
+      jobId: string;
+      requestId: string;
+      request: string;
     }
   | {
       type: "codex_usage_request";

@@ -295,6 +295,23 @@ describe("Mac agent bridge", () => {
         sessionId: "019-session",
       },
     ]);
+    const steer = acquired.workflow.steer(job.id, "Check the setup guide");
+    const steerMessage = JSON.parse(sent.at(-1)!);
+    expect(steerMessage).toMatchObject({
+      type: "steer",
+      jobId: job.id,
+      request: "Check the setup guide",
+    });
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "steer_result",
+        jobId: job.id,
+        requestId: steerMessage.requestId,
+        accepted: true,
+      }),
+    );
+    expect(await steer).toBe(true);
     expect(acquired.workflow.stop(job.id)).toBe(true);
     expect(JSON.parse(sent.at(-1)!)).toEqual({
       type: "cancel",
