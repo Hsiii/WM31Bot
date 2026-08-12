@@ -8,7 +8,7 @@ A Discord companion for chat, links, community access, and updates.
 
 - Reacts to community messages with emotes in configured server.
 - Answers mentions in configured server using conversation context, attachments, public web search, and accessible Discord history.
-- Performs emote management on demand including adding new emote from attachment and moving emotes to other servers.
+- Performs expression management on demand, including adding emojis or stickers from attachments and moving emojis to other servers.
 - Publishes daily TOEFL vocabulary, AniGamer forum voucher code updates, and Codex news on X to configured channels.
 - Improves Instagram and Twitter/X embeds with `kkinstagram.com` and `fxtwitter.com` links.
 - Creates reminders when asked to and pings you when the reminder expires.

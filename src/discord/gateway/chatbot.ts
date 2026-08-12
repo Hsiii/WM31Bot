@@ -35,10 +35,11 @@ import {
 } from "../api/reactions";
 import {
   addGuildEmojiFromAttachment,
+  addGuildStickerFromAttachment,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
-  selectEmojiImageAttachment,
+  selectExpressionAttachment,
 } from "../api/emojis";
 import { getChatbotReminderScheduler } from "../jobs/reminders";
 import { sendChannelMessage } from "../api/channel-messages";
@@ -1162,16 +1163,24 @@ export async function handleChatbotMention({
                 })),
               listGuildEmojis: (guild: string) =>
                 listGuildEmojis({ guild, discordRequest }),
-              addGuildEmoji: (input: {
+              addGuildExpression: (input: {
+                kind?: "emoji" | "sticker";
                 emoji?: string;
                 sourceGuild?: string;
                 destinationGuild?: string;
                 name?: string;
                 attachment?: string;
+                description?: string;
+                tags?: string;
               }) => {
                 const destinationGuild =
                   input.destinationGuild ?? message.guild_id!;
                 if (input.emoji || input.sourceGuild) {
+                  if (input.kind === "sticker") {
+                    throw new Error(
+                      "Existing sticker copying is not supported; attach the sticker file instead.",
+                    );
+                  }
                   if (!input.emoji || !input.sourceGuild) {
                     throw new Error(
                       "Provide both sourceGuild and emoji when copying an existing emoji.",
@@ -1185,12 +1194,28 @@ export async function handleChatbotMention({
                     discordRequest,
                   });
                 }
-                const attachment = selectEmojiImageAttachment({
+                const attachment = selectExpressionAttachment({
                   attachments: requestMessage.attachments,
                   referencedAttachments:
                     requestMessage.referencedMessage?.attachments,
                   selector: input.attachment,
+                  kind: input.kind,
                 });
+                if (input.kind === "sticker") {
+                  if (!input.tags) {
+                    throw new Error(
+                      "Provide a related Unicode emoji or search tag for the sticker.",
+                    );
+                  }
+                  return addGuildStickerFromAttachment({
+                    destinationGuild,
+                    attachment,
+                    name: input.name,
+                    description: input.description,
+                    tags: input.tags,
+                    discordRequest,
+                  });
+                }
                 return addGuildEmojiFromAttachment({
                   destinationGuild,
                   attachment,
