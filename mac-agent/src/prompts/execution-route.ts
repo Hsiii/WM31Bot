@@ -19,9 +19,19 @@ export const EXECUTION_ROUTE_OUTPUT_SCHEMA = {
         { type: "null" },
       ],
     },
+    threadTitle: {
+      anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }],
+    },
     reason: { type: "string", maxLength: 160 },
   },
-  required: ["mode", "target", "repository", "mutationScope", "reason"],
+  required: [
+    "mode",
+    "target",
+    "repository",
+    "mutationScope",
+    "threadTitle",
+    "reason",
+  ],
 } as const;
 
 export const EXECUTION_ROUTE_INSTRUCTIONS = `Classify this owner request for MiniSago. Do not answer it and do not perform any action.
@@ -33,6 +43,8 @@ Choose chat for ordinary conversation, Discord history lookup, summarization, ex
 Choose target mac only when the request explicitly needs files, applications, browser state, hardware, or another resource on Hsi's Mac. Choose target default otherwise. Target selection is independent of mode.
 
 Set repository to one exact value from available_repositories_json. Infer it naturally from the owner's request, links, and nearby conversation. Never invent a repository. Use chatbot_repository_json for requests to change your own behavior, replies, access, Discord handling, or other chatbot capabilities. Use null when no single advertised repository is identifiable.
+
+For dev mode, set threadTitle to a concise Codex-style task name that describes the intended outcome, normally an imperative phrase of 3–7 words. Generate it from the resolved task rather than copying or truncating the user's message. Use the request's language, omit the repository name, punctuation, and conversational filler, and stay under 100 characters. For chat mode, use null.
 
 Treat a short follow-up such as "handle this", "try again", "retry", "push", "ship it", "grant write access", "升成寫入權限", or an equivalent phrase as the owner's request to perform or continue the clearly identified recent task. Use referenced and nearby conversation to resolve what task, mode, target, repository, and mutation scope the owner means. The owner's request may adopt a task described in that context; contextual wording does not need to repeat every intended edit. If no single recent task is clear, choose chat with no repository or mutation scope instead of guessing.
 

@@ -198,7 +198,8 @@ function validTaskProgress(value: unknown): value is ChatbotTaskProgress {
     ) &&
     typeof progress.summary === "string" &&
     progress.summary.length > 0 &&
-    progress.summary.length <= 600 &&
+    progress.summary.length <= 2_000 &&
+    (progress.kind === undefined || progress.kind === "trace") &&
     (progress.sessionId === undefined ||
       (typeof progress.sessionId === "string" &&
         /^[a-z0-9._-]{1,128}$/iu.test(progress.sessionId)))

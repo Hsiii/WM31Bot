@@ -93,6 +93,18 @@ describe("Codex chatbot runner", () => {
       phase: "implementing",
       summary: "Updated the working tree.",
     });
+    expect(
+      progressForCodexEvent(
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "reasoning", text: "Inspecting the bridge." },
+        }),
+      ),
+    ).toEqual({
+      phase: "exploring",
+      summary: "Inspecting the bridge.",
+      kind: "trace",
+    });
     expect(progressForCodexEvent("not-json")).toBeUndefined();
   });
 
@@ -196,6 +208,7 @@ describe("Codex chatbot runner", () => {
     });
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("target");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("mutationScope");
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("threadTitle");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.target.enum).toEqual([
       "default",
       "mac",
@@ -313,6 +326,25 @@ describe("Codex chatbot runner", () => {
     expect(outputSchemaForJob(answerJob)).toBe(ARTIFACT_ANSWER_OUTPUT_SCHEMA);
     expect(ARTIFACT_ANSWER_OUTPUT_SCHEMA.properties.artifacts.maxItems).toBe(1);
     expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
+  });
+
+  test("uses native Codex output for Discord coding threads", () => {
+    const developerJob: ChatbotJob = {
+      ...job,
+      requesterUserId: ACCESS_CONFIG.ownerUserId,
+      purpose: "answer",
+      executionMode: "dev",
+      repository: "Hsiii/mini-sago",
+      developerTask: { id: "task-1" },
+    };
+    const prompt = buildCodexPrompt(developerJob, [], [], "Repository policy");
+
+    expect(outputSchemaForJob(developerJob)).toBeUndefined();
+    expect(prompt).toContain("Work as Codex directly");
+    expect(prompt).toContain("Respond directly to the user");
+    expect(prompt).toContain("Repository policy");
+    expect(prompt).not.toContain("Speak as MiniSago");
+    expect(prompt).not.toContain("referenceResolution");
   });
 
   test("gives only owner Mac answers the bounded file output", () => {

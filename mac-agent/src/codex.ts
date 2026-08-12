@@ -93,6 +93,18 @@ export function progressForCodexEvent(
       };
     }
     if (
+      event.type === "item.completed" &&
+      (event.item?.type === "reasoning" ||
+        event.item?.type === "agent_message") &&
+      event.item.text?.trim()
+    ) {
+      return {
+        phase: event.item.type === "reasoning" ? "exploring" : "reviewing",
+        summary: event.item.text.trim().slice(0, 2_000),
+        kind: "trace",
+      };
+    }
+    if (
       event.type === "item.started" &&
       event.item?.type === "command_execution"
     ) {
@@ -588,6 +600,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       `model_reasoning_effort="${profile.reasoningEffort}"`,
       "--config",
       `model_verbosity="${CHATBOT_MODEL_VERBOSITY}"`,
+      "--config",
+      'model_reasoning_summary="detailed"',
+      "--config",
+      "hide_agent_reasoning=false",
       "--config",
       'approval_policy="never"',
       "--config",
