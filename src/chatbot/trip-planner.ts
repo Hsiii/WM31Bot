@@ -12,8 +12,6 @@ type ScheduleKind =
   | "food"
   | "transit"
   | "concert"
-  | "game"
-  | "karaoke"
   | "friend"
   | "open";
 
