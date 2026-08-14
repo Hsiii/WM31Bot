@@ -584,8 +584,6 @@ function createServer(session: ChatbotMcpSession) {
               "food",
               "transit",
               "concert",
-              "game",
-              "karaoke",
               "friend",
               "open",
             ])

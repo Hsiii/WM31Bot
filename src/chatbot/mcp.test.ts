@@ -225,6 +225,25 @@ describe("MiniSago MCP server", () => {
     expect(tools.tools.map((tool) => tool.name)).toContain("read_trip_plan");
     expect(tools.tools.map((tool) => tool.name)).toContain("edit_trip_plan");
     expect(
+      tools.tools.find((tool) => tool.name === "edit_trip_plan")?.inputSchema,
+    ).toMatchObject({
+      properties: {
+        kind: {
+          enum: [
+            "arrival",
+            "departure",
+            "stay",
+            "place",
+            "food",
+            "transit",
+            "concert",
+            "friend",
+            "open",
+          ],
+        },
+      },
+    });
+    expect(
       tools.tools.find((tool) => tool.name === "read_trip_plan")?.description,
     ).toContain("Required source of truth");
     const read = await client.callTool({
