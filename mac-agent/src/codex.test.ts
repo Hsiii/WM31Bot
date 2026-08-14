@@ -28,6 +28,7 @@ import {
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   mediaMcpConfig,
+  minisagoMcpApprovalMode,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
@@ -36,6 +37,7 @@ import {
   PROMPT_VERSION,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
   SOCIAL_ACTION_PROFILE,
+  TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG,
   usesOuterSeatbelt,
 } from "./codex";
 
@@ -121,6 +123,19 @@ describe("Codex chatbot runner", () => {
     expect(CHANNEL_QUIET_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.pause_channel_activity.approval_mode="approve"',
     );
+    expect(TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.edit_trip_plan.approval_mode="approve"',
+    );
+  });
+
+  test("pre-approves all request-scoped MCP tools for the owner", () => {
+    expect(minisagoMcpApprovalMode(job, ACCESS_CONFIG)).toBe("auto");
+    expect(
+      minisagoMcpApprovalMode(
+        { ...job, requesterUserId: ACCESS_CONFIG.ownerUserId },
+        ACCESS_CONFIG,
+      ),
+    ).toBe("approve");
   });
 
   test("injects the request-local media server only into Linux chat answers", () => {

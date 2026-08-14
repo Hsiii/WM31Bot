@@ -42,6 +42,16 @@ export const SERVER_MEMORY_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.manage_server_memory.approval_mode="approve"';
 export const CHANNEL_QUIET_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.pause_channel_activity.approval_mode="approve"';
+export const TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.edit_trip_plan.approval_mode="approve"';
+
+export function minisagoMcpApprovalMode(
+  job: ChatbotJob,
+  accessConfig: ChatbotAccessConfig,
+) {
+  return job.requesterUserId === accessConfig.ownerUserId ? "approve" : "auto";
+}
+
 export const COMMUNITY_CHATBOT_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "high",
@@ -664,7 +674,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         "--config",
         "mcp_servers.minisago.required=true",
         "--config",
-        'mcp_servers.minisago.default_tools_approval_mode="auto"',
+        `mcp_servers.minisago.default_tools_approval_mode="${minisagoMcpApprovalMode(
+          job,
+          options.chatbotAccess,
+        )}"`,
         "--config",
         EXPRESSION_ADD_MCP_APPROVAL_CONFIG,
         "--config",
@@ -673,6 +686,8 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
         SERVER_MEMORY_MCP_APPROVAL_CONFIG,
         "--config",
         CHANNEL_QUIET_MCP_APPROVAL_CONFIG,
+        "--config",
+        TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG,
         "--config",
         "mcp_servers.minisago.startup_timeout_sec=10",
         "--config",
