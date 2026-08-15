@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { getInstagramReplyUrls, getTwitterReplyUrls } from "./social-links";
+import {
+  getInstagramReplyUrls,
+  getSocialLinkReplacement,
+  getTwitterReplyUrls,
+} from "./social-links";
 
 describe("getInstagramReplyUrls", () => {
   test("returns only the transformed URL from a message", () => {
@@ -56,5 +60,29 @@ describe("getTwitterReplyUrls", () => {
     expect(
       getTwitterReplyUrls("https://fxtwitter.com/minisago/status/1"),
     ).toEqual([]);
+  });
+});
+
+describe("getSocialLinkReplacement", () => {
+  test("preserves the message while suppressing original social embeds", () => {
+    expect(
+      getSocialLinkReplacement(
+        "look https://instagram.com/reel/abc/, then https://x.com/user/status/1!",
+      ),
+    ).toBe(
+      "look <https://instagram.com/reel/abc/>, then <https://x.com/user/status/1>!\n" +
+        "https://kkinstagram.com/reel/abc/\n" +
+        "https://fxtwitter.com/user/status/1",
+    );
+  });
+
+  test("does not wrap an already suppressed original link twice", () => {
+    expect(getSocialLinkReplacement("<https://www.instagram.com/p/abc/>")).toBe(
+      "<https://www.instagram.com/p/abc/>\nhttps://www.kkinstagram.com/p/abc/",
+    );
+  });
+
+  test("returns null when there is no original social link", () => {
+    expect(getSocialLinkReplacement("https://example.com")).toBeNull();
   });
 });

@@ -1,4 +1,12 @@
-import { getInstagramReplyUrls, getTwitterReplyUrls } from "./social-links";
+import {
+  getInstagramReplyUrls,
+  getSocialLinkReplacement,
+  getTwitterReplyUrls,
+} from "./social-links";
+import {
+  canReplaceSocialMessage,
+  getSocialProxyIdentity,
+} from "./social-proxy";
 import {
   ChatbotConversationTracker,
   createDiscordRequest,
@@ -32,6 +40,7 @@ import {
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const MESSAGE_CONTENT_LIMIT = 2_000;
+const SOCIAL_WEBHOOK_NAME = "MiniSago Social Links";
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const GUILDS_INTENT = 1 << 0;
 const GUILD_VOICE_STATES_INTENT = 1 << 7;
@@ -66,6 +75,10 @@ type GatewayGuildCreate = {
 type DiscordUser = {
   id?: string;
   bot?: boolean;
+  username?: string;
+  global_name?: string | null;
+  avatar?: string | null;
+  discriminator?: string;
 };
 
 type DiscordMessageCreate = {
@@ -73,6 +86,7 @@ type DiscordMessageCreate = {
   channel_id: string;
   guild_id?: string;
   content?: string;
+  type?: number;
   timestamp: string;
   attachments?: Array<{
     id: string;
@@ -87,10 +101,34 @@ type DiscordMessageCreate = {
     url?: string;
   }>;
   sticker_items?: Array<{ name?: string }>;
+  components?: unknown[];
+  message_snapshots?: unknown[];
+  poll?: unknown;
   referenced_message?: DiscordMessageCreate | null;
   mentions?: DiscordUser[];
   webhook_id?: string;
   author?: DiscordUser;
+  member?: {
+    nick?: string | null;
+    avatar?: string | null;
+  };
+};
+
+type DiscordChannel = {
+  id: string;
+  type: number;
+  parent_id?: string | null;
+};
+
+type DiscordWebhook = {
+  id: string;
+  token?: string;
+  name?: string | null;
+  user?: DiscordUser;
+};
+
+type DiscordCreatedMessage = {
+  id: string;
 };
 
 type InstagramGatewayConfig = {
@@ -189,6 +227,11 @@ class InstagramGatewayClient implements VoiceGateway {
   private botUserId: string | null = null;
   private reactionBroker: DiscordReactionBroker;
   private voiceStates = new VoiceStateTracker();
+  private socialWebhookDestinations = new Map<
+    string,
+    { webhookChannelId: string; threadId?: string }
+  >();
+  private socialWebhooks = new Map<string, Promise<DiscordWebhook>>();
 
   constructor(private readonly config: InstagramGatewayConfig) {
     this.reactionBroker = new DiscordReactionBroker();
@@ -530,6 +573,23 @@ class InstagramGatewayClient implements VoiceGateway {
     }
 
     const replyContent = replyUrls.join("\n");
+    const replacementContent = getSocialLinkReplacement(content);
+
+    if (
+      replacementContent &&
+      replacementContent.length <= MESSAGE_CONTENT_LIMIT &&
+      canReplaceSocialMessage(message)
+    ) {
+      try {
+        await this.replaceSocialMessage(message, replacementContent);
+        return;
+      } catch (error) {
+        console.error(
+          `Failed to replace social link message ${message.id}; falling back to a reply:`,
+          error,
+        );
+      }
+    }
 
     if (replyContent.length > MESSAGE_CONTENT_LIMIT) {
       console.warn(
@@ -569,6 +629,120 @@ class InstagramGatewayClient implements VoiceGateway {
     }
 
     return message.author?.id !== this.botUserId;
+  }
+
+  private async replaceSocialMessage(
+    message: DiscordMessageCreate,
+    content: string,
+  ) {
+    const destination = await this.getSocialWebhookDestination(
+      message.channel_id,
+    );
+    const webhookChannelId = destination.webhookChannelId;
+    const webhook = await this.getSocialWebhook(webhookChannelId);
+
+    if (!webhook.token) {
+      throw new Error("Social link webhook is missing its token.");
+    }
+
+    const identity = getSocialProxyIdentity(message);
+    const query = new URLSearchParams({ wait: "true" });
+    if (destination.threadId) query.set("thread_id", destination.threadId);
+
+    let proxyMessage: DiscordCreatedMessage;
+    try {
+      proxyMessage = await this.discordRequest<DiscordCreatedMessage>(
+        `/webhooks/${webhook.id}/${webhook.token}?${query}`,
+        {
+          method: "POST",
+          body: {
+            content,
+            username: identity.username,
+            avatar_url: identity.avatarUrl,
+            allowed_mentions: { parse: [] },
+          },
+        },
+      );
+    } catch (error) {
+      this.socialWebhooks.delete(webhookChannelId);
+      throw error;
+    }
+
+    try {
+      await this.discordRequest(
+        `/channels/${message.channel_id}/messages/${message.id}`,
+        { method: "DELETE" },
+      );
+    } catch (error) {
+      try {
+        await this.discordRequest(
+          `/webhooks/${webhook.id}/${webhook.token}/messages/${proxyMessage.id}${
+            destination.threadId ? `?thread_id=${destination.threadId}` : ""
+          }`,
+          { method: "DELETE" },
+        );
+      } catch (cleanupError) {
+        console.error(
+          `Failed to roll back social link proxy ${proxyMessage.id}:`,
+          cleanupError,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async getSocialWebhookDestination(channelId: string) {
+    const cached = this.socialWebhookDestinations.get(channelId);
+    if (cached) return cached;
+
+    const channel = await this.discordRequest<DiscordChannel>(
+      `/channels/${channelId}`,
+    );
+    const isThread = [10, 11, 12].includes(channel.type);
+    const destination = {
+      webhookChannelId:
+        isThread && channel.parent_id ? channel.parent_id : channel.id,
+      ...(isThread ? { threadId: channel.id } : {}),
+    };
+
+    this.socialWebhookDestinations.set(channelId, destination);
+    return destination;
+  }
+
+  private async getSocialWebhook(channelId: string) {
+    const cached = this.socialWebhooks.get(channelId);
+    if (cached) return await cached;
+
+    const webhookPromise = this.findOrCreateSocialWebhook(channelId);
+    this.socialWebhooks.set(channelId, webhookPromise);
+
+    try {
+      return await webhookPromise;
+    } catch (error) {
+      if (this.socialWebhooks.get(channelId) === webhookPromise) {
+        this.socialWebhooks.delete(channelId);
+      }
+      throw error;
+    }
+  }
+
+  private async findOrCreateSocialWebhook(channelId: string) {
+    const webhooks = await this.discordRequest<DiscordWebhook[]>(
+      `/channels/${channelId}/webhooks`,
+    );
+    const existing = webhooks.find(
+      (webhook) =>
+        webhook.name === SOCIAL_WEBHOOK_NAME &&
+        webhook.token &&
+        (!this.botUserId || webhook.user?.id === this.botUserId),
+    );
+    return (
+      existing ??
+      this.discordRequest<DiscordWebhook>(`/channels/${channelId}/webhooks`, {
+        method: "POST",
+        body: { name: SOCIAL_WEBHOOK_NAME },
+      })
+    );
   }
 
   private async replyToMessage(

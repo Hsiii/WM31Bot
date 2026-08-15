@@ -50,6 +50,14 @@ function transformedUrl(
   return parsed.toString();
 }
 
+function socialUrl(rawUrl: string) {
+  return (
+    transformedUrl(rawUrl, isInstagramHost, (hostname) =>
+      hostname.replace(/instagram\.com$/i, "kkinstagram.com"),
+    ) ?? transformedUrl(rawUrl, isTwitterHost, () => "fxtwitter.com")
+  );
+}
+
 function replyUrls(
   content: string,
   transform: (candidate: string) => string | null,
@@ -81,4 +89,33 @@ export function getTwitterReplyUrls(content: string) {
   return replyUrls(content, (candidate) =>
     transformedUrl(candidate, isTwitterHost, () => "fxtwitter.com"),
   );
+}
+
+export function getSocialLinkReplacement(content: string) {
+  const embedUrls: string[] = [];
+  const replacedContent = content.replace(
+    URL_PATTERN,
+    (candidate, offset: number) => {
+      const originalUrl = urlWithoutTrailingPunctuation(candidate);
+      const embedUrl = socialUrl(originalUrl);
+
+      if (!embedUrl) {
+        return candidate;
+      }
+
+      embedUrls.push(embedUrl);
+      const suffix = candidate.slice(originalUrl.length);
+      const alreadySuppressed =
+        content[offset - 1] === "<" &&
+        content[offset + originalUrl.length] === ">";
+
+      return `${alreadySuppressed ? originalUrl : `<${originalUrl}>`}${suffix}`;
+    },
+  );
+
+  if (embedUrls.length === 0) {
+    return null;
+  }
+
+  return `${replacedContent}\n${embedUrls.join("\n")}`;
 }
