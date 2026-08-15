@@ -19,24 +19,28 @@ Configure workers separately using [Workers](workers.md).
 
 ## Permissions
 
-The synchronized permission bitfield is `9122511662144`:
+The synchronized permission bitfield is `9123048549440`:
 
 - Add Reactions
 - View Channels
 - Send Messages
 - Manage Messages
+- Embed Links
 - Read Message History
 - Connect
+- Manage Webhooks
 - Manage Threads
 - Create Public Threads
 - Send Messages in Threads
 - Create Expressions
 
-Manage Messages pins PR review requests; thread permissions support review
+Manage Messages pins PR review requests and lets MiniSago replace original
+Instagram and X messages after their proxy succeeds. Embed Links and Manage
+Webhooks let those replacements retain the sender's display name and avatar
+while showing the improved social embed. Thread permissions support review
 discussions. Add Reactions supports answer and ambient reactions. Connect lets
 the host-bound MCP tools join and leave voice channels. Create Expressions is
-needed in every destination guild where the owner may add emoji. MiniSago does
-not need Manage Webhooks.
+needed in every destination guild where the owner may add emoji.
 
 ## Gateway ownership
 
@@ -44,9 +48,10 @@ Run only one Gateway-enabled deployment per bot token. Set
 `DISCORD_GATEWAY_DISABLED=true` on temporary or HTTP-only instances while
 production is connected.
 
-If Instagram messages are deleted or reappear under a user's display name,
-stop the retired webhook-based deployment and remove its webhook under
-**Server Settings → Integrations → Webhooks**.
+MiniSago creates one `MiniSago Social Links` webhook per active parent channel
+and reuses it for that channel's threads. Removing one under **Server Settings
+→ Integrations → Webhooks** is safe; MiniSago recreates it when the next social
+link arrives.
 
 ## GitHub review webhook
 
