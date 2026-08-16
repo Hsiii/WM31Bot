@@ -2,7 +2,7 @@
 
 <img src="assets/minisago.png" alt="MiniSago icon" width="160">
 
-A Discord companion for chat, links, community access, and updates.
+A Discord bot for... everything?
 
 ## Features
 
