@@ -2,7 +2,8 @@
 
 <img src="assets/minisago.png" alt="MiniSago icon" width="160">
 
-A Discord companion for chat, links, community access, and updates.
+A Discord bot for... everything?
+Codex-powered chat with server context, emote creation and cross-server migration, manage issue or publish PR based on discussion context, maintain PR review thread life cycle, set reminders, process images, access files from my Mac, you name it.
 
 ## Features
 
