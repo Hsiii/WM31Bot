@@ -1,3 +1,5 @@
+export {};
+
 const encoder = new TextEncoder();
 
 function send(value: unknown) {

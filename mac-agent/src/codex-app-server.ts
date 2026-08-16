@@ -67,7 +67,7 @@ class CodexTurnInterruptedError extends Error {}
 class CodexAppServerSession {
   private active?: ActiveTurn;
   private buffer = "";
-  private child: ReturnType<typeof Bun.spawn>;
+  private child: Bun.PipedSubprocess;
   private nextId = 1;
   private pending = new Map<
     number,
@@ -100,17 +100,21 @@ class CodexAppServerSession {
       ...options.imagePaths.map((path) => ({ type: "localImage", path })),
     );
 
+    let resolveResult!: (content: string) => void;
+    let rejectResult!: (error: Error) => void;
     const result = new Promise<string>((resolve, reject) => {
-      this.active = {
-        jobId: options.jobId,
-        finalAnswer: "",
-        lastAgentMessage: "",
-        onProgress: options.onProgress,
-        onMcpToolCall: options.onMcpToolCall,
-        resolve,
-        reject,
-      };
+      resolveResult = resolve;
+      rejectResult = reject;
     });
+    this.active = {
+      jobId: options.jobId,
+      finalAnswer: "",
+      lastAgentMessage: "",
+      onProgress: options.onProgress,
+      onMcpToolCall: options.onMcpToolCall,
+      resolve: resolveResult,
+      reject: rejectResult,
+    };
     const interrupt = () => void this.interrupt(options.jobId);
     options.signal?.addEventListener("abort", interrupt, { once: true });
 
