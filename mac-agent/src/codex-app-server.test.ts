@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
+import type { ChatbotTaskProgress } from "../../src/chatbot/protocol";
 import { CodexAppServerManager } from "./codex-app-server";
 
 const fakeServer = join(
@@ -9,7 +10,7 @@ const fakeServer = join(
 );
 
 function runOptions(
-  onProgress: (progress: { summary: string; kind?: string }) => void,
+  onProgress: (progress: ChatbotTaskProgress) => void,
   jobId = "job-1",
 ) {
   return {
@@ -31,7 +32,7 @@ function runOptions(
 describe("Codex App Server manager", () => {
   test("keeps steering in the active turn and returns only its final answer", async () => {
     const manager = new CodexAppServerManager();
-    const progress: Array<{ summary: string; kind?: string }> = [];
+    const progress: ChatbotTaskProgress[] = [];
     const result = manager.run(runOptions((item) => progress.push(item)));
 
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -63,7 +64,7 @@ describe("Codex App Server manager", () => {
 
   test("interrupts without discarding the persistent Codex thread", async () => {
     const manager = new CodexAppServerManager();
-    const firstProgress: Array<{ summary: string; kind?: string }> = [];
+    const firstProgress: ChatbotTaskProgress[] = [];
     const first = manager.run(
       runOptions((item) => firstProgress.push(item), "job-stop"),
     );
@@ -76,7 +77,7 @@ describe("Codex App Server manager", () => {
     expect(await manager.interrupt("job-stop")).toBe(true);
     await expect(first).rejects.toThrow("cancelled or timed out");
 
-    const secondProgress: Array<{ summary: string; kind?: string }> = [];
+    const secondProgress: ChatbotTaskProgress[] = [];
     const second = manager.run(
       runOptions((item) => secondProgress.push(item), "job-continue"),
     );
