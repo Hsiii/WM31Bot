@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildXPostMessage,
+  getXPostMonitorConfigs,
   parseXPosts,
   shouldCheckpointXPostState,
 } from "./x-post-monitor";
@@ -40,6 +41,36 @@ describe("X post monitor", () => {
       content: "https://fxtwitter.com/thsottiaux/status/2078320950488297917",
       allowed_mentions: { parse: [] },
     });
+  });
+
+  test("includes the hololive dreams Discord pipe with isolated state", () => {
+    const configs = getXPostMonitorConfigs({
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      X_POST_STATE_FILE: "/app/state/x-post-state.json",
+    });
+
+    expect(
+      configs.map(({ handle, channelId, feedUrl, stateFile }) => ({
+        handle,
+        channelId,
+        feedUrl,
+        stateFile,
+      })),
+    ).toEqual([
+      {
+        handle: "thsottiaux",
+        channelId: "1527893157168283668",
+        feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
+        stateFile: "/app/state/x-post-state.json",
+      },
+      {
+        handle: "hololive_dreams",
+        channelId: "1290252977621176361",
+        feedUrl: "https://fxtwitter.com/hololive_dreams/feed.xml?count=20",
+        stateFile: "/app/state/x-post-hololive-dreams-state.json",
+      },
+    ]);
   });
 
   test("checkpoints idle state no more than once per hour", () => {

@@ -43,6 +43,11 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 See `.env.production.example` for production state paths and the complete
 scheduled-monitor variable names.
 
+The X monitor keeps the configurable primary pipe and also reposts
+`@hololive_dreams` to Discord channel `1290252977621176361`. The additional
+pipe stores its checkpoint beside `X_POST_STATE_FILE` under
+`x-post-hololive-dreams-state.json`.
+
 ## Workers
 
 | Name                             | Required | Purpose                                                 |

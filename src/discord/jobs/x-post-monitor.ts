@@ -9,6 +9,13 @@ import {
 const DEFAULT_HANDLE = "thsottiaux";
 const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
+const DEFAULT_ADDITIONAL_PIPES = [
+  {
+    handle: "hololive_dreams",
+    channelId: "1290252977621176361",
+    stateFileName: "x-post-hololive-dreams-state.json",
+  },
+] as const;
 const DEFAULT_CHECK_INTERVAL_MS = 300_000;
 const STATE_CHECKPOINT_INTERVAL_MS = 3_600_000;
 const USER_AGENT = "MiniSago/0.1";
@@ -147,31 +154,60 @@ function parseCheckIntervalMs(value: string | undefined) {
   return parsed;
 }
 
-function getXPostMonitorConfig(): XPostMonitorConfig | null {
-  if (process.env.X_POST_MONITOR_DISABLED === "true") {
-    return null;
+function stateFileBeside(stateFile: string, fileName: string) {
+  const separatorIndex = Math.max(
+    stateFile.lastIndexOf("/"),
+    stateFile.lastIndexOf("\\"),
+  );
+
+  return separatorIndex >= 0
+    ? `${stateFile.slice(0, separatorIndex + 1)}${fileName}`
+    : fileName;
+}
+
+export function getXPostMonitorConfigs(
+  env: NodeJS.ProcessEnv = process.env,
+): XPostMonitorConfig[] {
+  if (env.X_POST_MONITOR_DISABLED === "true") {
+    return [];
   }
 
-  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+  const botToken = env.DISCORD_BOT_TOKEN?.trim();
 
   if (!botToken) {
     console.warn("X post monitor disabled: DISCORD_BOT_TOKEN is missing.");
-    return null;
+    return [];
   }
 
-  const handle = process.env.X_POST_HANDLE?.trim() || DEFAULT_HANDLE;
-
-  return {
+  const handle = env.X_POST_HANDLE?.trim() || DEFAULT_HANDLE;
+  const stateFile = env.X_POST_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
+  const sharedConfig = {
     botToken,
-    channelId: process.env.X_POST_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
-    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
+    guildId: env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
+    checkIntervalMs: parseCheckIntervalMs(env.X_POST_CHECK_INTERVAL_MS),
+  };
+  const primaryConfig: XPostMonitorConfig = {
+    ...sharedConfig,
+    channelId: env.X_POST_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
     handle,
     feedUrl:
-      process.env.X_POST_FEED_URL?.trim() ||
+      env.X_POST_FEED_URL?.trim() ||
       `https://fxtwitter.com/${handle}/feed.xml?count=20`,
-    stateFile: process.env.X_POST_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
-    checkIntervalMs: parseCheckIntervalMs(process.env.X_POST_CHECK_INTERVAL_MS),
+    stateFile,
   };
+
+  return [
+    primaryConfig,
+    ...DEFAULT_ADDITIONAL_PIPES.map(
+      ({ handle, channelId, stateFileName }): XPostMonitorConfig => ({
+        ...sharedConfig,
+        handle,
+        channelId,
+        feedUrl: `https://fxtwitter.com/${handle}/feed.xml?count=20`,
+        stateFile: stateFileBeside(stateFile, stateFileName),
+      }),
+    ),
+  ];
 }
 
 async function fetchLatestXPosts(feedUrl: string) {
@@ -261,33 +297,35 @@ async function sendXPostAlertsIfNeeded(
 }
 
 export function startXPostMonitor() {
-  const config = getXPostMonitorConfig();
+  const configs = getXPostMonitorConfigs();
 
-  if (!config) {
+  if (configs.length === 0) {
     return null;
   }
 
-  let running = false;
-  const tick = async () => {
-    if (running) {
-      return;
-    }
+  return configs.map((config) => {
+    let running = false;
+    const tick = async () => {
+      if (running) {
+        return;
+      }
 
-    running = true;
+      running = true;
 
-    try {
-      await sendXPostAlertsIfNeeded(config);
-    } catch (error) {
-      console.error(`Failed to check @${config.handle} X posts:`, error);
-    } finally {
-      running = false;
-    }
-  };
+      try {
+        await sendXPostAlertsIfNeeded(config);
+      } catch (error) {
+        console.error(`Failed to check @${config.handle} X posts:`, error);
+      } finally {
+        running = false;
+      }
+    };
 
-  void tick();
-  const timer = setInterval(() => void tick(), config.checkIntervalMs);
-  console.log(
-    `X post monitor enabled for @${config.handle} every ${config.checkIntervalMs}ms.`,
-  );
-  return timer;
+    void tick();
+    const timer = setInterval(() => void tick(), config.checkIntervalMs);
+    console.log(
+      `X post monitor enabled for @${config.handle} to channel ${config.channelId} every ${config.checkIntervalMs}ms.`,
+    );
+    return timer;
+  });
 }
