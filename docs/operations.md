@@ -44,8 +44,8 @@ Every push to `main` publishes the core and worker images with moving `main`
 tags and immutable `sha-<commit>` tags:
 
 ```text
-ghcr.io/hsiii/minisago
-ghcr.io/hsiii/minisago-worker
+ghcr.io/orangesago/minisago
+ghcr.io/orangesago/minisago-worker
 ```
 
 For a general self-host, run the core image with the hosted-service variables,

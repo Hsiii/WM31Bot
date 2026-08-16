@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 
-const repository = "Hsiii/MiniSago";
+const repository = "orangesago/mini-sago";
 const workflow = "image.yml";
 const service = "minisago";
 const remoteHost = process.env.SAGO_CLOUD_HOST ?? "sago-cloud";
