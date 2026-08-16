@@ -90,8 +90,8 @@ describe("Discord chatbot", () => {
           protocolVersion: CHATBOT_PROTOCOL_VERSION,
           secret,
           workerId: "oracle",
-          repositories: ["Hsiii/mini-sago"],
-          chatbotRepository: "Hsiii/mini-sago",
+          repositories: ["orangesago/mini-sago"],
+          chatbotRepository: "orangesago/mini-sago",
         }),
       );
       macAgentBridge.message(
@@ -145,7 +145,7 @@ describe("Discord chatbot", () => {
           content: JSON.stringify({
             mode: "dev",
             target: "default",
-            repository: "Hsiii/mini-sago",
+            repository: "orangesago/mini-sago",
             mutationScope: "code",
             threadTitle: "Stream Codex task progress",
             reason: "code change",
@@ -807,7 +807,7 @@ describe("Discord chatbot", () => {
         id: "message-community-pr",
         channel_id: "channel-1",
         guild_id: "917436845187563610",
-        content: `<@${BOT_ID}> review https://github.com/Hsiii/health-check-system/pull/42`,
+        content: `<@${BOT_ID}> review https://github.com/orangesago/health-check-system/pull/42`,
         timestamp: "2026-07-20T11:00:00.000Z",
         author: { id: "member-1", username: "Member" },
       },
@@ -1228,28 +1228,28 @@ describe("Discord chatbot", () => {
   });
 
   test("validates the router's proposed mode, target, repository, and mutation", () => {
-    const repositories = ["Hsiii/mini-sago", "Kiwi/backend"];
+    const repositories = ["orangesago/mini-sago", "Kiwi/backend"];
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","mutationScope":null,"threadTitle":"  Review   pull request  ","reason":"PR review"}',
+        '{"mode":"dev","target":"default","repository":"orangesago/mini-sago","mutationScope":null,"threadTitle":"  Review   pull request  ","reason":"PR review"}',
         repositories,
       ),
     ).toEqual({
       mode: "dev",
       target: "default",
-      repository: "Hsiii/mini-sago",
+      repository: "orangesago/mini-sago",
       threadTitle: "Review pull request",
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"chat","target":"default","repository":"Hsiii/mini-sago","mutationScope":"code","reason":"code change"}',
+        '{"mode":"chat","target":"default","repository":"orangesago/mini-sago","mutationScope":"code","reason":"code change"}',
         repositories,
       ),
     ).toEqual({
       mode: "dev",
       target: "default",
       mutationScope: "code",
-      repository: "Hsiii/mini-sago",
+      repository: "orangesago/mini-sago",
     });
     expect(
       parseExecutionRoute(
@@ -1283,14 +1283,14 @@ describe("Discord chatbot", () => {
     );
     expect(
       missingDeveloperRepositoryResponse("dev", undefined, [
-        "Hsiii/mini-sago",
+        "orangesago/mini-sago",
         "Kiwi/backend",
       ]),
     ).toBe(
-      "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n目前可用的有 `Hsiii/mini-sago` `Kiwi/backend`\n告訴我是哪個 我就能繼續",
+      "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n目前可用的有 `orangesago/mini-sago` `Kiwi/backend`\n告訴我是哪個 我就能繼續",
     );
     expect(
-      missingDeveloperRepositoryResponse("dev", "Hsiii/mini-sago"),
+      missingDeveloperRepositoryResponse("dev", "orangesago/mini-sago"),
     ).toBeUndefined();
     expect(missingDeveloperRepositoryResponse("chat")).toBeUndefined();
   });

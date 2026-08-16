@@ -19,7 +19,7 @@ async function options() {
   roots.push(root);
   return {
     githubConfigDir: "/secrets/github",
-    githubRepositories: ["Hsiii/mini-sago"],
+    githubRepositories: ["orangesago/mini-sago"],
     githubWorktreeRoot: join(root, "worktrees"),
   };
 }
@@ -31,7 +31,7 @@ function job(mutationScope?: "code" | "issue"): ChatbotJob {
     purpose: "answer",
     executionMode: "dev",
     ...(mutationScope ? { mutationScope } : {}),
-    repository: "Hsiii/mini-sago",
+    repository: "orangesago/mini-sago",
     channelId: "channel-1",
     requestMessageId: "message-1",
     request: "review the PR",
@@ -53,13 +53,15 @@ describe("developer workspace", () => {
       },
     );
 
-    expect(workspace.directory).toEndWith("/worktrees/job-123/Hsiii/mini-sago");
+    expect(workspace.directory).toEndWith(
+      "/worktrees/job-123/orangesago/mini-sago",
+    );
     expect(commands).toHaveLength(1);
     expect(commands[0]!.command.slice(0, 4)).toEqual([
       "gh",
       "repo",
       "clone",
-      "Hsiii/mini-sago",
+      "orangesago/mini-sago",
     ]);
     expect(commands[0]!.environment.GH_CONFIG_DIR).toBe("/secrets/github");
     expect(workspace.sandboxReadPaths[0]).toEndWith("/worktrees/job-123/bin");
@@ -164,7 +166,7 @@ describe("developer workspace", () => {
   test("rejects a repository outside the worker advertisement", async () => {
     await expect(
       prepareDeveloperWorkspace(
-        { ...job(), repository: "Hsiii/other" },
+        { ...job(), repository: "orangesago/other" },
         await options(),
         async () => {
           throw new Error("command should not run");

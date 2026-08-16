@@ -18,10 +18,10 @@ jobs:
         include:
           - name: core
             dockerfile: Dockerfile
-            image: ghcr.io/hsiii/minisago
+            image: ghcr.io/orangesago/minisago
           - name: worker
             dockerfile: Dockerfile.worker
-            image: ghcr.io/hsiii/minisago-worker
+            image: ghcr.io/orangesago/minisago-worker
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4

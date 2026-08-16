@@ -41,14 +41,14 @@ function webhookRequest(
 function pullRequestPayload(action: string, merged = false, number = 42) {
   return {
     action,
-    repository: { full_name: "Hsiii/health-check-system" },
+    repository: { full_name: "orangesago/health-check-system" },
     pull_request: {
       number,
       title: "Make health checks clearer",
-      html_url: `https://github.com/Hsiii/health-check-system/pull/${number}`,
+      html_url: `https://github.com/orangesago/health-check-system/pull/${number}`,
       draft: false,
       merged,
-      user: { login: "Hsiii" },
+      user: { login: "orangesago" },
       merged_by: merged ? { login: "Danielllllllllllllll" } : null,
     },
   };
@@ -87,15 +87,15 @@ describe("GitHub PR webhook", () => {
   test("mentions Daniel and Jasmine for Hsi's PR", () => {
     expect(
       buildReviewRequest({
-        authorLogin: "Hsiii",
+        authorLogin: "orangesago",
         title: "Improve checks",
-        url: "https://github.com/Hsiii/health-check-system/pull/1",
+        url: "https://github.com/orangesago/health-check-system/pull/1",
       }),
     ).toEqual({
       authorDiscordId: HSI_ID,
       reviewerDiscordIds: [DANIEL_ID, JASMINE_ID],
       message: {
-        content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Improve checks](<https://github.com/Hsiii/health-check-system/pull/1>)`,
+        content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Improve checks](<https://github.com/orangesago/health-check-system/pull/1>)`,
         allowed_mentions: {
           parse: [],
           users: [DANIEL_ID, JASMINE_ID],
@@ -112,7 +112,7 @@ describe("GitHub PR webhook", () => {
       const request = buildReviewRequest({
         authorLogin,
         title: "Improve checks",
-        url: "https://github.com/Hsiii/health-check-system/pull/2",
+        url: "https://github.com/orangesago/health-check-system/pull/2",
       });
 
       expect(request.authorDiscordId).toBe(authorDiscordId);
@@ -249,7 +249,7 @@ describe("GitHub PR webhook", () => {
             url: "https://discord.com/api/v10/channels/thread-42/messages",
             method: "POST",
             body: {
-              content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Make health checks clearer](<https://github.com/Hsiii/health-check-system/pull/42>)`,
+              content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Make health checks clearer](<https://github.com/orangesago/health-check-system/pull/42>)`,
               allowed_mentions: {
                 parse: [],
                 users: [DANIEL_ID, JASMINE_ID],
@@ -301,15 +301,16 @@ describe("GitHub PR webhook", () => {
         ]);
 
         const state = JSON.parse(await readFile(stateFile, "utf8"));
-        expect(state.threads["hsiii/health-check-system#42"].archived).toBe(
-          true,
-        );
         expect(
-          state.threads["hsiii/health-check-system#42"]
+          state.threads["orangesago/health-check-system#42"].archived,
+        ).toBe(true);
+        expect(
+          state.threads["orangesago/health-check-system#42"]
             .approvalNotificationSent,
         ).toBe(true);
         expect(
-          state.threads["hsiii/health-check-system#42"].mergeNotificationSent,
+          state.threads["orangesago/health-check-system#42"]
+            .mergeNotificationSent,
         ).toBe(true);
 
         calls.length = 0;
@@ -350,10 +351,10 @@ describe("GitHub PR webhook", () => {
 
         const closedState = JSON.parse(await readFile(stateFile, "utf8"));
         expect(
-          closedState.threads["hsiii/health-check-system#43"].archived,
+          closedState.threads["orangesago/health-check-system#43"].archived,
         ).toBe(true);
         expect(
-          closedState.threads["hsiii/health-check-system#43"]
+          closedState.threads["orangesago/health-check-system#43"]
             .mergeNotificationSent,
         ).toBeUndefined();
       } finally {
