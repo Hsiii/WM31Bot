@@ -47,7 +47,7 @@ function connectWorker(
   {
     workerId = "oracle",
     secret = bridgeSecret,
-    repositories = ["orangesago/mini-sago"],
+    repositories = ["sago-cream/mini-sago"],
     chatbotRepository,
     capacity = 1,
   }: {
@@ -94,7 +94,7 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "other-worker",
-        repositories: ["orangesago/mini-sago"],
+        repositories: ["sago-cream/mini-sago"],
       }),
     );
 
@@ -108,8 +108,8 @@ describe("Mac agent bridge", () => {
     useWorker();
     const bridge = new MacAgentBridge();
     const { socket, sent } = connectWorker(bridge, {
-      repositories: ["orangesago/mini-sago", "Kiwi/backend"],
-      chatbotRepository: "orangesago/mini-sago",
+      repositories: ["sago-cream/mini-sago", "Kiwi/backend"],
+      chatbotRepository: "sago-cream/mini-sago",
       capacity: null,
     });
 
@@ -184,8 +184,8 @@ describe("Mac agent bridge", () => {
     useWorker();
     const bridge = new MacAgentBridge();
     const { socket } = connectWorker(bridge, {
-      repositories: ["orangesago/mini-sago", "Kiwi/backend"],
-      chatbotRepository: "orangesago/mini-sago",
+      repositories: ["sago-cream/mini-sago", "Kiwi/backend"],
+      chatbotRepository: "sago-cream/mini-sago",
     });
     const job: ChatbotJob = {
       id: "router-1",
@@ -204,9 +204,9 @@ describe("Mac agent bridge", () => {
     if (acquired.status !== "accepted") throw new Error("Expected workflow");
     expect(acquired.workflow.availableRepositories).toEqual([
       "Kiwi/backend",
-      "orangesago/mini-sago",
+      "sago-cream/mini-sago",
     ]);
-    expect(acquired.workflow.chatbotRepository).toBe("orangesago/mini-sago");
+    expect(acquired.workflow.chatbotRepository).toBe("sago-cream/mini-sago");
 
     const planning = acquired.workflow.dispatch(job);
     expect(planning.status).toBe("accepted");
@@ -256,7 +256,7 @@ describe("Mac agent bridge", () => {
       requesterUserId: "test-user",
       purpose: "answer",
       executionMode: "dev",
-      repository: "orangesago/mini-sago",
+      repository: "sago-cream/mini-sago",
       channelId: "thread-1",
       requestMessageId: "message-1",
       request: "Fix it",
@@ -563,7 +563,7 @@ describe("Mac agent bridge", () => {
     }
     expect(await localDispatch.result).toEqual({ ok: true, content: "local" });
     expect(
-      first.workflow.route(["dev", "mac"], "orangesago/mini-sago"),
+      first.workflow.route(["dev", "mac"], "sago-cream/mini-sago"),
     ).toEqual({
       status: "accepted",
     });
@@ -578,7 +578,7 @@ describe("Mac agent bridge", () => {
     const workflow = bridge.acquireWorkflow();
     if (workflow.status !== "accepted") throw new Error("Expected workflow");
     expect(
-      workflow.workflow.route(["dev"], "orangesago/not-advertised"),
+      workflow.workflow.route(["dev"], "sago-cream/not-advertised"),
     ).toEqual({
       status: "offline",
     });
@@ -588,7 +588,7 @@ describe("Mac agent bridge", () => {
         requesterUserId: "owner",
         purpose: "answer",
         executionMode: "dev",
-        repository: "orangesago/not-advertised",
+        repository: "sago-cream/not-advertised",
         channelId: "channel-1",
         requestMessageId: "message-1",
         request: "review this PR",
