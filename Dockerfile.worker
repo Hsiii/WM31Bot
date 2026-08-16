@@ -22,7 +22,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && BUN_INSTALL=/usr/local bun add --global "@openai/codex@${CODEX_VERSION}" \
   && git config --system user.name Hsi \
-  && git config --system user.email orangesago@users.noreply.github.com \
+  && git config --system user.email 94444077+sago-cream@users.noreply.github.com \
   && git config --system credential.https://github.com.helper '!/usr/bin/gh auth git-credential'
 
 WORKDIR /app/mac-agent

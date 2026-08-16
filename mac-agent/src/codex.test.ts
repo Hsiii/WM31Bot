@@ -190,11 +190,11 @@ describe("Codex chatbot runner", () => {
           "/home/bun/.config/gh",
           "/workspace/worktrees/job-1/bin",
         ],
-        ["/workspace/worktrees/job-1/orangesago/mini-sago/.git"],
+        ["/workspace/worktrees/job-1/sago-cream/mini-sago/.git"],
         "linux",
       ),
     ).toBe(
-      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read","/workspace/worktrees/job-1/orangesago/mini-sago/.git"="write",":workspace_roots"={"."="write"}}',
+      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read","/workspace/worktrees/job-1/sago-cream/mini-sago/.git"="write",":workspace_roots"={"."="write"}}',
     );
     expect(
       developerFilesystemPermissions(["/Library/MiniSago"], [], "darwin"),
@@ -280,17 +280,17 @@ describe("Codex chatbot runner", () => {
             attachments: [],
           },
         ],
-        availableRepositories: ["orangesago/mini-sago", "Kiwi/backend"],
-        chatbotRepository: "orangesago/mini-sago",
+        availableRepositories: ["sago-cream/mini-sago", "Kiwi/backend"],
+        chatbotRepository: "sago-cream/mini-sago",
       },
       [],
       [],
     );
 
     expect(prompt).toContain(
-      'available_repositories_json\n["orangesago/mini-sago","Kiwi/backend"]',
+      'available_repositories_json\n["sago-cream/mini-sago","Kiwi/backend"]',
     );
-    expect(prompt).toContain('chatbot_repository_json\n"orangesago/mini-sago"');
+    expect(prompt).toContain('chatbot_repository_json\n"sago-cream/mini-sago"');
     expect(prompt).toContain("Never invent a repository");
     expect(prompt).toContain("Mutation scope is a coarse execution aid");
     expect(prompt).toContain(
@@ -311,7 +311,7 @@ describe("Codex chatbot runner", () => {
     );
     expect(prompt).toContain("把不要用 😂 的限制加進你的 prompt 裡");
     expect(prompt).toContain("filesystem sandbox 啟動失敗");
-    expect(prompt).not.toContain("use orangesago/MiniSago");
+    expect(prompt).not.toContain("use sago-cream/MiniSago");
   });
 
   test("teaches mention answers to use bounded MCP tools", () => {
@@ -349,7 +349,7 @@ describe("Codex chatbot runner", () => {
       requesterUserId: ACCESS_CONFIG.ownerUserId,
       purpose: "answer",
       executionMode: "dev",
-      repository: "orangesago/mini-sago",
+      repository: "sago-cream/mini-sago",
       developerTask: { id: "task-1" },
     };
     const prompt = buildCodexPrompt(developerJob, [], [], "Repository policy");
@@ -491,7 +491,7 @@ describe("Codex chatbot runner", () => {
       assertChatbotJobAllowed({
         ...job,
         executionMode: "dev",
-        repository: "orangesago/mini-sago",
+        repository: "sago-cream/mini-sago",
       }),
     ).toThrow("Requester cannot use the dev capability.");
     expect(() =>
@@ -505,7 +505,7 @@ describe("Codex chatbot runner", () => {
         ...job,
         requesterUserId: "917446775873343600",
         executionMode: "dev",
-        repository: "orangesago/mini-sago",
+        repository: "sago-cream/mini-sago",
       }),
     ).not.toThrow();
   });
@@ -516,7 +516,7 @@ describe("Codex chatbot runner", () => {
         ...job,
         requesterUserId: "917446775873343600",
         executionMode: "dev",
-        repository: "orangesago/mini-sago",
+        repository: "sago-cream/mini-sago",
         request: "review this PR",
       },
       [],
@@ -859,7 +859,7 @@ describe("Codex chatbot runner", () => {
 
   test("exposes no token and gives GitHub paths only to owner dev answers", () => {
     const developerEnvironment = {
-      MINISAGO_GITHUB_REPOSITORIES: "orangesago/mini-sago",
+      MINISAGO_GITHUB_REPOSITORIES: "sago-cream/mini-sago",
     };
     const chatEnvironment = codexEnvironment(
       "/tmp/codex-home",
@@ -879,7 +879,7 @@ describe("Codex chatbot runner", () => {
     expect(chatEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBeUndefined();
     expect(devEnvironment.GH_TOKEN).toBeUndefined();
     expect(devEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBe(
-      "orangesago/mini-sago",
+      "sago-cream/mini-sago",
     );
     expect(devEnvironment.MINISAGO_MCP_TOKEN).toBe("ephemeral-token");
     expect(
@@ -912,14 +912,14 @@ describe("Codex chatbot runner", () => {
       ...job,
       id: "job-123",
       executionMode: "dev",
-      repository: "orangesago/mini-sago",
+      repository: "sago-cream/mini-sago",
     });
     const devPrompt = buildCodexPrompt(
       {
         ...job,
         requesterUserId: "917446775873343600",
         executionMode: "dev",
-        repository: "orangesago/mini-sago",
+        repository: "sago-cream/mini-sago",
       },
       [],
       [],
@@ -927,7 +927,7 @@ describe("Codex chatbot runner", () => {
     );
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
-    expect(policy).toContain("orangesago/mini-sago");
+    expect(policy).toContain("sago-cream/mini-sago");
     expect(policy).toContain("routed as dev");
     expect(policy).toContain("must remain read-only on GitHub");
     expect(policy).toContain("dedicated repo-scoped GitHub login");

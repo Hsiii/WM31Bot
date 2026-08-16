@@ -110,7 +110,7 @@ branches. The credential should have repository contents, issues, and pull
 request access plus read access to checks and Actions when needed; never grant
 administration, secrets, environments, deployments, organization, or unrelated
 repository access. Credential and ruleset setup is tracked in
-[issue #12](https://github.com/orangesago/mini-sago/issues/12).
+[issue #12](https://github.com/sago-cream/mini-sago/issues/12).
 
 ## Retention and privacy
 

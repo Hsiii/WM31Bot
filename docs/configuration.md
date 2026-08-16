@@ -106,7 +106,7 @@ repository. Each guild file is capped at 4,000 characters.
 The repository still contains these Hsi-specific boundaries:
 
 - configured-guild fallback `1282936453134815275`; and
-- PR review repository and reviewer mapping for `orangesago/health-check-system`.
+- PR review repository and reviewer mapping for `sago-cream/health-check-system`.
 
 A general self-host must change these source-level defaults or disable the
 corresponding features. Installing the bot in another guild does not expose

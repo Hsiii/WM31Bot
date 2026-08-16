@@ -2,14 +2,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { discordRequest, readJsonFile, writeJsonFile } from "./job-utils";
 
-const TARGET_REPOSITORY = "orangesago/health-check-system";
+const TARGET_REPOSITORY = "sago-cream/health-check-system";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
 const DEFAULT_STATE_FILE = ".data/github-pr-threads.json";
 const PUBLIC_THREAD_TYPE = 11;
 const APPROVED_EMOJI_NAME = "approved";
 
 const TEAM = {
-  orangesago: "917446775873343600",
+  "sago-cream": "917446775873343600",
   Danielllllllllllllll: "927940363644194847",
   Jasmine0108: "881904247879368715",
 } as const;
@@ -130,9 +130,9 @@ export function buildReviewRequest({
   url: string;
 }): ReviewRequest {
   const reviewerDiscordIds =
-    authorLogin === "orangesago"
+    authorLogin === "sago-cream"
       ? [TEAM.Danielllllllllllllll, TEAM.Jasmine0108]
-      : [TEAM.orangesago];
+      : [TEAM["sago-cream"]];
   const mentions = reviewerDiscordIds.map((id) => `<@${id}>`).join(" ");
 
   return {

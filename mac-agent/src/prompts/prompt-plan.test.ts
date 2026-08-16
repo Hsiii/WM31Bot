@@ -89,14 +89,14 @@ describe("prompt plan", () => {
       {
         ...baseJob,
         purpose: "execution_route",
-        availableRepositories: ["orangesago/mini-sago"],
+        availableRepositories: ["sago-cream/mini-sago"],
       },
       [],
       [],
     );
 
-    expect(plan.developerInstructions).not.toContain("orangesago/mini-sago");
-    expect(plan.taskInstruction).not.toContain("orangesago/mini-sago");
-    expect(plan.context).toContain("orangesago/mini-sago");
+    expect(plan.developerInstructions).not.toContain("sago-cream/mini-sago");
+    expect(plan.taskInstruction).not.toContain("sago-cream/mini-sago");
+    expect(plan.context).toContain("sago-cream/mini-sago");
   });
 });
