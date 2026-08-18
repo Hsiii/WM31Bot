@@ -299,6 +299,18 @@ export async function executeChatbotAnswerDecision({
 
 export type ChatbotMention = DiscordMessage;
 
+export type ChatbotInvocation = {
+  request: string;
+  addressingMode: ChatbotAddressingMode;
+  chatOnly?: boolean;
+  recentContext?: boolean;
+  silent?: boolean;
+  respond?: (
+    content: string | string[] | null,
+    files?: ChatbotOutgoingFile[],
+  ) => Promise<void>;
+};
+
 export function extractMentionRequest(content: string, botUserId: string) {
   const mentionPattern = new RegExp(`<@!?${botUserId}>`, "g");
 
@@ -837,6 +849,7 @@ export async function handleChatbotMention({
   reactionBroker,
   conversationTracker,
   quietTracker,
+  invocation,
 }: {
   message: ChatbotMention;
   botUserId: string;
@@ -845,19 +858,31 @@ export async function handleChatbotMention({
   reactionBroker?: DiscordReactionBroker;
   conversationTracker?: ChatbotConversationTracker;
   quietTracker?: ChannelQuietTracker;
+  invocation?: ChatbotInvocation;
 }) {
   const requesterUserId = message.author?.id;
+  const respond = (
+    content: string | string[] | null,
+    files: ChatbotOutgoingFile[] = [],
+  ) =>
+    invocation?.respond
+      ? invocation.respond(content, files)
+      : postChatbotResponse(message, content, discordRequest, files);
 
   if (!requesterUserId || message.author?.bot || message.webhook_id) {
     return false;
   }
 
-  if (developerTasks.has(message.channel_id)) {
+  if (!invocation && developerTasks.has(message.channel_id)) {
     return developerTasks.handle(message);
   }
 
-  let addressingMode = chatbotAddressingMode(message, botUserId, accessConfig);
-  let request = extractChatbotRequest(message, botUserId, accessConfig);
+  let addressingMode =
+    invocation?.addressingMode ??
+    chatbotAddressingMode(message, botUserId, accessConfig);
+  let request =
+    invocation?.request ??
+    extractChatbotRequest(message, botUserId, accessConfig);
   if (request === null && conversationTracker?.take(message)) {
     request = message.content?.trim() ?? "";
     addressingMode = "continuation";
@@ -878,11 +903,8 @@ export async function handleChatbotMention({
       return false;
     }
 
-    await postChatbotResponse(
-      message,
-      `在這個伺服器裡我暫時只聽 <@${accessConfig.ownerUserId}> 的 抱歉啦`,
-      discordRequest,
-    );
+    const content = `在這個伺服器裡我暫時只聽 <@${accessConfig.ownerUserId}> 的 抱歉啦`;
+    await respond(content);
     return true;
   }
 
@@ -900,20 +922,14 @@ export async function handleChatbotMention({
   const acquired = macAgentBridge.acquireWorkflow();
 
   if (acquired.status === "offline") {
-    await postChatbotResponse(
-      message,
-      "我現在沒接上工作機 晚點再叫我一次 💤",
-      discordRequest,
-    );
+    const content = "我現在沒接上工作機 晚點再叫我一次 💤";
+    await respond(content);
     return true;
   }
 
   if (acquired.status === "busy") {
-    await postChatbotResponse(
-      message,
-      "我正在幫別人做事 等我一下下",
-      discordRequest,
-    );
+    const content = "我正在幫別人做事 等我一下下";
+    await respond(content);
     return true;
   }
 
@@ -926,21 +942,29 @@ export async function handleChatbotMention({
   };
   let reactionCapabilities: DiscordReactionCapabilities | undefined;
   try {
-    result = await withTyping(message.channel_id, discordRequest, async () => {
+    const execute = async () => {
       const requestMessage = toChatbotMessage(message, botUserId);
-      let messages = message.guild_id
-        ? await getNearbyHumanMessages({
+      let messages = invocation?.recentContext
+        ? await getRecentHumanMessages({
             channelId: message.channel_id,
             requestMessageId: message.id,
             botUserId,
             discordRequest,
+            messageLimit: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
           })
-        : await getRecentHumanMessages({
-            channelId: message.channel_id,
-            requestMessageId: message.id,
-            botUserId,
-            discordRequest,
-          });
+        : message.guild_id
+          ? await getNearbyHumanMessages({
+              channelId: message.channel_id,
+              requestMessageId: message.id,
+              botUserId,
+              discordRequest,
+            })
+          : await getRecentHumanMessages({
+              channelId: message.channel_id,
+              requestMessageId: message.id,
+              botUserId,
+              discordRequest,
+            });
       let serverMemory: ChatbotJob["serverMemory"];
       if (message.guild_id) {
         try {
@@ -964,7 +988,10 @@ export async function handleChatbotMention({
       let selectedRepository: string | undefined;
       let developerThreadTitle: string | undefined;
 
-      if (requesterUserId === accessConfig.ownerUserId) {
+      if (
+        requesterUserId === accessConfig.ownerUserId &&
+        !invocation?.chatOnly
+      ) {
         const routeJob: ChatbotJob = {
           id: randomUUID(),
           requesterUserId,
@@ -1405,7 +1432,10 @@ export async function handleChatbotMention({
       }
 
       return dispatch.result;
-    });
+    };
+    result = invocation?.silent
+      ? await execute()
+      : await withTyping(message.channel_id, discordRequest, execute);
   } catch (error) {
     console.error(`Chatbot request ${message.id} failed:`, error);
     result = { ok: false, error: "聊天機器人請求失敗" };
@@ -1442,13 +1472,11 @@ export async function handleChatbotMention({
     reply = "我剛剛卡住了 晚點再叫我一次";
   }
   if (reply || files.length > 0) {
-    await postChatbotResponse(
-      message,
-      reply ? formatDiscordAnswers(reply) : null,
-      discordRequest,
-      files,
-    );
-    conversationTracker?.activate(message.channel_id, requesterUserId);
+    const content = reply ? formatDiscordAnswers(reply) : null;
+    await respond(content, files);
+    if (!invocation) {
+      conversationTracker?.activate(message.channel_id, requesterUserId);
+    }
   }
 
   return true;
@@ -1457,12 +1485,18 @@ export async function handleChatbotMention({
 export function createDiscordRequest(botToken: string): DiscordRequest {
   async function discordRequest<T>(
     path: string,
-    options: { method?: string; body?: unknown; formData?: FormData } = {},
+    options: {
+      method?: string;
+      body?: unknown;
+      formData?: FormData;
+      authenticated?: boolean;
+    } = {},
     retries = 3,
   ): Promise<T> {
-    const headers: Record<string, string> = {
-      Authorization: `Bot ${botToken}`,
-    };
+    const headers: Record<string, string> = {};
+    if (options.authenticated !== false) {
+      headers.Authorization = `Bot ${botToken}`;
+    }
 
     if (options.body !== undefined) {
       headers["Content-Type"] = "application/json";

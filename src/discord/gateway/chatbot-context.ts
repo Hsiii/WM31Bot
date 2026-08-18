@@ -110,7 +110,12 @@ export type DiscordSearchQuery = {
 
 export type DiscordRequest = <T>(
   path: string,
-  options?: { method?: string; body?: unknown; formData?: FormData },
+  options?: {
+    method?: string;
+    body?: unknown;
+    formData?: FormData;
+    authenticated?: boolean;
+  },
 ) => Promise<T>;
 
 function authorAliases(message: DiscordMessage) {
