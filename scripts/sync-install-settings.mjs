@@ -79,18 +79,41 @@ await discordApi("/applications/@me", {
   }),
 });
 
-const commandPaths = [
-  `/applications/${applicationId}/commands`,
-  ...(guildId
-    ? [`/applications/${applicationId}/guilds/${guildId}/commands`]
-    : []),
-];
+const askCommand = {
+  name: "ask",
+  type: 1,
+  description: "Ask MiniSago privately in this channel",
+  options: [
+    {
+      name: "prompt",
+      type: 3,
+      description: "What you want to ask MiniSago",
+      required: true,
+      max_length: 2_000,
+    },
+  ],
+};
+
+const commandTargets = guildId
+  ? [
+      { path: `/applications/${applicationId}/commands`, commands: [] },
+      {
+        path: `/applications/${applicationId}/guilds/${guildId}/commands`,
+        commands: [askCommand],
+      },
+    ]
+  : [
+      {
+        path: `/applications/${applicationId}/commands`,
+        commands: [{ ...askCommand, contexts: [0], integration_types: [0] }],
+      },
+    ];
 
 await Promise.all(
-  commandPaths.map((path) =>
+  commandTargets.map(({ path, commands }) =>
     discordApi(path, {
       method: "PUT",
-      body: "[]",
+      body: JSON.stringify(commands),
     }),
   ),
 );
@@ -106,7 +129,7 @@ inviteUrl.searchParams.set("integration_type", GUILD_INSTALL);
 
 console.log("Updated Discord Guild Install default settings.");
 console.log(
-  `Cleared slash commands globally${guildId ? ` and for guild ${guildId}` : ""}.`,
+  `Registered /ask ${guildId ? `for guild ${guildId}` : "globally"}.`,
 );
 console.log(`Scopes: ${guildInstallScopes.join(", ")}`);
 console.log(`Permissions: ${guildInstallPermissions} (${permissionNames})`);

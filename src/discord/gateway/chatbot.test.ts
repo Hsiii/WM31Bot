@@ -832,6 +832,41 @@ describe("Discord chatbot", () => {
     });
   });
 
+  test("routes slash command failures through the private responder", async () => {
+    const responses: Array<string | string[] | null> = [];
+    const discordPaths: string[] = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "interaction-1",
+        channel_id: "channel-1",
+        guild_id: "917436845187563610",
+        content: "private question",
+        timestamp: "2026-08-18T11:00:00.000Z",
+        author: { id: "member-1", username: "Member" },
+      },
+      botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
+      discordRequest: async (path) => {
+        discordPaths.push(path);
+        return undefined as never;
+      },
+      invocation: {
+        request: "private question",
+        addressingMode: "mention",
+        chatOnly: true,
+        recentContext: true,
+        silent: true,
+        respond: async (content) => {
+          responses.push(content);
+        },
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(discordPaths).toEqual([]);
+    expect(responses).toEqual(["我現在沒接上工作機 晚點再叫我一次 💤"]);
+  });
+
   test("gives unauthorized guild members a safe Chinese reply", async () => {
     const requests: Array<{ path: string; body: unknown }> = [];
     const handled = await handleChatbotMention({

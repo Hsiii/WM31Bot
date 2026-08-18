@@ -12,6 +12,13 @@ import {
   createDiscordRequest,
   handleChatbotMention,
 } from "./chatbot";
+import {
+  createEphemeralInteractionResponder,
+  deferEphemeralInteraction,
+  getAskPrompt,
+  toInteractionMessage,
+  type DiscordApplicationCommandInteraction,
+} from "./interactions";
 import { ChannelQuietTracker } from "./channel-quiet";
 import {
   getChatbotAccessConfig,
@@ -370,7 +377,70 @@ class InstagramGatewayClient implements VoiceGateway {
       await this.channelTasks.run(message.channel_id, () =>
         this.handleMessageCreate(message),
       );
+      return;
     }
+
+    if (payload.t === "INTERACTION_CREATE") {
+      await this.handleInteractionCreate(
+        payload.d as DiscordApplicationCommandInteraction,
+      );
+    }
+  }
+
+  private async handleInteractionCreate(
+    interaction: DiscordApplicationCommandInteraction,
+  ) {
+    const prompt = getAskPrompt(interaction);
+    if (!prompt || !interaction.channel_id) return;
+
+    const discordRequest = createDiscordRequest(this.config.botToken);
+    try {
+      await deferEphemeralInteraction(interaction, discordRequest);
+    } catch (error) {
+      console.error(
+        `Failed to defer /ask interaction ${interaction.id}:`,
+        error,
+      );
+      return;
+    }
+
+    const baseRespond = createEphemeralInteractionResponder(
+      interaction,
+      discordRequest,
+    );
+    let responseAttempted = false;
+    const respond: typeof baseRespond = (...args) => {
+      responseAttempted = true;
+      return baseRespond(...args);
+    };
+    void handleChatbotMention({
+      message: toInteractionMessage(interaction, prompt),
+      botUserId: interaction.application_id,
+      discordRequest,
+      accessConfig: this.config.chatbotAccess,
+      invocation: {
+        request: prompt,
+        addressingMode: "mention",
+        chatOnly: true,
+        recentContext: true,
+        silent: true,
+        respond,
+      },
+    })
+      .then(async (handled) => {
+        if (!handled) {
+          await respond("我剛剛卡住了 晚點再叫我一次");
+        }
+      })
+      .catch(async (error) => {
+        console.error(
+          `Failed to handle /ask interaction ${interaction.id}:`,
+          error,
+        );
+        if (!responseAttempted) {
+          await respond("我剛剛卡住了 晚點再叫我一次").catch(() => undefined);
+        }
+      });
   }
 
   private handleHello(hello: GatewayHello) {

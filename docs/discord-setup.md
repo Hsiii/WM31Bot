@@ -13,9 +13,11 @@ Configure workers separately using [Workers](workers.md).
 4. Copy `.env.example` to `.env.local` and provide the application ID, bot
    token, owner ID, and intended guild/channel access.
 5. Run `bun run sync:install` to update the application's Default Install
-   Settings and clear any stale global or configured-guild slash commands.
-   Install with the `bot` scope. Application defaults affect new installs only;
-   update existing bot roles and channel overrides manually.
+   Settings and register `/ask` globally or in the configured guild. The
+   command accepts a prompt in a public channel and returns an ephemeral answer
+   visible only to its requester. Install with the `bot` scope. Application
+   defaults affect new installs only; update existing bot roles and channel
+   overrides manually.
 
 ## Permissions
 
