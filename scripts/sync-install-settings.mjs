@@ -1,3 +1,8 @@
+import {
+  DISCORD_GUILD_INSTALL,
+  buildDiscordApplicationUpdate,
+} from "../src/discord/install-settings.ts";
+
 const applicationId = process.env.DISCORD_APPLICATION_ID;
 const botToken = process.env.DISCORD_BOT_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID?.trim();
@@ -8,8 +13,6 @@ if (!applicationId || !botToken) {
 }
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
-const GUILD_INSTALL = "0";
-
 const requiredGuildPermissionFlags = [
   ["ADD_REACTIONS", 1n << 6n],
   ["VIEW_CHANNEL", 1n << 10n],
@@ -57,26 +60,15 @@ if (currentApplication.id !== applicationId) {
   );
 }
 
-const integrationTypesConfig = {
-  ...(currentApplication.integration_types_config ?? {}),
-  [GUILD_INSTALL]: {
-    ...(currentApplication.integration_types_config?.[GUILD_INSTALL] ?? {}),
-    oauth2_install_params: {
-      scopes: guildInstallScopes,
-      permissions: guildInstallPermissions,
-    },
-  },
-};
-
 await discordApi("/applications/@me", {
   method: "PATCH",
-  body: JSON.stringify({
-    install_params: {
+  body: JSON.stringify(
+    buildDiscordApplicationUpdate({
+      application: currentApplication,
       scopes: guildInstallScopes,
       permissions: guildInstallPermissions,
-    },
-    integration_types_config: integrationTypesConfig,
-  }),
+    }),
+  ),
 });
 
 const askCommand = {
@@ -125,7 +117,7 @@ const inviteUrl = new URL("https://discord.com/oauth2/authorize");
 inviteUrl.searchParams.set("client_id", applicationId);
 inviteUrl.searchParams.set("scope", guildInstallScopes.join(" "));
 inviteUrl.searchParams.set("permissions", guildInstallPermissions);
-inviteUrl.searchParams.set("integration_type", GUILD_INSTALL);
+inviteUrl.searchParams.set("integration_type", DISCORD_GUILD_INSTALL);
 
 console.log("Updated Discord Guild Install default settings.");
 console.log(

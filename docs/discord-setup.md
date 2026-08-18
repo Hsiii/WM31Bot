@@ -15,9 +15,10 @@ Configure workers separately using [Workers](workers.md).
 5. Run `bun run sync:install` to update the application's Default Install
    Settings and register `/ask` globally or in the configured guild. The
    command accepts a prompt in a public channel and returns an ephemeral answer
-   visible only to its requester. Install with the `bot` scope. Application
-   defaults affect new installs only; update existing bot roles and channel
-   overrides manually.
+   visible only to its requester. The sync also clears any HTTP Interactions
+   Endpoint URL so commands continue through MiniSago's existing Gateway
+   connection. Install with the `bot` scope. Application defaults affect new
+   installs only; update existing bot roles and channel overrides manually.
 
 ## Permissions
 
