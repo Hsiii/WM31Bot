@@ -20,6 +20,7 @@ import type { TripPlanEditInput, TripPlanReadInput } from "./trip-planner";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
+const DEFAULT_REMINDER_TIMEZONE = "Asia/Taipei";
 
 const searchHas = z.enum([
   "image",
@@ -965,7 +966,7 @@ function createServer(session: ChatbotMcpSession) {
       "create_reminder",
       {
         description:
-          "Create a reminder in the current Discord channel for the current requester. For a one-time wall-clock reminder, provide runAt as an ISO 8601 timestamp including Z or a UTC offset and timezone as the IANA timezone used to resolve it. Relative-duration timers do not need a timezone. For a recurring reminder, provide a standard five-field cron expression and an IANA timezone. Provide exactly one schedule type.",
+          "Create a reminder in the current Discord channel for the current requester. Wall-clock and recurring requests default to Asia/Taipei when the user gives no timezone or location. For a one-time wall-clock reminder, provide runAt as an ISO 8601 timestamp including Z or a UTC offset and timezone as the IANA timezone used to resolve it. Relative-duration timers do not need a timezone. For a recurring reminder, provide a standard five-field cron expression and an IANA timezone. Provide exactly one schedule type.",
         inputSchema: {
           content: z.string().trim().min(1).max(1_500),
           runAt: z.string().trim().max(50).optional(),
@@ -987,15 +988,13 @@ function createServer(session: ChatbotMcpSession) {
               error: "Provide exactly one of runAt or cron.",
             });
           }
-          if (input.cron && !input.timezone) {
-            return toolResult({
-              status: "invalid",
-              error: "Recurring reminders require an IANA timezone.",
-            });
-          }
+          const reminderInput =
+            input.cron && !input.timezone
+              ? { ...input, timezone: DEFAULT_REMINDER_TIMEZONE }
+              : input;
           return toolResult({
             status: "complete",
-            reminder: await session.handlers.createReminder!(input),
+            reminder: await session.handlers.createReminder!(reminderInput),
           });
         } catch (error) {
           return toolResult({

@@ -691,17 +691,20 @@ describe("MiniSago MCP server", () => {
     expect(invalid.structuredContent).toMatchObject({ status: "invalid" });
     expect(created).toHaveLength(0);
 
-    const missingTimezone = await client.callTool({
+    const defaultTimezone = await client.callTool({
       name: "create_reminder",
       arguments: {
         content: "stand up",
         cron: "0 9 * * *",
       },
     });
-    expect(missingTimezone.structuredContent).toMatchObject({
-      status: "invalid",
+    expect(defaultTimezone.structuredContent).toMatchObject({
+      status: "complete",
+      reminder: {
+        timezone: "Asia/Taipei",
+      },
     });
-    expect(created).toHaveLength(0);
+    expect(created).toHaveLength(1);
 
     const createResult = await client.callTool({
       name: "create_reminder",
@@ -718,6 +721,7 @@ describe("MiniSago MCP server", () => {
         cron: "0 9 * * *",
       },
     });
+    expect(created).toHaveLength(2);
 
     const listResult = await client.callTool({
       name: "list_reminders",

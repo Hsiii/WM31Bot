@@ -649,7 +649,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(40);
+    expect(PROMPT_VERSION).toBe(41);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -666,7 +666,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("use the reminder tools");
-    expect(prompt).toContain("ask one short question for the timezone");
+    expect(prompt).toContain("default to Asia/Taipei (UTC+08:00)");
     expect(prompt).toContain("Do not ask for confirmation");
     expect(prompt).toContain("Stay accurate without sounding like a report");
     expect(prompt).toContain("Speak as MiniSago in the first person");
