@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -85,6 +85,30 @@ describe("Reminder scheduler", () => {
 
     expect(posted).toHaveLength(1);
     expect(await test.scheduler.list("user-1", "channel-1")).toEqual([]);
+  });
+
+  test("does not retain a reminder when persistence fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "minisago-reminders-"));
+    directories.push(directory);
+    const blockedParent = join(directory, "not-a-directory");
+    const scheduler = new ReminderScheduler({
+      stateFile: join(blockedParent, "reminders.json"),
+      post: async () => {},
+      now: () => new Date("2026-07-25T10:00:00.000Z"),
+    });
+    schedulers.push(scheduler);
+    await scheduler.start();
+    await writeFile(blockedParent, "blocked");
+
+    await expect(
+      scheduler.create({
+        requesterUserId: "user-1",
+        channelId: "channel-1",
+        content: "stand up",
+        runAt: "2026-07-25T10:01:00Z",
+      }),
+    ).rejects.toThrow();
+    expect(await scheduler.list("user-1", "channel-1")).toEqual([]);
   });
 
   test("advances recurring cron reminders in their timezone", async () => {

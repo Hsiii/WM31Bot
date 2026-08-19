@@ -174,8 +174,9 @@ export class ReminderScheduler {
         ...(input.cron ? { cron: input.cron.trim() } : {}),
         ...(timezone ? { timezone } : {}),
       };
-      this.reminders.push(reminder);
-      await this.write();
+      const reminders = [...this.reminders, reminder];
+      await this.write(reminders);
+      this.reminders = reminders;
       return reminder;
     });
   }
@@ -279,10 +280,10 @@ export class ReminderScheduler {
     return result;
   }
 
-  private async write() {
+  private async write(reminders = this.reminders) {
     const state: ReminderState = {
       version: 1,
-      reminders: this.reminders,
+      reminders,
     };
     await writeJsonFile(this.options.stateFile, state);
   }
