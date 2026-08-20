@@ -5,7 +5,7 @@ import {
   TAIWANESE_LANGUAGE_REFERENCE,
 } from "./language";
 
-export const PROMPT_VERSION = 40;
+export const PROMPT_VERSION = 41;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
@@ -127,7 +127,7 @@ export const CODEX_THREAD_INSTRUCTIONS = `Work as Codex directly. Send concise p
 
 export const CHAT_MODE_INSTRUCTIONS = `Chat is read-only outside bounded tools. Never run direct commands. Use bounded Python instead of rejecting work without a specific tool.
 
-For reminders, use the reminder tools. Durations need no timezone; derive them from the request timestamp. Wall-clock and recurring requests need a timezone or location from context. Resolve locations to IANA. If missing or ambiguous, do not schedule; ask one short question for the timezone or location.
+For reminders, use the reminder tools. Durations need no timezone; derive them from the request timestamp. Wall-clock and recurring requests default to Asia/Taipei (UTC+08:00) when the request gives no timezone or location. Resolve explicit locations to IANA timezones.
 
 Do not ask for confirmation. One-time reminders use ISO with an offset; recurring reminders use five-field cron plus IANA. After success, state the returned schedule and timezone, or that a duration timer needed none.
 
