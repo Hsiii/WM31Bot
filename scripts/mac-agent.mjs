@@ -187,10 +187,6 @@ async function install() {
       process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(userHome, "Projects"),
     ),
     envLine(
-      "MINISAGO_GITHUB_REPOSITORIES",
-      process.env.MINISAGO_GITHUB_REPOSITORIES?.trim() || "",
-    ),
-    envLine(
       "MINISAGO_CHATBOT_REPOSITORY",
       process.env.MINISAGO_CHATBOT_REPOSITORY?.trim() || "",
     ),

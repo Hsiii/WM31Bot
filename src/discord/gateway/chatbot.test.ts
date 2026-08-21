@@ -143,10 +143,8 @@ describe("Discord chatbot", () => {
           jobId: routeJob.job.id,
           ok: true,
           content: JSON.stringify({
-            mode: "dev",
-            target: "default",
+            route: "oracle",
             repository: "sago-cream/mini-sago",
-            mutationScope: "code",
             threadTitle: "Stream Codex task progress",
             reason: "code change",
           }),
@@ -1262,62 +1260,54 @@ describe("Discord chatbot", () => {
     });
   });
 
-  test("validates the router's proposed mode, target, repository, and mutation", () => {
+  test("validates the router's proposed execution route and repository", () => {
     const repositories = ["sago-cream/mini-sago", "Kiwi/backend"];
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"sago-cream/mini-sago","mutationScope":null,"threadTitle":"  Review   pull request  ","reason":"PR review"}',
+        '{"route":"oracle","repository":"sago-cream/mini-sago","threadTitle":"  Review   pull request  ","reason":"PR review"}',
         repositories,
       ),
     ).toEqual({
-      mode: "dev",
-      target: "default",
+      route: "oracle",
       repository: "sago-cream/mini-sago",
       threadTitle: "Review pull request",
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"chat","target":"default","repository":"sago-cream/mini-sago","mutationScope":"code","reason":"code change"}',
+        '{"route":"chat","repository":"sago-cream/mini-sago","threadTitle":null,"reason":"discussion"}',
         repositories,
       ),
     ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "sago-cream/mini-sago",
+      route: "chat",
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Kiwi/backend","mutationScope":"issue","reason":"issue update"}',
+        '{"route":"oracle","repository":"Kiwi/backend","threadTitle":null,"reason":"issue update"}',
         repositories,
       ),
     ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "issue",
+      route: "oracle",
       repository: "Kiwi/backend",
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"mac","repository":"invented/private","mutationScope":null,"reason":"repo work"}',
+        '{"route":"oracle","repository":"invented/private","threadTitle":null,"reason":"repo work"}',
         repositories,
       ),
     ).toEqual({
-      mode: "dev",
-      target: "mac",
+      route: "oracle",
     });
     expect(parseExecutionRoute("not json", repositories)).toEqual({
-      mode: "chat",
-      target: "default",
+      route: "unclear",
     });
   });
 
   test("asks for a repository instead of dispatching an invalid dev job", () => {
-    expect(missingDeveloperRepositoryResponse("dev")).toBe(
+    expect(missingDeveloperRepositoryResponse("oracle")).toBe(
       "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n告訴我是哪個 我就能繼續",
     );
     expect(
-      missingDeveloperRepositoryResponse("dev", undefined, [
+      missingDeveloperRepositoryResponse("oracle", undefined, [
         "sago-cream/mini-sago",
         "Kiwi/backend",
       ]),
@@ -1325,7 +1315,7 @@ describe("Discord chatbot", () => {
       "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n目前可用的有 `sago-cream/mini-sago` `Kiwi/backend`\n告訴我是哪個 我就能繼續",
     );
     expect(
-      missingDeveloperRepositoryResponse("dev", "sago-cream/mini-sago"),
+      missingDeveloperRepositoryResponse("oracle", "sago-cream/mini-sago"),
     ).toBeUndefined();
     expect(missingDeveloperRepositoryResponse("chat")).toBeUndefined();
   });

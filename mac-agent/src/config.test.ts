@@ -2,12 +2,21 @@ import { describe, expect, test } from "bun:test";
 
 import {
   macFileRoots,
+  parseGitHubRepositories,
   validateBridgeUrl,
   validateMcpUrl,
   workspaceChild,
 } from "./config";
 
 describe("worker configuration", () => {
+  test("discovers every valid repository visible to the worker account", () => {
+    expect(
+      parseGitHubRepositories(
+        "Hsiii/mini-sago\nsago-cream/mini-sago\ninvalid\nHsiii/mini-sago\n",
+      ),
+    ).toEqual(["Hsiii/mini-sago", "sago-cream/mini-sago"]);
+  });
+
   test("limits default Mac file access to common user folders", () => {
     expect(macFileRoots(undefined, "/Users/hsi")).toContain(
       "/Users/hsi/Documents",

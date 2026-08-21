@@ -36,21 +36,17 @@ export type DeveloperWorkspace = {
 };
 
 function developerMode(job: ChatbotJob) {
-  if (job.executionMode === "dev") {
-    return job.executionMode;
+  if (job.executionRoute === "oracle") {
+    return job.executionRoute;
   }
   throw new Error("Developer workspace requested for a non-development job.");
-}
-
-function mutationScope(job: ChatbotJob) {
-  return job.executionMode === "dev" ? (job.mutationScope ?? "none") : "none";
 }
 
 const GH_WRAPPER = `#!/bin/sh
 set -eu
 
 deny() {
-  echo "MiniSago denied a GitHub operation outside this job's mutation scope." >&2
+  echo "MiniSago denied this GitHub operation." >&2
   exit 77
 }
 
@@ -66,10 +62,8 @@ case "$command:$subcommand" in
     done
     ;;
   issue:create|issue:edit|issue:close|issue:reopen|issue:comment)
-    [ "\${MINISAGO_GITHUB_MUTATION:-none}" = "issue" ] || deny
     ;;
   pr:create)
-    [ "\${MINISAGO_GITHUB_MUTATION:-none}" = "code" ] || deny
     draft=false
     for argument in "$@"; do
       [ "$argument" = "--draft" ] && draft=true
@@ -93,10 +87,6 @@ const GIT_WRAPPER = `#!/bin/sh
 set -eu
 
 if [ "\${1:-}" = "push" ]; then
-  [ "\${MINISAGO_GITHUB_MUTATION:-none}" = "code" ] || {
-    echo "MiniSago denied git push outside a code mutation job." >&2
-    exit 77
-  }
   branch="$("$MINISAGO_REAL_GIT" branch --show-current)"
   [ "$branch" = "$MINISAGO_GIT_BRANCH" ] || {
     echo "MiniSago denied git push from an unprepared branch." >&2
@@ -174,8 +164,7 @@ export async function prepareDeveloperWorkspace(
   options: DeveloperWorkspaceOptions,
   runCommand: RunCommand = run,
 ): Promise<DeveloperWorkspace> {
-  const mode = developerMode(job);
-  const scope = mutationScope(job);
+  developerMode(job);
   const repository = selectedRepository(job, options.githubRepositories);
   const workspaceId = job.developerTask?.id ?? job.id;
   const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(workspaceId));
@@ -221,13 +210,11 @@ export async function prepareDeveloperWorkspace(
         preparationEnvironment,
         options.signal,
       );
-      if (mode === "dev" && scope === "code") {
-        await runCommand(
-          ["git", "-C", directory, "switch", "-c", branch],
-          preparationEnvironment,
-          options.signal,
-        );
-      }
+      await runCommand(
+        ["git", "-C", directory, "switch", "-c", branch],
+        preparationEnvironment,
+        options.signal,
+      );
       await mkdir(binDirectory, { mode: 0o700 });
       const ghWrapper = join(binDirectory, "gh");
       const gitWrapper = join(binDirectory, "git");
@@ -244,7 +231,6 @@ export async function prepareDeveloperWorkspace(
 
   const environment = {
     ...preparationEnvironment,
-    MINISAGO_GITHUB_MUTATION: scope,
     MINISAGO_GIT_BRANCH: branch,
     MINISAGO_REAL_GH: Bun.which("gh") || "/usr/bin/gh",
     MINISAGO_REAL_GIT: Bun.which("git") || "/usr/bin/git",

@@ -19,9 +19,7 @@ import {
 import { getGuildMemoryStore } from "../../chatbot/guild-memory";
 import type {
   ChatbotAddressingMode,
-  ChatbotExecutionMode,
-  ChatbotExecutionTarget,
-  ChatbotMutationScope,
+  ChatbotExecutionRoute,
   ChatbotOutgoingFile,
   ChatbotJob,
   ChatbotMemberResult,
@@ -91,16 +89,14 @@ function supplementalCapabilities({
   hasReactions,
   availableRepositories,
   chatbotRepository,
-  executionMode,
-  executionTarget,
+  executionRoute,
 }: {
   isOwner: boolean;
   hasAttachments: boolean;
   hasReactions: boolean;
   availableRepositories: string[];
   chatbotRepository?: string;
-  executionMode: ChatbotExecutionMode;
-  executionTarget: ChatbotExecutionTarget;
+  executionRoute: ChatbotExecutionRoute;
 }): ChatbotMcpCapability[] {
   const capabilities: ChatbotMcpCapability[] = [
     {
@@ -146,25 +142,25 @@ function supplementalCapabilities({
     capabilities.push({
       id: "repository_work",
       category: "development",
-      availability: executionMode === "dev" ? "available" : "conditional",
+      availability: executionRoute === "oracle" ? "available" : "conditional",
       description:
-        "Inspect configured repositories and handle debugging, tests, builds, code changes, commits, feature-branch pushes, and draft pull requests within the routed permission scope.",
+        "Inspect repositories visible to the dedicated GitHub account and handle debugging, tests, builds, code changes, commits, feature-branch pushes, issue work, and draft pull requests.",
       condition:
-        executionMode === "dev"
-          ? "This request has already been routed to development mode."
-          : "The owner must make an explicit request that identifies a configured repository.",
+        executionRoute === "oracle"
+          ? "This owner request is running in Oracle."
+          : "The owner must make a request that identifies an accessible repository.",
     });
   }
   if (isOwner && chatbotRepository) {
     capabilities.push({
       id: "self_development",
       category: "development",
-      availability: executionMode === "dev" ? "available" : "conditional",
+      availability: executionRoute === "oracle" ? "available" : "conditional",
       description:
         "Inspect or change MiniSago's own behavior and implementation through her configured chatbot repository.",
       condition:
-        executionMode === "dev"
-          ? "This request has already been routed to development mode."
+        executionRoute === "oracle"
+          ? "This owner request is running in Oracle."
           : "The owner must explicitly request a change to MiniSago.",
     });
   }
@@ -172,11 +168,11 @@ function supplementalCapabilities({
     capabilities.push({
       id: "mac_file_delivery",
       category: "attachments",
-      availability: executionTarget === "mac" ? "available" : "conditional",
+      availability: executionRoute === "mac" ? "available" : "conditional",
       description:
         "Find and send one requested file from the owner's allowlisted Mac folders without reading its contents.",
       condition:
-        executionTarget === "mac"
+        executionRoute === "mac"
           ? "This request has already been routed to the connected Mac."
           : "The owner must explicitly request a file and a compatible Mac worker must be connected.",
     });
@@ -982,9 +978,7 @@ export async function handleChatbotMention({
           console.warn("Discord server memory unavailable.");
         }
       }
-      let executionMode: ChatbotExecutionMode = "chat";
-      let executionTarget: ChatbotExecutionTarget = "default";
-      let mutationScope: ChatbotMutationScope | undefined;
+      let executionRoute: ChatbotExecutionRoute = "chat";
       let selectedRepository: string | undefined;
       let developerThreadTitle: string | undefined;
 
@@ -1015,14 +1009,12 @@ export async function handleChatbotMention({
             workflow.availableRepositories,
           );
         }
-        executionMode = route.mode;
-        executionTarget = route.target;
-        mutationScope = route.mutationScope;
+        executionRoute = route.route === "unclear" ? "chat" : route.route;
         selectedRepository = route.repository;
         developerThreadTitle = route.threadTitle;
 
         const missingRepository = missingDeveloperRepositoryResponse(
-          executionMode,
+          route.route,
           selectedRepository,
           workflow.availableRepositories,
         );
@@ -1031,8 +1023,8 @@ export async function handleChatbotMention({
         }
         const workerRoute = workflow.route(
           [
-            executionMode === "chat" ? "chat" : executionMode,
-            ...(executionTarget === "mac" ? (["mac"] as const) : []),
+            executionRoute === "oracle" ? "dev" : "chat",
+            ...(executionRoute === "mac" ? (["mac"] as const) : []),
           ],
           selectedRepository,
         );
@@ -1362,19 +1354,16 @@ export async function handleChatbotMention({
             hasReactions: Boolean(reactionCapabilities?.tools.length),
             availableRepositories: workflow.availableRepositories,
             chatbotRepository: workflow.chatbotRepository,
-            executionMode,
-            executionTarget,
+            executionRoute,
           }),
       });
-      if (executionMode === "dev") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
+      if (executionRoute === "oracle") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
 
       const job: ChatbotJob = {
         id: randomUUID(),
         requesterUserId,
         purpose: "answer",
-        executionMode,
-        executionTarget,
-        mutationScope,
+        executionRoute,
         repository: selectedRepository,
         channelId: message.channel_id,
         requestMessageId: message.id,
@@ -1389,7 +1378,11 @@ export async function handleChatbotMention({
         ...(serverMemory ? { serverMemory } : {}),
       };
 
-      if (executionMode === "dev" && selectedRepository && message.guild_id) {
+      if (
+        executionRoute === "oracle" &&
+        selectedRepository &&
+        message.guild_id
+      ) {
         const taskId = randomUUID();
         const threadId = await createDeveloperThread(
           message,

@@ -25,9 +25,7 @@ export type ChatbotReaction = {
   me?: boolean;
 };
 
-export type ChatbotExecutionMode = "chat" | "dev";
-export type ChatbotExecutionTarget = "default" | "mac";
-export type ChatbotMutationScope = "code" | "issue" | "deploy";
+export type ChatbotExecutionRoute = "chat" | "mac" | "oracle";
 export type ChatbotAddressingMode = "mention" | "reply" | "dm" | "continuation";
 
 export type CodexUsageWindow = {
@@ -123,9 +121,7 @@ export type ChatbotJob = {
   id: string;
   requesterUserId: string;
   purpose?: "answer" | "execution_route" | "social_action" | "trace_lookup";
-  executionMode?: ChatbotExecutionMode;
-  executionTarget?: ChatbotExecutionTarget;
-  mutationScope?: ChatbotMutationScope;
+  executionRoute?: ChatbotExecutionRoute;
   repository?: string;
   availableRepositories?: string[];
   chatbotRepository?: string;

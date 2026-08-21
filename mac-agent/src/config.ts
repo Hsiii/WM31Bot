@@ -83,6 +83,50 @@ async function resolveCodexPath() {
   );
 }
 
+export async function discoverGitHubRepositories(githubConfigDir: string) {
+  const child = Bun.spawn(
+    [
+      "gh",
+      "api",
+      "--paginate",
+      "user/repos?per_page=100&affiliation=owner,collaborator,organization_member",
+      "--jq",
+      ".[].full_name",
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        GH_CONFIG_DIR: githubConfigDir,
+        GH_HOST: "github.com",
+        GH_PROMPT_DISABLED: "1",
+      },
+    },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(
+      stderr.trim().split("\n").at(-1) || "GitHub repository discovery failed.",
+    );
+  }
+  return parseGitHubRepositories(stdout);
+}
+
+export function parseGitHubRepositories(stdout: string) {
+  const repositories = stdout
+    .split("\n")
+    .map((repository) => repository.trim())
+    .filter((repository) => /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/iu.test(repository));
+  return [...new Set(repositories)].sort((left, right) =>
+    left.localeCompare(right, "en-US"),
+  );
+}
+
 export function validateBridgeUrl(value: string) {
   const url = new URL(value);
   const hostname = url.hostname.replace(/^\[|\]$/gu, "");
@@ -142,7 +186,9 @@ export function workspaceChild(root: string, candidate: string, name: string) {
   return absoluteCandidate;
 }
 
-export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
+export async function loadMacAgentConfig(
+  discoverRepositories = discoverGitHubRepositories,
+): Promise<MacAgentConfig> {
   const chatbotAccess = getChatbotAccessConfig();
   const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
 
@@ -162,22 +208,13 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(workerId)) {
     throw new Error("MINISAGO_WORKER_ID must be a safe 1-64 character ID.");
   }
-  const githubRepositories = (process.env.MINISAGO_GITHUB_REPOSITORIES || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (
-    githubRepositories.some(
-      (repository) => !/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/iu.test(repository),
-    )
-  ) {
-    throw new Error(
-      "MINISAGO_GITHUB_REPOSITORIES must contain owner/repository names.",
-    );
-  }
+  const githubConfigDir =
+    process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
+    join(defaultApplicationSupport, "github");
+  const githubRepositories = await discoverRepositories(githubConfigDir);
   if (githubRepositories.length === 0) {
     throw new Error(
-      "MINISAGO_GITHUB_REPOSITORIES is required for dev workers.",
+      "The worker GitHub account has no accessible repositories.",
     );
   }
   const configuredChatbotRepository =
@@ -191,7 +228,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     )
   ) {
     throw new Error(
-      "MINISAGO_CHATBOT_REPOSITORY must name a repository in MINISAGO_GITHUB_REPOSITORIES.",
+      "MINISAGO_CHATBOT_REPOSITORY must name an accessible GitHub repository.",
     );
   }
   const chatbotRepository =
@@ -218,9 +255,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
-    githubConfigDir:
-      process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
-      join(defaultApplicationSupport, "github"),
+    githubConfigDir,
     githubRepositories,
     chatbotRepository,
     chatbotAccess,

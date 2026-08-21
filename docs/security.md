@@ -91,18 +91,17 @@ regular file of 8 MB or less. Symlinks and paths outside the roots are rejected.
 ## Owner development and GitHub
 
 Development jobs receive one selected disposable repository checkout. GitHub
-uses a dedicated persistent `gh` login with a fine-grained credential limited
-to the configured repository allowlist. Tokens must never be placed in Discord,
-tasks, environment files, shell arguments, or repository content.
+uses a dedicated persistent `gh` login. Workers discover every repository that
+credential can access rather than maintaining a second application allowlist.
+Tokens must never be placed in Discord, tasks, environment files, shell
+arguments, or repository content.
 
-The owner router assigns `issue`, `code`, or `deploy` from the requested task.
-Implementation requests receive `code` scope without requiring the owner to
-separately request each implementation mechanic, push, or draft pull request.
-Per-job `gh` and `git` wrappers enforce that scope:
+Only the configured owner can route work to Oracle. Every Oracle job uses a
+prepared feature branch, and per-job `gh` and `git` wrappers permit ordinary
+repository work without a second inferred authorization scope:
 
-- read-only jobs cannot mutate GitHub;
-- issue jobs can perform only bounded issue operations;
-- code jobs may use a prepared feature branch, push it, and open a draft PR;
+- issue operations are allowed;
+- the prepared feature branch may be pushed and used to open a draft PR;
 - merge, ready, review, protected-branch, and force-push operations are denied.
 
 GitHub rulesets must independently block direct and force pushes to protected
