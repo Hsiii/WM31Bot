@@ -98,10 +98,16 @@ Also verify the relevant behavior after risky changes:
 - deliver a GitHub webhook and ensure it reuses the mapped thread; and
 - check scheduled state files remain under `/app/state`.
 
+The Oracle container also exposes an internal `GET /health` endpoint on port
+`8081`. Its Docker health check verifies the bridge connection, Codex login,
+and Codex app-server sessions; the port is not published publicly.
+
 ## Logs and traces
 
 Core logs cover Gateway lifecycle, monitors, webhooks, worker connections, and
-request failures. Worker logs intentionally contain metadata only.
+request failures. Worker failures include job ID, last phase, repository,
+prepared branch, cause, and whether retrying is safe. Logs intentionally omit
+request content.
 
 Mac logs and traces live under:
 
@@ -122,6 +128,8 @@ for their contents and exclusions.
    status.
 2. Inspect worker logs for authentication, protocol-version, Codex-login, or
    reconnect failures.
+   A container marked unhealthy has also failed its local bridge, Codex login,
+   or Codex app-server check.
 3. Verify the worker and hosted service use the matching profile secret.
 4. Confirm Codex authentication and account capacity.
 5. Restart only the affected worker after correcting configuration.
