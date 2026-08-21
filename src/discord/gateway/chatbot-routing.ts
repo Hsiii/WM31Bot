@@ -1,7 +1,5 @@
 import type {
-  ChatbotExecutionMode,
-  ChatbotExecutionTarget,
-  ChatbotMutationScope,
+  ChatbotExecutionRoute,
   ChatbotTraceContext,
 } from "../../chatbot/protocol";
 
@@ -45,9 +43,7 @@ export function parseExecutionRoute(
   content: string,
   availableRepositories: string[] = [],
 ): {
-  mode: ChatbotExecutionMode;
-  target: ChatbotExecutionTarget;
-  mutationScope?: ChatbotMutationScope;
+  route: ChatbotExecutionRoute | "unclear";
   repository?: string;
   threadTitle?: string;
 } {
@@ -64,20 +60,14 @@ export function parseExecutionRoute(
       .replace(/^```(?:json)?\s*/iu, "")
       .replace(/\s*```$/u, "");
     const payload = JSON.parse(normalized) as {
-      mode?: unknown;
-      target?: unknown;
+      route?: unknown;
       repository?: unknown;
-      mutationScope?: unknown;
       threadTitle?: unknown;
     };
-    if (payload.mode === "dev" || payload.mode === "chat") {
-      const mutationScope = ["code", "issue", "deploy"].includes(
-        payload.mutationScope as string,
-      )
-        ? (payload.mutationScope as ChatbotMutationScope)
-        : undefined;
-      const mode = mutationScope ? "dev" : payload.mode;
-      const target = payload.target === "mac" ? "mac" : "default";
+    if (
+      ["chat", "mac", "oracle", "unclear"].includes(payload.route as string)
+    ) {
+      const route = payload.route as ChatbotExecutionRoute | "unclear";
       const repository =
         typeof payload.repository === "string"
           ? advertisedRepositories.get(
@@ -89,11 +79,9 @@ export function parseExecutionRoute(
           ? payload.threadTitle.replace(/\s+/gu, " ").trim().slice(0, 100)
           : undefined;
       return {
-        mode,
-        target,
-        ...(mutationScope ? { mutationScope } : {}),
-        ...(mode === "dev" && repository ? { repository } : {}),
-        ...(mode === "dev" && threadTitle ? { threadTitle } : {}),
+        route,
+        ...(route === "oracle" && repository ? { repository } : {}),
+        ...(route === "oracle" && threadTitle ? { threadTitle } : {}),
       };
     }
   } catch {
@@ -101,17 +89,19 @@ export function parseExecutionRoute(
   }
 
   return {
-    mode: "chat",
-    target: "default",
+    route: "unclear",
   };
 }
 
 export function missingDeveloperRepositoryResponse(
-  mode: ChatbotExecutionMode,
+  route: ChatbotExecutionRoute | "unclear",
   repository?: string,
   availableRepositories: string[] = [],
 ) {
-  if (mode !== "dev" || repository) return undefined;
+  if (route === "unclear") {
+    return "我不確定你要我聊天 用 Mac 還是進 repo 做事 你指一下我就接著跑";
+  }
+  if (route !== "oracle" || repository) return undefined;
   const choices =
     availableRepositories.length > 0
       ? `\n目前可用的有 ${availableRepositories.map((value) => `\`${value}\``).join(" ")}`

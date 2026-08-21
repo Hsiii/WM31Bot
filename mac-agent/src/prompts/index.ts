@@ -128,8 +128,8 @@ export function outputSchemaForJob(job: ChatbotJob) {
   if (job.purpose === "social_action") return SOCIAL_ACTION_OUTPUT_SCHEMA;
   if (job.purpose === "answer") {
     if (job.developerTask) return undefined;
-    if (job.executionTarget === "mac") return MAC_FILE_ANSWER_OUTPUT_SCHEMA;
-    return job.executionMode === "dev"
+    if (job.executionRoute === "mac") return MAC_FILE_ANSWER_OUTPUT_SCHEMA;
+    return job.executionRoute === "oracle"
       ? ANSWER_OUTPUT_SCHEMA
       : ARTIFACT_ANSWER_OUTPUT_SCHEMA;
   }

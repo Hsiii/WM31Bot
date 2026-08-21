@@ -32,6 +32,7 @@ function runOptions(
 describe("Codex App Server manager", () => {
   test("keeps steering in the active turn and returns only its final answer", async () => {
     const manager = new CodexAppServerManager();
+    expect(manager.status()).toEqual({ ok: true, sessions: 0, active: 0 });
     const progress: ChatbotTaskProgress[] = [];
     const result = manager.run(runOptions((item) => progress.push(item)));
 
@@ -42,10 +43,12 @@ describe("Codex App Server manager", () => {
       await Bun.sleep(2);
     }
 
+    expect(manager.status()).toEqual({ ok: true, sessions: 1, active: 1 });
     expect(await manager.steer("job-1", "Focus on the setup guide.")).toBe(
       true,
     );
     expect(await result).toBe("Finished after steering.");
+    expect(manager.status()).toEqual({ ok: true, sessions: 1, active: 0 });
     expect(progress).toContainEqual({
       phase: "exploring",
       summary: "Inspecting the task.",

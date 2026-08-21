@@ -68,6 +68,7 @@ class CodexAppServerSession {
   private active?: ActiveTurn;
   private buffer = "";
   private child: Bun.PipedSubprocess;
+  private exited = false;
   private nextId = 1;
   private pending = new Map<
     number,
@@ -172,6 +173,10 @@ class CodexAppServerSession {
     this.child.kill();
   }
 
+  isHealthy() {
+    return !this.exited;
+  }
+
   private async initialize() {
     await this.request("initialize", {
       clientInfo: { name: "minisago", title: "MiniSago", version: "1" },
@@ -251,6 +256,7 @@ class CodexAppServerSession {
 
   private async watchExit() {
     const exitCode = await this.child.exited;
+    this.exited = true;
     const error = new Error(
       this.stderr || `Codex App Server exited with status ${exitCode}.`,
     );
@@ -428,6 +434,15 @@ export class CodexAppServerManager {
 
   async interrupt(jobId: string) {
     return (await this.jobs.get(jobId)?.interrupt(jobId)) ?? false;
+  }
+
+  status() {
+    const sessions = [...this.sessions.values()];
+    return {
+      ok: sessions.every((session) => session.isHealthy()),
+      sessions: sessions.length,
+      active: this.jobs.size,
+    };
   }
 
   close() {

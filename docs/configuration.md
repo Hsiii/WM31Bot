@@ -65,7 +65,6 @@ pipe stores its checkpoint beside `X_POST_STATE_FILE` under
 | `MINISAGO_SANDBOX_URL`           | Linux    | Internal request-local computation broker URL           |
 | `MINISAGO_HEADLESS`              | Linux    | Keep a worker connected without a session monitor       |
 | `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                  |
-| `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                      |
 | `MINISAGO_CHATBOT_REPOSITORY`    | No       | Repository that owns chatbot behavior                   |
 | `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner ID as the hosted service                     |
 | `MINISAGO_GITHUB_CONFIG_DIR`     | Dev      | Dedicated GitHub CLI state                              |
@@ -79,7 +78,8 @@ The prompt harness has one production path rather than a runtime rollout flag.
 Its authority layers and context budgets are versioned in code, covered by
 tests, and rolled back through the corresponding atomic Git commit if needed.
 
-Set `MINISAGO_CHATBOT_REPOSITORY` when a worker advertises multiple repositories
+Workers discover repositories from their dedicated GitHub CLI login at startup.
+Set `MINISAGO_CHATBOT_REPOSITORY` when that login can access multiple repositories
 so requests to change MiniSago itself do not rely on name inference.
 
 ## Persistent state

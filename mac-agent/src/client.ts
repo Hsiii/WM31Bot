@@ -21,6 +21,35 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const AUTH_RETRY_MS = 30_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 
+type JobPhase =
+  | "preparing"
+  | "exploring"
+  | "implementing"
+  | "testing"
+  | "reviewing";
+
+export function formatJobFailure(
+  job: ChatbotJob,
+  phase: JobPhase,
+  cause: string,
+) {
+  const retryable =
+    /busy|disconnect|network|offline|rate.?limit|timed? out|timeout/iu.test(
+      cause,
+    );
+  const branch = job.developerTask
+    ? `minisago/${job.developerTask.id}`
+    : undefined;
+  return [
+    `Phase: ${phase}`,
+    `Cause: ${cause}`,
+    ...(job.repository ? [`Repository: ${job.repository}`] : []),
+    ...(branch ? [`Branch: ${branch}`] : []),
+    `Retry: ${retryable ? "safe" : "needs review"}`,
+    `Logs: worker job ${job.id}`,
+  ].join("\n");
+}
+
 function parseServerMessage(value: unknown) {
   try {
     return JSON.parse(String(value)) as MacAgentServerMessage;
@@ -33,6 +62,7 @@ export class MacAgentClient {
   private appServer = new CodexAppServerManager();
   private authenticated = false;
   private authRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  private codexAuthenticated = false;
   private currentJobs = new Map<string, AbortController>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
@@ -70,6 +100,7 @@ export class MacAgentClient {
   stop() {
     this.stopped = true;
     this.unlocked = false;
+    this.codexAuthenticated = false;
     this.clearTimers();
     this.abortAllJobs();
     this.appServer.close();
@@ -79,10 +110,26 @@ export class MacAgentClient {
     this.traceStore.close();
   }
 
+  health() {
+    const appServer = this.appServer.status();
+    const bridge =
+      this.authenticated && this.socket?.readyState === WebSocket.OPEN;
+    return {
+      ok: Boolean(
+        this.unlocked && bridge && this.codexAuthenticated && appServer.ok,
+      ),
+      bridge,
+      codexAuthenticated: this.codexAuthenticated,
+      activeJobs: this.currentJobs.size,
+      appServer,
+    };
+  }
+
   private async handleSessionState(state: "locked" | "unlocked") {
     if (state === "locked") {
       this.unlocked = false;
       this.authenticated = false;
+      this.codexAuthenticated = false;
       this.clearTimers();
       this.abortAllJobs();
       this.appServer.close();
@@ -105,8 +152,8 @@ export class MacAgentClient {
       return;
     }
 
-    const authenticated = await checkCodexAuthentication(this.config);
-    if (!authenticated) {
+    this.codexAuthenticated = await checkCodexAuthentication(this.config);
+    if (!this.codexAuthenticated) {
       console.warn("Local Codex authentication unavailable; chatbot offline.");
       this.authRetryTimer = setTimeout(
         () => void this.connectWhenReady(),
@@ -246,6 +293,7 @@ export class MacAgentClient {
     const controller = new AbortController();
     this.currentJobs.set(job.id, controller);
     const startedAt = Date.now();
+    let phase: JobPhase = "preparing";
     console.log(`Job ${job.id} started.`);
 
     try {
@@ -271,8 +319,10 @@ export class MacAgentClient {
                 onMcpToolCall: (call) => toolCalls.push(call),
                 onPromptCompiled: (prompt) =>
                   this.traceStore.recordPrompt(job.id, prompt),
-                onProgress: (progress) =>
-                  this.send({ type: "progress", jobId: job.id, progress }),
+                onProgress: (progress) => {
+                  phase = progress.phase;
+                  this.send({ type: "progress", jobId: job.id, progress });
+                },
                 signal: controller.signal,
               });
               this.traceStore.finish(
@@ -301,11 +351,13 @@ export class MacAgentClient {
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
     } catch (error) {
+      const cause = controller.signal.aborted
+        ? "Task stopped."
+        : error instanceof Error
+          ? error.message
+          : "Codex failed.";
       if (job.purpose !== "trace_lookup") {
-        this.traceStore.fail(
-          job.id,
-          error instanceof Error ? error.message : "Codex failed.",
-        );
+        this.traceStore.fail(job.id, cause);
       }
       if (this.authenticated) {
         this.currentJobs.delete(job.id);
@@ -314,14 +366,14 @@ export class MacAgentClient {
           jobId: job.id,
           ok: false,
           error: controller.signal.aborted
-            ? "Task stopped."
-            : error instanceof Error
-              ? error.message
-              : "Codex failed.",
+            ? cause
+            : formatJobFailure(job, phase, cause),
           ...(controller.signal.aborted ? { stopped: true } : {}),
         });
       }
-      console.error(`Job ${job.id} failed after ${Date.now() - startedAt} ms.`);
+      console.error(
+        `Job ${job.id} failed in ${phase} after ${Date.now() - startedAt} ms: ${cause}`,
+      );
     } finally {
       this.currentJobs.delete(job.id);
     }

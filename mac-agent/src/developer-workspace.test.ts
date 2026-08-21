@@ -24,13 +24,12 @@ async function options() {
   };
 }
 
-function job(mutationScope?: "code" | "issue"): ChatbotJob {
+function job(): ChatbotJob {
   return {
     id: "job-123",
     requesterUserId: "917446775873343600",
     purpose: "answer",
-    executionMode: "dev",
-    ...(mutationScope ? { mutationScope } : {}),
+    executionRoute: "oracle",
     repository: "sago-cream/mini-sago",
     channelId: "channel-1",
     requestMessageId: "message-1",
@@ -56,7 +55,7 @@ describe("developer workspace", () => {
     expect(workspace.directory).toEndWith(
       "/worktrees/job-123/sago-cream/mini-sago",
     );
-    expect(commands).toHaveLength(1);
+    expect(commands).toHaveLength(2);
     expect(commands[0]!.command.slice(0, 4)).toEqual([
       "gh",
       "repo",
@@ -73,13 +72,13 @@ describe("developer workspace", () => {
     await workspace.cleanup();
   });
 
-  test("uses the same credential for explicit write jobs", async () => {
+  test("prepares every owner coding job on a protected feature branch", async () => {
     const commands: Array<{
       command: string[];
       environment: Record<string, string>;
     }> = [];
     await prepareDeveloperWorkspace(
-      job("code"),
+      job(),
       await options(),
       async (command, environment) => {
         commands.push({ command, environment });
@@ -99,7 +98,7 @@ describe("developer workspace", () => {
     const workspaceOptions = await options();
     const commands: string[][] = [];
     const taskJob = {
-      ...job("code"),
+      ...job(),
       developerTask: { id: "task-456" },
     };
     const first = await prepareDeveloperWorkspace(
@@ -134,9 +133,9 @@ describe("developer workspace", () => {
     await resumed.cleanup();
   });
 
-  test("blocks GitHub mutations outside the selected scope", async () => {
+  test("allows bounded issue and draft PR mutations", async () => {
     const workspace = await prepareDeveloperWorkspace(
-      job("issue"),
+      job(),
       await options(),
       async () => undefined,
     );
@@ -146,12 +145,12 @@ describe("developer workspace", () => {
       ...workspace.environment,
       MINISAGO_REAL_GH: "/bin/echo",
     };
-    const denied = Bun.spawn([gh, "pr", "create", "--draft"], {
+    const draftPr = Bun.spawn([gh, "pr", "create", "--draft"], {
       env: environment,
       stdout: "ignore",
       stderr: "ignore",
     });
-    expect(await denied.exited).toBe(77);
+    expect(await draftPr.exited).toBe(0);
     const allowed = Bun.spawn([gh, "issue", "comment", "12"], {
       env: environment,
       stdout: "pipe",
@@ -161,6 +160,12 @@ describe("developer workspace", () => {
     expect(await new Response(allowed.stdout).text()).toContain(
       "issue comment 12",
     );
+    const denied = Bun.spawn([gh, "pr", "merge", "12"], {
+      env: environment,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await denied.exited).toBe(77);
   });
 
   test("rejects a repository outside the worker advertisement", async () => {

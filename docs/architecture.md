@@ -57,8 +57,9 @@ routing, evidence retrieval, and answering unless its required profile changes.
    reply continuation, owner direct message, or timed follow-up.
 2. The hosted service authorizes the requester and gathers nearby messages.
 3. It reserves a compatible worker. Owner requests first run a bounded router
-   that selects chat or development, default or Mac, repository, and any
-   task-appropriate mutation scope for owner-requested work.
+   that selects `chat`, `mac`, `oracle`, or `unclear`, plus a repository for
+   Oracle work. An unclear decision asks the owner instead of silently falling
+   back to chat.
 4. The service registers a short-lived, bearer-bound MCP session and dispatches
    one answer job.
 5. Codex receives the request, nearby context, and supported answer attachments.
@@ -77,7 +78,7 @@ development answers may run for 15 minutes.
 
 The hosted service exposes one Streamable HTTP MCP endpoint. Tokens are created
 for one active workflow, expire after 16 minutes, and cannot select another
-requester, guild, channel, worker profile, repository, or mutation scope.
+requester, guild, channel, worker profile, or repository.
 
 The consolidated `resolve_context` tool can request, in parallel:
 

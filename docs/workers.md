@@ -11,12 +11,12 @@ Every worker needs:
 - a working Codex executable and isolated Codex home;
 - a bridge URL and 32-byte-or-longer profile secret;
 - the same `MINISAGO_CHATBOT_OWNER_USER_ID` as the hosted service;
-- an exact `MINISAGO_GITHUB_REPOSITORIES` allowlist; and
+- a dedicated authenticated GitHub CLI login; and
 - outbound HTTPS and WSS.
 
-Repository advertisement means a worker may clone the repository on demand; it
-does not need to exist in advance. Development jobs always receive a disposable
-checkout.
+At startup, each worker discovers and advertises every repository visible to its
+GitHub login. A repository does not need to exist locally in advance. Oracle jobs
+always receive a disposable checkout and prepared feature branch.
 
 ## Oracle worker
 
@@ -53,6 +53,9 @@ docker compose -f compose.worker.yaml run --rm worker gh auth login --hostname g
 docker compose -f compose.worker.yaml up -d --force-recreate
 docker compose -f compose.worker.yaml exec worker gh auth status
 ```
+
+Restart the worker after changing the GitHub login or its repository access so
+it refreshes the advertised repository list.
 
 Never put the token in `.env.worker`, Discord, a Codex request, a shell
 argument, or the repository. Do not expose Docker, Codex, SSH, or workspace

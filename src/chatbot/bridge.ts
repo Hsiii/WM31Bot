@@ -308,7 +308,7 @@ export class MacAgentBridge {
   dispatch(
     job: ChatbotJob,
     capabilities: ChatbotWorkerCapability[] = [
-      job.executionMode === "dev" ? "dev" : "chat",
+      job.executionRoute === "oracle" ? "dev" : "chat",
     ],
   ): DispatchResult {
     const selected = this.selectWorker(capabilities, undefined, job.repository);
@@ -513,7 +513,7 @@ export class MacAgentBridge {
     const worker = this.workers.get(workerId);
     if (!worker?.available) return { status: "offline" };
     if (
-      job.executionMode === "dev" &&
+      job.executionRoute === "oracle" &&
       (!job.repository ||
         !worker.repositories.has(repositoryKey(job.repository)))
     ) {
@@ -526,7 +526,7 @@ export class MacAgentBridge {
 
     const result = new Promise<MacAgentJobResult>((resolve) => {
       const timeoutMs =
-        job.executionMode === "dev" && job.purpose === "answer"
+        job.executionRoute === "oracle" && job.purpose === "answer"
           ? CHATBOT_DEV_JOB_TIMEOUT_MS
           : CHATBOT_JOB_TIMEOUT_MS;
       const timer = setTimeout(() => {

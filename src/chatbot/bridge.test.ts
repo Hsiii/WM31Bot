@@ -255,7 +255,7 @@ describe("Mac agent bridge", () => {
       id: "coding-1",
       requesterUserId: "test-user",
       purpose: "answer",
-      executionMode: "dev",
+      executionRoute: "oracle",
       repository: "sago-cream/mini-sago",
       channelId: "thread-1",
       requestMessageId: "message-1",
@@ -537,16 +537,14 @@ describe("Mac agent bridge", () => {
     const localDispatch = first.workflow.dispatch({
       ...macJob,
       id: "local-job",
-      executionMode: "chat",
-      executionTarget: "mac",
+      executionRoute: "mac",
     });
     expect(JSON.parse(mac.sent.at(-1)!)).toEqual({
       type: "job",
       job: {
         ...macJob,
         id: "local-job",
-        executionMode: "chat",
-        executionTarget: "mac",
+        executionRoute: "mac",
       },
     });
     bridge.message(
@@ -587,7 +585,7 @@ describe("Mac agent bridge", () => {
         id: "review-job",
         requesterUserId: "owner",
         purpose: "answer",
-        executionMode: "dev",
+        executionRoute: "oracle",
         repository: "sago-cream/not-advertised",
         channelId: "channel-1",
         requestMessageId: "message-1",

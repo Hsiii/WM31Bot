@@ -51,24 +51,10 @@ describe("chatbot access policy", () => {
       canUseChatbotCapability("community-member", "mac", ACCESS_CONFIG),
     ).toBe(false);
     expect(
-      canUseChatbotCapability(
-        "community-member",
-        "execution_route",
-        ACCESS_CONFIG,
-      ),
-    ).toBe(false);
-    expect(
       canUseChatbotCapability(ACCESS_CONFIG.ownerUserId, "dev", ACCESS_CONFIG),
     ).toBe(true);
     expect(
       canUseChatbotCapability(ACCESS_CONFIG.ownerUserId, "mac", ACCESS_CONFIG),
-    ).toBe(true);
-    expect(
-      canUseChatbotCapability(
-        ACCESS_CONFIG.ownerUserId,
-        "execution_route",
-        ACCESS_CONFIG,
-      ),
     ).toBe(true);
   });
 });

@@ -142,13 +142,11 @@ describe("Codex chatbot runner", () => {
     const answerJob = {
       ...job,
       purpose: "answer" as const,
-      executionMode: "chat" as const,
-      executionTarget: "default" as const,
     };
     expect(canUseMediaTools(answerJob, "linux")).toBe(true);
     expect(canUseMediaTools(answerJob, "darwin")).toBe(false);
     expect(
-      canUseMediaTools({ ...answerJob, executionMode: "dev" }, "linux"),
+      canUseMediaTools({ ...answerJob, executionRoute: "oracle" }, "linux"),
     ).toBe(false);
 
     expect(
@@ -221,19 +219,20 @@ describe("Codex chatbot runner", () => {
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
     });
-    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("target");
-    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("mutationScope");
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("route");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("threadTitle");
-    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.target.enum).toEqual([
-      "default",
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.route.enum).toEqual([
+      "chat",
       "mac",
+      "oracle",
+      "unclear",
     ]);
     expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
     expect(
       codexProfileForJob({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
       }),
     ).toBe(OWNER_CHATBOT_PROFILE);
     expect(
@@ -292,16 +291,13 @@ describe("Codex chatbot runner", () => {
     );
     expect(prompt).toContain('chatbot_repository_json\n"sago-cream/mini-sago"');
     expect(prompt).toContain("Never invent a repository");
-    expect(prompt).toContain("Mutation scope is a coarse execution aid");
+    expect(prompt).toContain("already authorized for every route");
+    expect(prompt).toContain("choose unclear instead of silently falling back");
     expect(prompt).toContain(
       'Treat a short follow-up such as "handle this", "try again", "retry", "push"',
     );
-    expect(prompt).toContain('"升成寫入權限"');
     expect(prompt).toContain(
-      "Set code whenever successful completion normally involves editing repository files",
-    );
-    expect(prompt).toContain(
-      "Do not withhold code scope merely because the wording is brief",
+      "Choose oracle for PR review, repository inspection, analysis, debugging, tests, builds, issue work, code changes, commits, feature-branch pushes, draft PRs, or deployment work",
     );
     expect(prompt).toContain(
       "Use them only to resolve the current owner's request",
@@ -348,7 +344,7 @@ describe("Codex chatbot runner", () => {
       ...job,
       requesterUserId: ACCESS_CONFIG.ownerUserId,
       purpose: "answer",
-      executionMode: "dev",
+      executionRoute: "oracle",
       repository: "sago-cream/mini-sago",
       developerTask: { id: "task-1" },
     };
@@ -367,8 +363,7 @@ describe("Codex chatbot runner", () => {
       ...job,
       requesterUserId: ACCESS_CONFIG.ownerUserId,
       purpose: "answer",
-      executionMode: "chat",
-      executionTarget: "mac",
+      executionRoute: "mac",
     };
     const roots = ["/Users/hsi/Documents", "/Users/hsi/Downloads"];
     const prompt = buildCodexPrompt(macJob, [], [], undefined, roots);
@@ -490,21 +485,21 @@ describe("Codex chatbot runner", () => {
     expect(() =>
       assertChatbotJobAllowed({
         ...job,
-        executionMode: "dev",
+        executionRoute: "oracle",
         repository: "sago-cream/mini-sago",
       }),
     ).toThrow("Requester cannot use the dev capability.");
     expect(() =>
-      assertChatbotJobAllowed({ ...job, executionTarget: "mac" }),
+      assertChatbotJobAllowed({ ...job, executionRoute: "mac" }),
     ).toThrow("Requester cannot use the mac capability.");
     expect(() =>
       assertChatbotJobAllowed({ ...job, purpose: "execution_route" }),
-    ).toThrow("Requester cannot use the execution_route capability.");
+    ).toThrow("Requester cannot route owner execution.");
     expect(() =>
       assertChatbotJobAllowed({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
         repository: "sago-cream/mini-sago",
       }),
     ).not.toThrow();
@@ -515,7 +510,7 @@ describe("Codex chatbot runner", () => {
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
         repository: "sago-cream/mini-sago",
         request: "review this PR",
       },
@@ -524,10 +519,8 @@ describe("Codex chatbot runner", () => {
     );
     const chatPrompt = buildCodexPrompt(job, [], []);
 
-    expect(devPrompt).toContain(
-      "owner-authorized development task without mutation scope",
-    );
-    expect(devPrompt).toContain("never intentionally modify remote state");
+    expect(devPrompt).toContain("owner-authorized development task");
+    expect(devPrompt).toContain("prepared feature branch");
     expect(devPrompt).not.toContain("read-only chat");
     expect(chatPrompt).toContain("Chat is read-only");
     expect(chatPrompt).toContain("Use bounded Python");
@@ -859,7 +852,7 @@ describe("Codex chatbot runner", () => {
 
   test("exposes no token and gives GitHub paths only to owner dev answers", () => {
     const developerEnvironment = {
-      MINISAGO_GITHUB_REPOSITORIES: "sago-cream/mini-sago",
+      MINISAGO_GITHUB_CONFIG_DIR: "/tmp/github-config",
     };
     const chatEnvironment = codexEnvironment(
       "/tmp/codex-home",
@@ -876,17 +869,17 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(chatEnvironment.GH_TOKEN).toBeUndefined();
-    expect(chatEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBeUndefined();
+    expect(chatEnvironment.MINISAGO_GITHUB_CONFIG_DIR).toBeUndefined();
     expect(devEnvironment.GH_TOKEN).toBeUndefined();
-    expect(devEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBe(
-      "sago-cream/mini-sago",
+    expect(devEnvironment.MINISAGO_GITHUB_CONFIG_DIR).toBe(
+      "/tmp/github-config",
     );
     expect(devEnvironment.MINISAGO_MCP_TOKEN).toBe("ephemeral-token");
     expect(
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
         purpose: "answer",
       }),
     ).toBe(true);
@@ -894,14 +887,14 @@ describe("Codex chatbot runner", () => {
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
         purpose: "social_action",
       }),
     ).toBe(false);
     expect(
       canUseDeveloperTools({
         ...job,
-        executionMode: "dev",
+        executionRoute: "oracle",
         purpose: "answer",
       }),
     ).toBe(false);
@@ -911,14 +904,14 @@ describe("Codex chatbot runner", () => {
     const policy = buildGithubDeveloperPolicy({
       ...job,
       id: "job-123",
-      executionMode: "dev",
+      executionRoute: "oracle",
       repository: "sago-cream/mini-sago",
     });
     const devPrompt = buildCodexPrompt(
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionRoute: "oracle",
         repository: "sago-cream/mini-sago",
       },
       [],
@@ -928,8 +921,8 @@ describe("Codex chatbot runner", () => {
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
     expect(policy).toContain("sago-cream/mini-sago");
-    expect(policy).toContain("routed as dev");
-    expect(policy).toContain("must remain read-only on GitHub");
+    expect(policy).toContain("routed to Oracle");
+    expect(policy).toContain("draft pull requests");
     expect(policy).toContain("dedicated repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");
     expect(chatPrompt).not.toContain("github_development_policy");
