@@ -77,9 +77,6 @@ function requestMessageContext(job: ChatbotJob) {
       ? { attachments: message.attachments.map(promptAttachment) }
       : {}),
     ...(message.reactions?.length ? { reactions: message.reactions } : {}),
-    ...(message.referencedMessage
-      ? { referencedMessage: promptMessage(message.referencedMessage) }
-      : {}),
   };
 }
 
@@ -105,6 +102,14 @@ export function requestContext(
 
   if (currentMessage) {
     sections.push(block("current_message_context_json", currentMessage));
+  }
+  if (job.requestMessage?.referencedMessage) {
+    sections.push(
+      block(
+        "replied_to_message_json",
+        promptMessage(job.requestMessage.referencedMessage),
+      ),
+    );
   }
   if (job.addressingMode) {
     sections.push(
