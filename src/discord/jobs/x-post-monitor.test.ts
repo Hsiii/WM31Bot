@@ -43,7 +43,7 @@ describe("X post monitor", () => {
     });
   });
 
-  test("includes the hololive dreams Discord pipe with isolated state", () => {
+  test("includes additional Discord pipes with isolated state", () => {
     const configs = getXPostMonitorConfigs({
       DISCORD_BOT_TOKEN: "test-token",
       DISCORD_GUILD_ID: "guild-1",
@@ -63,6 +63,12 @@ describe("X post monitor", () => {
         channelId: "1527893157168283668",
         feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
         stateFile: "/app/state/x-post-state.json",
+      },
+      {
+        handle: "thsottiaux",
+        channelId: "1515569479541854218",
+        feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
+        stateFile: "/app/state/x-post-thsottiaux-additional-state.json",
       },
       {
         handle: "hololive_dreams",

@@ -11,6 +11,11 @@ const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
 const DEFAULT_ADDITIONAL_PIPES = [
   {
+    handle: "thsottiaux",
+    channelId: "1515569479541854218",
+    stateFileName: "x-post-thsottiaux-additional-state.json",
+  },
+  {
     handle: "hololive_dreams",
     channelId: "1290252977621176361",
     stateFileName: "x-post-hololive-dreams-state.json",
