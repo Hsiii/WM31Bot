@@ -2,8 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import type { ChatbotAccessConfig } from "../../src/chatbot/access";
 import type {
-  ChatbotJob,
+  ChatAnswerJob,
   ChatbotMcpTraceCall,
+  CodexJob,
+  ExecutionRouteJob,
+  MacAnswerJob,
+  OracleAnswerJob,
+  SocialActionJob,
 } from "../../src/chatbot/protocol";
 import {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
@@ -46,18 +51,21 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
   guildIds: new Set(),
   channelIds: new Set(),
 };
-const assertChatbotJobAllowed = (job: ChatbotJob) =>
+const assertChatbotJobAllowed = (job: CodexJob) =>
   assertChatbotJobAllowedWithConfig(job, ACCESS_CONFIG);
-const canUseDeveloperTools = (job: ChatbotJob) =>
+const canUseDeveloperTools = (job: CodexJob) =>
   canUseDeveloperToolsWithConfig(job, ACCESS_CONFIG);
-const canUseMacFiles = (job: ChatbotJob) =>
+const canUseMacFiles = (job: CodexJob) =>
   canUseMacFilesWithConfig(job, ACCESS_CONFIG);
-const codexProfileForJob = (job: ChatbotJob) =>
+const codexProfileForJob = (job: CodexJob) =>
   codexProfileForJobWithConfig(job, ACCESS_CONFIG);
 
-const job: ChatbotJob = {
+const job: ChatAnswerJob = {
   id: "job-1",
   requesterUserId: "community-member",
+  purpose: "answer",
+  executionRoute: "chat",
+  mcpAccessToken: "test-token",
   channelId: "channel-1",
   requestMessageId: "message-2",
   request: "What did we decide?",
@@ -72,6 +80,50 @@ const job: ChatbotJob = {
     },
   ],
 };
+
+function executionRouteJob(
+  overrides: Partial<ExecutionRouteJob> = {},
+): ExecutionRouteJob {
+  return {
+    id: job.id,
+    requesterUserId: job.requesterUserId,
+    purpose: "execution_route",
+    channelId: job.channelId,
+    requestMessageId: job.requestMessageId,
+    request: job.request,
+    requestMessage: job.requestMessage,
+    messages: job.messages,
+    availableRepositories: [],
+    ...overrides,
+  };
+}
+
+function socialActionJob(
+  overrides: Partial<SocialActionJob> = {},
+): SocialActionJob {
+  return {
+    id: job.id,
+    requesterUserId: job.requesterUserId,
+    purpose: "social_action",
+    channelId: job.channelId,
+    requestMessageId: job.requestMessageId,
+    request: job.request,
+    requestMessage: job.requestMessage,
+    messages: job.messages,
+    availableTools: [],
+    socialActionCandidateMessageIds: [],
+    ...overrides,
+  };
+}
+
+function oracleJob(overrides: Partial<OracleAnswerJob> = {}): OracleAnswerJob {
+  return {
+    ...job,
+    executionRoute: "oracle",
+    repository: "sago-cream/mini-sago",
+    ...overrides,
+  };
+}
 
 describe("Codex chatbot runner", () => {
   test("turns Codex JSONL into bounded public progress", () => {
@@ -145,9 +197,7 @@ describe("Codex chatbot runner", () => {
     };
     expect(canUseMediaTools(answerJob, "linux")).toBe(true);
     expect(canUseMediaTools(answerJob, "darwin")).toBe(false);
-    expect(
-      canUseMediaTools({ ...answerJob, executionRoute: "oracle" }, "linux"),
-    ).toBe(false);
+    expect(canUseMediaTools(oracleJob(), "linux")).toBe(false);
 
     expect(
       mediaMcpConfig(
@@ -229,25 +279,20 @@ describe("Codex chatbot runner", () => {
     ]);
     expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
     expect(
-      codexProfileForJob({
-        ...job,
-        requesterUserId: "917446775873343600",
-        executionRoute: "oracle",
-      }),
+      codexProfileForJob(
+        oracleJob({
+          requesterUserId: "917446775873343600",
+        }),
+      ),
     ).toBe(OWNER_CHATBOT_PROFILE);
     expect(
-      codexProfileForJob({
-        ...job,
-        requesterUserId: "917446775873343600",
-        purpose: "execution_route",
-      }),
+      codexProfileForJob(
+        executionRouteJob({
+          requesterUserId: "917446775873343600",
+        }),
+      ),
     ).toBe(OWNER_ROUTER_PROFILE);
-    expect(
-      codexProfileForJob({
-        ...job,
-        purpose: "social_action",
-      }),
-    ).toBe(SOCIAL_ACTION_PROFILE);
+    expect(codexProfileForJob(socialActionJob())).toBe(SOCIAL_ACTION_PROFILE);
     expect(SOCIAL_ACTION_OUTPUT_SCHEMA.properties.action.enum).toEqual([
       "ignore",
       "discord.add_reaction",
@@ -257,9 +302,7 @@ describe("Codex chatbot runner", () => {
 
   test("routes only through worker-advertised repository capabilities", () => {
     const prompt = buildCodexPrompt(
-      {
-        ...job,
-        purpose: "execution_route",
+      executionRouteJob({
         request: "try again",
         messages: [
           {
@@ -281,7 +324,7 @@ describe("Codex chatbot runner", () => {
         ],
         availableRepositories: ["sago-cream/mini-sago", "Kiwi/backend"],
         chatbotRepository: "sago-cream/mini-sago",
-      },
+      }),
       [],
       [],
     );
@@ -311,7 +354,7 @@ describe("Codex chatbot runner", () => {
   });
 
   test("teaches mention answers to use bounded MCP tools", () => {
-    const answerJob: ChatbotJob = {
+    const answerJob: ChatAnswerJob = {
       ...job,
       purpose: "answer",
       availableTools: [
@@ -340,14 +383,10 @@ describe("Codex chatbot runner", () => {
   });
 
   test("uses native Codex output for Discord coding threads", () => {
-    const developerJob: ChatbotJob = {
-      ...job,
+    const developerJob: OracleAnswerJob = oracleJob({
       requesterUserId: ACCESS_CONFIG.ownerUserId,
-      purpose: "answer",
-      executionRoute: "oracle",
-      repository: "sago-cream/mini-sago",
       developerTask: { id: "task-1" },
-    };
+    });
     const prompt = buildCodexPrompt(developerJob, [], [], "Repository policy");
 
     expect(outputSchemaForJob(developerJob)).toBeUndefined();
@@ -359,7 +398,7 @@ describe("Codex chatbot runner", () => {
   });
 
   test("gives only owner Mac answers the bounded file output", () => {
-    const macJob: ChatbotJob = {
+    const macJob: MacAnswerJob = {
       ...job,
       requesterUserId: ACCESS_CONFIG.ownerUserId,
       purpose: "answer",
@@ -492,9 +531,9 @@ describe("Codex chatbot runner", () => {
     expect(() =>
       assertChatbotJobAllowed({ ...job, executionRoute: "mac" }),
     ).toThrow("Requester cannot use the mac capability.");
-    expect(() =>
-      assertChatbotJobAllowed({ ...job, purpose: "execution_route" }),
-    ).toThrow("Requester cannot route owner execution.");
+    expect(() => assertChatbotJobAllowed(executionRouteJob())).toThrow(
+      "Requester cannot route owner execution.",
+    );
     expect(() =>
       assertChatbotJobAllowed({
         ...job,
@@ -584,9 +623,7 @@ describe("Codex chatbot runner", () => {
 
   test("reviews one buffered notification burst without duplicating its text", () => {
     const prompt = buildCodexPrompt(
-      {
-        ...job,
-        purpose: "social_action",
+      socialActionJob({
         request: "",
         socialActionCandidateMessageIds: ["message-2"],
         messages: [
@@ -605,7 +642,7 @@ describe("Codex chatbot runner", () => {
             attachments: [],
           },
         ],
-      },
+      }),
       [],
       [],
     );
@@ -880,28 +917,18 @@ describe("Codex chatbot runner", () => {
     );
     expect(devEnvironment.MINISAGO_MCP_TOKEN).toBe("ephemeral-token");
     expect(
-      canUseDeveloperTools({
-        ...job,
-        requesterUserId: "917446775873343600",
-        executionRoute: "oracle",
-        purpose: "answer",
-      }),
+      canUseDeveloperTools(
+        oracleJob({
+          requesterUserId: "917446775873343600",
+        }),
+      ),
     ).toBe(true);
     expect(
-      canUseDeveloperTools({
-        ...job,
-        requesterUserId: "917446775873343600",
-        executionRoute: "oracle",
-        purpose: "social_action",
-      }),
+      canUseDeveloperTools(
+        socialActionJob({ requesterUserId: "917446775873343600" }),
+      ),
     ).toBe(false);
-    expect(
-      canUseDeveloperTools({
-        ...job,
-        executionRoute: "oracle",
-        purpose: "answer",
-      }),
-    ).toBe(false);
+    expect(canUseDeveloperTools(oracleJob())).toBe(false);
   });
 
   test("describes owner-routed GitHub profiles", () => {

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ChatbotJob } from "../../src/chatbot/protocol";
+import type { OracleAnswerJob } from "../../src/chatbot/protocol";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 
 const roots: string[] = [];
@@ -24,13 +24,14 @@ async function options() {
   };
 }
 
-function job(): ChatbotJob {
+function job(): OracleAnswerJob {
   return {
     id: "job-123",
     requesterUserId: "917446775873343600",
     purpose: "answer",
     executionRoute: "oracle",
     repository: "sago-cream/mini-sago",
+    mcpAccessToken: "test-token",
     channelId: "channel-1",
     requestMessageId: "message-1",
     request: "review the PR",

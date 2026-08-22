@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../src/chatbot/protocol";
+import type { AnswerJob } from "../../../src/chatbot/protocol";
 import { answerContext } from "./context";
 import {
   needsTaiwaneseLanguageReference,
@@ -140,7 +140,7 @@ To send one file, put its exact absolute path in files. The host revalidates the
 }
 
 export function buildAnswerDeveloperInstructions(
-  job: ChatbotJob,
+  job: AnswerJob,
   developerPolicy?: string,
   macFileRoots: string[] = [],
 ) {
@@ -176,7 +176,7 @@ export const CODEX_THREAD_TASK_INSTRUCTION =
   "Work on the current request from the supplied context. Respond directly to the user.";
 
 export function buildAnswerPrompt(
-  job: ChatbotJob,
+  job: AnswerJob,
   attachmentText: string[],
   ignoredAttachments: string[],
   developerPolicy?: string,

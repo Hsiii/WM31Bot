@@ -1,5 +1,6 @@
 import {
   CHATBOT_PROTOCOL_VERSION,
+  parseChatbotJob,
   type ChatbotFailureKind,
   type ChatbotJob,
   type ChatbotMcpTraceCall,
@@ -65,7 +66,38 @@ export function failureKindForCause(
 
 function parseServerMessage(value: unknown) {
   try {
-    return JSON.parse(String(value)) as MacAgentServerMessage;
+    const message = JSON.parse(String(value)) as unknown;
+    if (!message || typeof message !== "object") return null;
+    const record = message as Record<string, unknown>;
+
+    if (
+      record.type === "authenticated" &&
+      typeof record.protocolVersion === "number"
+    ) {
+      return record as MacAgentServerMessage;
+    }
+    if (record.type === "job") {
+      const job = parseChatbotJob(record.job);
+      return job ? ({ type: "job", job } as const) : null;
+    }
+    if (record.type === "cancel" && typeof record.jobId === "string") {
+      return record as MacAgentServerMessage;
+    }
+    if (
+      record.type === "steer" &&
+      typeof record.jobId === "string" &&
+      typeof record.requestId === "string" &&
+      typeof record.request === "string"
+    ) {
+      return record as MacAgentServerMessage;
+    }
+    if (
+      record.type === "codex_usage_request" &&
+      typeof record.requestId === "string"
+    ) {
+      return record as MacAgentServerMessage;
+    }
+    return null;
   } catch {
     return null;
   }

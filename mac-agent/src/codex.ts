@@ -6,10 +6,14 @@ import {
   type ChatbotAccessConfig,
 } from "../../src/chatbot/access";
 import type {
-  ChatbotJob,
+  AnswerJob,
+  ChatAnswerJob,
   ChatbotMcpTraceCall,
   ChatbotPromptTelemetry,
   ChatbotTaskProgress,
+  CodexJob,
+  MacAnswerJob,
+  OracleAnswerJob,
 } from "../../src/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
@@ -46,7 +50,7 @@ export const TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.edit_trip_plan.approval_mode="approve"';
 
 export function minisagoMcpApprovalMode(
-  job: ChatbotJob,
+  job: AnswerJob,
   accessConfig: ChatbotAccessConfig,
 ) {
   return job.requesterUserId === accessConfig.ownerUserId ? "approve" : "auto";
@@ -196,7 +200,7 @@ export function developerFilesystemPermissions(
 }
 
 export function codexProfileForJob(
-  job: ChatbotJob,
+  job: CodexJob,
   accessConfig: ChatbotAccessConfig,
 ) {
   if (job.purpose === "execution_route") return OWNER_ROUTER_PROFILE;
@@ -208,7 +212,7 @@ export function codexProfileForJob(
 }
 
 export function assertChatbotJobAllowed(
-  job: ChatbotJob,
+  job: CodexJob,
   accessConfig: ChatbotAccessConfig,
 ) {
   if (
@@ -233,20 +237,20 @@ export function assertChatbotJobAllowed(
 }
 
 export function canUseDeveloperTools(
-  job: ChatbotJob,
+  job: CodexJob,
   accessConfig: ChatbotAccessConfig,
-) {
+): job is OracleAnswerJob {
   return (
     canUseChatbotCapability(job.requesterUserId, "dev", accessConfig) &&
-    job.executionRoute === "oracle" &&
-    (job.purpose === undefined || job.purpose === "answer")
+    job.purpose === "answer" &&
+    job.executionRoute === "oracle"
   );
 }
 
 export function canUseMacFiles(
-  job: ChatbotJob,
+  job: CodexJob,
   accessConfig: ChatbotAccessConfig,
-) {
+): job is MacAnswerJob {
   return (
     canUseChatbotCapability(job.requesterUserId, "mac", accessConfig) &&
     job.executionRoute === "mac" &&
@@ -255,14 +259,13 @@ export function canUseMacFiles(
 }
 
 export function canUseMediaTools(
-  job: ChatbotJob,
+  job: CodexJob,
   platform: NodeJS.Platform = process.platform,
-) {
+): job is ChatAnswerJob {
   return (
     platform === "linux" &&
     job.purpose === "answer" &&
-    job.executionRoute !== "oracle" &&
-    job.executionRoute !== "mac"
+    job.executionRoute === "chat"
   );
 }
 
@@ -374,7 +377,7 @@ export function codexEnvironment(
   return environment;
 }
 
-export function buildGithubDeveloperPolicy(job: ChatbotJob) {
+export function buildGithubDeveloperPolicy(job: OracleAnswerJob) {
   return `<github_development_policy>
 This owner-authorized job is routed to Oracle in ${job.repository}. Work only in the current isolated checkout.
 Use MiniSago's dedicated repo-scoped GitHub login. Never print, inspect, copy, persist elsewhere, or expose credentials or authentication configuration.
@@ -547,7 +550,7 @@ export async function checkCodexAuthentication({
   return (await process.exited) === 0;
 }
 
-export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
+export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   assertChatbotJobAllowed(job, options.chatbotAccess);
   const profile = codexProfileForJob(job, options.chatbotAccess);
   const hasDeveloperAccess = canUseDeveloperTools(job, options.chatbotAccess);
@@ -661,9 +664,6 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     }
 
     if (job.purpose === "answer") {
-      if (!job.mcpAccessToken) {
-        throw new Error("Chatbot answer job is missing its MCP session.");
-      }
       codexArguments.push(
         "--config",
         `mcp_servers.minisago.url=${JSON.stringify(options.mcpUrl)}`,
@@ -714,10 +714,10 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
           true,
           {
             ...developerWorkspace!.environment,
-            MINISAGO_GITHUB_REPOSITORY: job.repository!,
+            MINISAGO_GITHUB_REPOSITORY: job.repository,
             MINISAGO_JOB_ID: job.id,
           },
-          { MINISAGO_MCP_TOKEN: job.mcpAccessToken! },
+          { MINISAGO_MCP_TOKEN: job.mcpAccessToken },
         ),
         model: profile.model,
         effort: profile.reasoningEffort,

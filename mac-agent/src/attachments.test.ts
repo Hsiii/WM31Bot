@@ -2,8 +2,14 @@ import { access, readFile } from "node:fs/promises";
 
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotJob } from "../../src/chatbot/protocol";
+import type { ChatAnswerJob } from "../../src/chatbot/protocol";
 import { attachmentLimits, prepareAttachments } from "./attachments";
+
+const answerDefaults = {
+  purpose: "answer",
+  executionRoute: "chat",
+  mcpAccessToken: "test-token",
+} as const;
 
 describe("chatbot attachment limits", () => {
   test("caps downloads at ten files and twenty megabytes each", () => {
@@ -18,6 +24,7 @@ describe("chatbot attachment limits", () => {
 
   test("explains oversized attachments with the selected Chinese copy", async () => {
     const prepared = await prepareAttachments({
+      ...answerDefaults,
       id: "job-large-file",
       requesterUserId: "test-user",
       channelId: "channel-1",
@@ -61,6 +68,7 @@ describe("chatbot attachment limits", () => {
         id: "route-with-attachment",
         requesterUserId: "owner",
         purpose: "execution_route",
+        availableRepositories: [],
         channelId: "channel-1",
         requestMessageId: "message-1",
         request: "handle this",
@@ -102,9 +110,9 @@ describe("chatbot attachment limits", () => {
 
     try {
       const prepared = await prepareAttachments({
+        ...answerDefaults,
         id: "answer-with-docx",
         requesterUserId: "test-user",
-        purpose: "answer",
         channelId: "channel-1",
         requestMessageId: "message-1",
         request: "read this",
@@ -140,7 +148,8 @@ describe("chatbot attachment limits", () => {
     "extracts text attachments and removes temporary files",
     async () => {
       const originalFetch = globalThis.fetch;
-      const job: ChatbotJob = {
+      const job: ChatAnswerJob = {
+        ...answerDefaults,
         id: "job-1",
         requesterUserId: "test-user",
         channelId: "channel-1",
@@ -199,7 +208,8 @@ describe("chatbot attachment limits", () => {
 
   test.serial("includes attachments on the triggering mention", async () => {
     const originalFetch = globalThis.fetch;
-    const job: ChatbotJob = {
+    const job: ChatAnswerJob = {
+      ...answerDefaults,
       id: "job-2",
       requesterUserId: "test-user",
       channelId: "channel-1",
@@ -250,9 +260,9 @@ describe("chatbot attachment limits", () => {
 
       try {
         const prepared = await prepareAttachments({
+          ...answerDefaults,
           id: "job-video",
           requesterUserId: "test-user",
-          purpose: "answer",
           channelId: "channel-1",
           requestMessageId: "message-video",
           request: "make a clip",
@@ -300,7 +310,8 @@ describe("chatbot attachment limits", () => {
     "includes replied-to images with missing or modern MIME types",
     async () => {
       const originalFetch = globalThis.fetch;
-      const job: ChatbotJob = {
+      const job: ChatAnswerJob = {
+        ...answerDefaults,
         id: "job-images",
         requesterUserId: "test-user",
         channelId: "channel-1",
@@ -396,6 +407,7 @@ describe("chatbot attachment limits", () => {
         await expect(
           prepareAttachments(
             {
+              ...answerDefaults,
               id: "job-cancelled",
               requesterUserId: "test-user",
               channelId: "channel-1",

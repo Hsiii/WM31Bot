@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../src/chatbot/protocol";
+import type { CodexJob } from "../../../src/chatbot/protocol";
 import {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_OUTPUT_SCHEMA,
@@ -45,7 +45,7 @@ export type PromptPlan = {
   context: string;
   telemetry: {
     promptVersion: number;
-    purpose: NonNullable<ChatbotJob["purpose"]>;
+    purpose: CodexJob["purpose"];
     developerCharacters: number;
     taskCharacters: number;
     contextCharacters: number;
@@ -53,7 +53,7 @@ export type PromptPlan = {
 };
 
 function promptPlan(
-  purpose: NonNullable<ChatbotJob["purpose"]>,
+  purpose: CodexJob["purpose"],
   developerInstructions: string,
   taskInstruction: string,
   context: string,
@@ -74,7 +74,7 @@ function promptPlan(
 }
 
 export function buildPromptPlan(
-  job: ChatbotJob,
+  job: CodexJob,
   attachmentText: string[],
   ignoredAttachments: string[],
   developerPolicy?: string,
@@ -105,7 +105,7 @@ export function buildPromptPlan(
 }
 
 export function buildCodexPrompt(
-  job: ChatbotJob,
+  job: CodexJob,
   attachmentText: string[],
   ignoredAttachments: string[],
   developerPolicy?: string,
@@ -123,7 +123,7 @@ export function buildCodexPrompt(
   );
 }
 
-export function outputSchemaForJob(job: ChatbotJob) {
+export function outputSchemaForJob(job: CodexJob) {
   if (job.purpose === "execution_route") return EXECUTION_ROUTE_OUTPUT_SCHEMA;
   if (job.purpose === "social_action") return SOCIAL_ACTION_OUTPUT_SCHEMA;
   if (job.purpose === "answer") {

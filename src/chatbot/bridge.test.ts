@@ -132,6 +132,9 @@ describe("Mac agent bridge", () => {
     const job: ChatbotJob = {
       id: "job-1",
       requesterUserId: "test-user",
+      purpose: "answer",
+      executionRoute: "chat",
+      mcpAccessToken: "test-token",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "Summarize this",
@@ -191,6 +194,7 @@ describe("Mac agent bridge", () => {
       id: "router-1",
       requesterUserId: "test-user",
       purpose: "execution_route",
+      availableRepositories: ["Kiwi/backend", "sago-cream/mini-sago"],
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "What did we decide?",
@@ -223,9 +227,15 @@ describe("Mac agent bridge", () => {
     await planning.result;
 
     const answer = acquired.workflow.dispatch({
-      ...job,
       id: "answer-1",
+      requesterUserId: job.requesterUserId,
       purpose: "answer",
+      executionRoute: "chat",
+      mcpAccessToken: "test-token",
+      channelId: job.channelId,
+      requestMessageId: job.requestMessageId,
+      request: job.request,
+      messages: job.messages,
     });
     expect(answer.status).toBe("accepted");
     acquired.workflow.release();
@@ -257,6 +267,7 @@ describe("Mac agent bridge", () => {
       purpose: "answer",
       executionRoute: "oracle",
       repository: "sago-cream/mini-sago",
+      mcpAccessToken: "test-token",
       channelId: "thread-1",
       requestMessageId: "message-1",
       request: "Fix it",
@@ -402,6 +413,9 @@ describe("Mac agent bridge", () => {
     const job: ChatbotJob = {
       id: "job-1",
       requesterUserId: "test-user",
+      purpose: "answer",
+      executionRoute: "chat",
+      mcpAccessToken: "test-token",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "Summarize this",
@@ -480,6 +494,9 @@ describe("Mac agent bridge", () => {
     const cloudJob: ChatbotJob = {
       id: "cloud-job",
       requesterUserId: "owner",
+      purpose: "answer",
+      executionRoute: "chat",
+      mcpAccessToken: "test-token",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "Review a PR",
@@ -589,6 +606,7 @@ describe("Mac agent bridge", () => {
         purpose: "answer",
         executionRoute: "oracle",
         repository: "sago-cream/not-advertised",
+        mcpAccessToken: "test-token",
         channelId: "channel-1",
         requestMessageId: "message-1",
         request: "review this PR",
