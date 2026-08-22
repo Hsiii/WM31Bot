@@ -5,6 +5,7 @@ import type { ChatbotOutgoingFile } from "../../src/chatbot/protocol";
 
 const MAX_OUTGOING_FILE_BYTES = 8 * 1024 * 1024;
 const artifactIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$/u;
+const generatedArtifactIdPattern = /^(?:media|python)-/u;
 const generatedArtifactExtensions = new Set([
   ".csv",
   ".docx",
@@ -77,7 +78,9 @@ export function requestedArtifactIds(content: string) {
             typeof id === "string" &&
             id !== "." &&
             id !== ".." &&
-            artifactIdPattern.test(id),
+            artifactIdPattern.test(id) &&
+            generatedArtifactIdPattern.test(id) &&
+            generatedArtifactExtensions.has(extname(id).toLocaleLowerCase()),
         )
       : [];
     delete value.artifacts;
