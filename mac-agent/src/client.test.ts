@@ -9,6 +9,7 @@ const job: ChatbotJob = {
   purpose: "answer",
   executionRoute: "oracle",
   repository: "sago-cream/mini-sago",
+  mcpAccessToken: "test-token",
   channelId: "thread-1",
   requestMessageId: "message-1",
   request: "fix it",

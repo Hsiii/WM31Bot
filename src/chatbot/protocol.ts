@@ -69,7 +69,7 @@ export type ChatbotPromptTelemetry = {
     task: number;
     context: number;
   };
-  purpose: NonNullable<ChatbotJob["purpose"]>;
+  purpose: CodexJob["purpose"];
   developerCharacters: number;
   taskCharacters: number;
   contextCharacters: number;
@@ -118,30 +118,291 @@ export type ChatbotServerMemory = {
   }>;
 };
 
-export type ChatbotJob = {
+type ChatbotJobBase = {
   id: string;
   requesterUserId: string;
-  purpose?: "answer" | "execution_route" | "social_action" | "trace_lookup";
-  executionRoute?: ChatbotExecutionRoute;
-  repository?: string;
-  availableRepositories?: string[];
-  chatbotRepository?: string;
-  mcpAccessToken?: string;
-  availableTools?: ChatbotToolCapability[];
-  addressingMode?: ChatbotAddressingMode;
-  serverMemory?: ChatbotServerMemory;
-  socialActionCandidateMessageIds?: string[];
   channelId: string;
   requestMessageId: string;
   request: string;
   requestMessage?: ChatbotMessage;
   messages: ChatbotMessage[];
+};
+
+type NonAnswerJob = {
+  executionRoute?: never;
+  repository?: never;
+  mcpAccessToken?: never;
+  addressingMode?: never;
+  serverMemory?: never;
+  developerTask?: never;
+};
+
+type NonRoutingJob = {
+  availableRepositories?: never;
+  chatbotRepository?: never;
+};
+
+export type ExecutionRouteJob = ChatbotJobBase &
+  NonAnswerJob & {
+    purpose: "execution_route";
+    availableRepositories: string[];
+    chatbotRepository?: string;
+    availableTools?: never;
+    socialActionCandidateMessageIds?: never;
+  };
+
+export type TraceLookupJob = ChatbotJobBase &
+  NonAnswerJob &
+  NonRoutingJob & {
+    purpose: "trace_lookup";
+    availableTools?: never;
+    socialActionCandidateMessageIds?: never;
+  };
+
+export type SocialActionJob = ChatbotJobBase &
+  NonAnswerJob &
+  NonRoutingJob & {
+    purpose: "social_action";
+    availableTools: ChatbotToolCapability[];
+    socialActionCandidateMessageIds: string[];
+  };
+
+type AnswerJobBase = ChatbotJobBase &
+  NonRoutingJob & {
+    purpose: "answer";
+    mcpAccessToken: string;
+    availableTools?: ChatbotToolCapability[];
+    addressingMode?: ChatbotAddressingMode;
+    serverMemory?: ChatbotServerMemory;
+    socialActionCandidateMessageIds?: never;
+  };
+
+export type ChatAnswerJob = AnswerJobBase & {
+  executionRoute: "chat";
+  repository?: never;
+  developerTask?: never;
+};
+
+export type MacAnswerJob = AnswerJobBase & {
+  executionRoute: "mac";
+  repository?: never;
+  developerTask?: never;
+};
+
+export type OracleAnswerJob = AnswerJobBase & {
+  executionRoute: "oracle";
+  repository: string;
   developerTask?: {
     id: string;
     title?: string;
     resumeSessionId?: string;
   };
 };
+
+export type AnswerJob = ChatAnswerJob | MacAnswerJob | OracleAnswerJob;
+export type CodexJob = AnswerJob | ExecutionRouteJob | SocialActionJob;
+export type ChatbotJob = CodexJob | TraceLookupJob;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
+}
+
+function isAttachment(value: unknown): value is ChatbotAttachment {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.filename === "string" &&
+    (value.contentType === undefined ||
+      typeof value.contentType === "string") &&
+    typeof value.size === "number" &&
+    typeof value.url === "string"
+  );
+}
+
+function isReaction(value: unknown): value is ChatbotReaction {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.emoji === "string" &&
+    typeof value.count === "number" &&
+    (value.me === undefined || typeof value.me === "boolean")
+  );
+}
+
+function isMessage(value: unknown): value is ChatbotMessage {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    (value.role === undefined ||
+      ["user", "assistant"].includes(String(value.role))) &&
+    typeof value.author === "string" &&
+    (value.authorAliases === undefined || isStringArray(value.authorAliases)) &&
+    typeof value.timestamp === "string" &&
+    typeof value.content === "string" &&
+    Array.isArray(value.attachments) &&
+    value.attachments.every(isAttachment) &&
+    (value.reactions === undefined ||
+      (Array.isArray(value.reactions) && value.reactions.every(isReaction))) &&
+    (value.channelId === undefined || typeof value.channelId === "string") &&
+    (value.channelName === undefined ||
+      typeof value.channelName === "string") &&
+    (value.jumpUrl === undefined || typeof value.jumpUrl === "string") &&
+    (value.referencedMessage === undefined ||
+      isMessage(value.referencedMessage))
+  );
+}
+
+function isToolCapability(value: unknown): value is ChatbotToolCapability {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.name === "string" &&
+    ["ambient", "normal", "owner_confirmed"].includes(String(value.risk)) &&
+    typeof value.description === "string" &&
+    isRecord(value.inputSchema) &&
+    (value.metadata === undefined || isRecord(value.metadata))
+  );
+}
+
+function isServerMemory(value: unknown): value is ChatbotServerMemory {
+  if (!isRecord(value) || typeof value.revision !== "number") return false;
+  return (
+    Array.isArray(value.entries) &&
+    value.entries.every(
+      (entry) =>
+        isRecord(entry) &&
+        typeof entry.id === "string" &&
+        typeof entry.content === "string",
+    )
+  );
+}
+
+function isDeveloperTask(value: unknown) {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    (value.title === undefined || typeof value.title === "string") &&
+    (value.resumeSessionId === undefined ||
+      typeof value.resumeSessionId === "string")
+  );
+}
+
+function hasOnlyAbsent(record: Record<string, unknown>, keys: string[]) {
+  return keys.every((key) => record[key] === undefined);
+}
+
+function hasCommonJobFields(record: Record<string, unknown>) {
+  return (
+    typeof record.id === "string" &&
+    typeof record.requesterUserId === "string" &&
+    typeof record.channelId === "string" &&
+    typeof record.requestMessageId === "string" &&
+    typeof record.request === "string" &&
+    Array.isArray(record.messages) &&
+    record.messages.every(isMessage) &&
+    (record.requestMessage === undefined || isMessage(record.requestMessage))
+  );
+}
+
+const ANSWER_ONLY_FIELDS = [
+  "executionRoute",
+  "repository",
+  "mcpAccessToken",
+  "addressingMode",
+  "serverMemory",
+  "developerTask",
+] as const;
+
+const ROUTING_ONLY_FIELDS = [
+  "availableRepositories",
+  "chatbotRepository",
+] as const;
+
+export function parseChatbotJob(value: unknown): ChatbotJob | null {
+  if (!isRecord(value) || !hasCommonJobFields(value)) return null;
+
+  if (value.purpose === "execution_route") {
+    if (
+      !isStringArray(value.availableRepositories) ||
+      (value.chatbotRepository !== undefined &&
+        typeof value.chatbotRepository !== "string") ||
+      !hasOnlyAbsent(value, [
+        ...ANSWER_ONLY_FIELDS,
+        "availableTools",
+        "socialActionCandidateMessageIds",
+      ])
+    ) {
+      return null;
+    }
+    return value as ExecutionRouteJob;
+  }
+
+  if (value.purpose === "trace_lookup") {
+    if (
+      !hasOnlyAbsent(value, [
+        ...ANSWER_ONLY_FIELDS,
+        ...ROUTING_ONLY_FIELDS,
+        "availableTools",
+        "socialActionCandidateMessageIds",
+      ])
+    ) {
+      return null;
+    }
+    return value as TraceLookupJob;
+  }
+
+  if (value.purpose === "social_action") {
+    if (
+      !Array.isArray(value.availableTools) ||
+      !value.availableTools.every(isToolCapability) ||
+      !isStringArray(value.socialActionCandidateMessageIds) ||
+      !hasOnlyAbsent(value, [...ANSWER_ONLY_FIELDS, ...ROUTING_ONLY_FIELDS])
+    ) {
+      return null;
+    }
+    return value as SocialActionJob;
+  }
+
+  if (value.purpose !== "answer") return null;
+  if (
+    typeof value.mcpAccessToken !== "string" ||
+    value.mcpAccessToken.length === 0 ||
+    !["chat", "mac", "oracle"].includes(String(value.executionRoute)) ||
+    (value.availableTools !== undefined &&
+      (!Array.isArray(value.availableTools) ||
+        !value.availableTools.every(isToolCapability))) ||
+    (value.addressingMode !== undefined &&
+      !["mention", "reply", "dm", "continuation"].includes(
+        String(value.addressingMode),
+      )) ||
+    (value.serverMemory !== undefined && !isServerMemory(value.serverMemory)) ||
+    !hasOnlyAbsent(value, [
+      ...ROUTING_ONLY_FIELDS,
+      "socialActionCandidateMessageIds",
+    ])
+  ) {
+    return null;
+  }
+
+  if (value.executionRoute === "oracle") {
+    if (
+      typeof value.repository !== "string" ||
+      value.repository.length === 0 ||
+      (value.developerTask !== undefined &&
+        !isDeveloperTask(value.developerTask))
+    ) {
+      return null;
+    }
+    return value as OracleAnswerJob;
+  }
+
+  if (!hasOnlyAbsent(value, ["repository", "developerTask"])) return null;
+  return value as ChatAnswerJob | MacAnswerJob;
+}
 
 export type MacAgentClientMessage =
   | {

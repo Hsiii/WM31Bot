@@ -27,6 +27,8 @@ import type {
   ChatbotMessage,
   ChatbotTraceContext,
   ChatbotTaskProgress,
+  AnswerJob,
+  OracleAnswerJob,
 } from "../../chatbot/protocol";
 
 import {
@@ -535,7 +537,7 @@ type DeveloperTask = {
   requesterUserId: string;
   repository: string;
   request: string;
-  job: ChatbotJob;
+  job: OracleAnswerJob;
   workflow?: WorkflowLease;
   state: "running" | "stopping" | "stopped" | "completed" | "failed";
   summary: string;
@@ -676,7 +678,7 @@ class DeveloperTaskRegistry {
       }
     }
 
-    const job: ChatbotJob = {
+    const job: OracleAnswerJob = {
       ...task.job,
       id: randomUUID(),
       channelId: task.threadId,
@@ -1371,13 +1373,10 @@ export async function handleChatbotMention({
           }),
       });
       if (executionRoute === "oracle") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
-
-      const job: ChatbotJob = {
+      const answerBase = {
         id: randomUUID(),
         requesterUserId,
-        purpose: "answer",
-        executionRoute,
-        repository: selectedRepository,
+        purpose: "answer" as const,
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,
@@ -1390,12 +1389,28 @@ export async function handleChatbotMention({
           : {}),
         ...(serverMemory ? { serverMemory } : {}),
       };
+      let job: AnswerJob;
+      if (executionRoute === "oracle") {
+        const repository = selectedRepository;
+        if (!repository) {
+          return {
+            ok: false as const,
+            error: "The router selected Oracle without a repository.",
+            failureKind: "internal" as const,
+          };
+        }
+        job = {
+          ...answerBase,
+          executionRoute,
+          repository,
+        };
+      } else if (executionRoute === "mac") {
+        job = { ...answerBase, executionRoute };
+      } else {
+        job = { ...answerBase, executionRoute };
+      }
 
-      if (
-        executionRoute === "oracle" &&
-        selectedRepository &&
-        message.guild_id
-      ) {
+      if (job.executionRoute === "oracle" && message.guild_id) {
         const taskId = randomUUID();
         const threadId = await createDeveloperThread(
           message,
@@ -1407,7 +1422,7 @@ export async function handleChatbotMention({
           id: taskId,
           threadId,
           requesterUserId,
-          repository: selectedRepository,
+          repository: job.repository,
           request,
           job: {
             ...job,

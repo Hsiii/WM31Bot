@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 
 import type {
-  ChatbotJob,
+  CodexJob,
   ChatbotPromptTelemetry,
   ChatbotTraceContext,
 } from "../../src/chatbot/protocol";
@@ -49,10 +49,10 @@ function cleanUrl(value: string) {
   }
 }
 
-function sanitizedJob(job: ChatbotJob): ChatbotJob {
+function sanitizedJob(job: CodexJob) {
   const sanitizeMessage = (
-    message: ChatbotJob["messages"][number],
-  ): ChatbotJob["messages"][number] => ({
+    message: CodexJob["messages"][number],
+  ): CodexJob["messages"][number] => ({
     ...message,
     attachments: message.attachments.map((attachment) => ({
       ...attachment,
@@ -174,7 +174,7 @@ export class ChatbotTraceStore {
       .run(JSON.stringify(prompt), prompt.promptVersion, jobId);
   }
 
-  start(job: ChatbotJob, now = Date.now(), metadata: TraceStoreMetadata = {}) {
+  start(job: CodexJob, now = Date.now(), metadata: TraceStoreMetadata = {}) {
     this.cleanupIfNeeded(now);
     this.database
       .query(
@@ -187,7 +187,7 @@ export class ChatbotTraceStore {
         job.id,
         job.requestMessageId,
         job.channelId,
-        job.purpose ?? "answer",
+        job.purpose,
         now,
         JSON.stringify(sanitizedJob(job)),
         metadata.model ?? this.metadata.model ?? "unknown",
@@ -256,7 +256,9 @@ export class ChatbotTraceStore {
     const terminal = [...rows]
       .reverse()
       .find((row) => row.purpose === "answer");
-    const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
+    const answerJob = safeJson<{ messages?: unknown[] }>(
+      terminal?.input_json ?? null,
+    );
     const toolCalls =
       safeJson<NonNullable<ChatbotTraceContext["toolCalls"]>>(
         terminal?.tool_trace_json ?? null,
@@ -294,7 +296,7 @@ export class ChatbotTraceStore {
       ...(typeof mcpHistoryCount === "number" && {
         historyCount: mcpHistoryCount,
       }),
-      contextMessageCount: answerJob?.messages.length ?? 0,
+      contextMessageCount: answerJob?.messages?.length ?? 0,
       searchQueries: mcpSearchQueries.slice(0, 4).map(sanitizedSearchQuery),
       searchResultCount: toolCalls
         .filter((call) => call.name === "resolve_context")

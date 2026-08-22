@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ChatbotJob } from "../../src/chatbot/protocol";
+import type { ChatAnswerJob } from "../../src/chatbot/protocol";
 import { ChatbotTraceStore } from "./trace-store";
 
 const directories: string[] = [];
@@ -23,11 +23,13 @@ function store() {
   });
 }
 
-function job(overrides: Partial<ChatbotJob>): ChatbotJob {
+function job(overrides: Partial<ChatAnswerJob>): ChatAnswerJob {
   return {
     id: "answer-1",
     requesterUserId: "test-user",
     purpose: "answer",
+    executionRoute: "chat",
+    mcpAccessToken: "test-token",
     channelId: "channel-1",
     requestMessageId: "request-1",
     request: "What happened?",

@@ -4,7 +4,7 @@ import { basename, extname, join } from "node:path";
 
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import type { ChatbotAttachment, ChatbotJob } from "../../src/chatbot/protocol";
+import type { ChatbotAttachment, CodexJob } from "../../src/chatbot/protocol";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -103,7 +103,7 @@ function isSupported(attachment: ChatbotAttachment) {
   );
 }
 
-function rankCandidates(job: ChatbotJob) {
+function rankCandidates(job: CodexJob) {
   const tokens = queryTokens(job.request);
   const candidates: AttachmentCandidate[] = [];
   const contextMessages = [
@@ -265,7 +265,7 @@ function safeFilename(index: number, filename: string) {
 }
 
 export async function prepareAttachments(
-  job: ChatbotJob,
+  job: CodexJob,
   signal?: AbortSignal,
 ): Promise<PreparedAttachments> {
   const directory = await mkdtemp(join(tmpdir(), "minisago-chatbot-"));
@@ -282,10 +282,7 @@ export async function prepareAttachments(
   }> = [];
   const textBlocks: string[] = [];
   const ignored: string[] = [];
-  const candidates =
-    job.purpose === undefined || job.purpose === "answer"
-      ? rankCandidates(job)
-      : [];
+  const candidates = job.purpose === "answer" ? rankCandidates(job) : [];
   let downloadedBytes = 0;
   let extractedCharacters = 0;
 

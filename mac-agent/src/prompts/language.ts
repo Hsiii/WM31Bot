@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../src/chatbot/protocol";
+import type { AnswerJob } from "../../../src/chatbot/protocol";
 
 export const TAIWANESE_LANGUAGE_REFERENCE = `Understand contemporary Taiwanese Mandarin and internet shorthand from context:
 - Dating: 暈 or 暈船 means catching feelings, while 我暈 may instead express dizziness or disbelief.
@@ -10,7 +10,7 @@ export const TAIWANESE_LANGUAGE_REFERENCE = `Understand contemporary Taiwanese M
 
 const HAN_SCRIPT = /\p{Script=Han}/u;
 
-export function needsTaiwaneseLanguageReference(job: ChatbotJob) {
+export function needsTaiwaneseLanguageReference(job: AnswerJob) {
   return [
     job.request,
     job.requestMessage?.content,

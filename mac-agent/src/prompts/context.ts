@@ -1,4 +1,8 @@
-import type { ChatbotJob, ChatbotMessage } from "../../../src/chatbot/protocol";
+import type {
+  AnswerJob,
+  ChatbotMessage,
+  CodexJob,
+} from "../../../src/chatbot/protocol";
 import {
   budgetJsonItems,
   budgetMessages,
@@ -63,7 +67,7 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
   };
 }
 
-function requestMessageContext(job: ChatbotJob) {
+function requestMessageContext(job: CodexJob) {
   const message = job.requestMessage;
   if (!message) return undefined;
 
@@ -81,7 +85,7 @@ function requestMessageContext(job: ChatbotJob) {
 }
 
 export function requestContext(
-  job: ChatbotJob,
+  job: CodexJob,
   messageBlock = "discord_messages_json",
 ) {
   const omissions: ContextOmission[] = [];
@@ -140,7 +144,7 @@ export function requestContext(
 }
 
 export function answerContext(
-  job: ChatbotJob,
+  job: AnswerJob,
   attachmentText: string[],
   ignoredAttachments: string[],
 ) {

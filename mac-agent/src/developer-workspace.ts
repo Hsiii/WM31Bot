@@ -1,7 +1,7 @@
 import { access, chmod, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { ChatbotJob } from "../../src/chatbot/protocol";
+import type { OracleAnswerJob } from "../../src/chatbot/protocol";
 
 type DeveloperWorkspaceOptions = {
   githubConfigDir: string;
@@ -34,13 +34,6 @@ export type DeveloperWorkspace = {
   sandboxWritePaths: string[];
   cleanup: () => Promise<void>;
 };
-
-function developerMode(job: ChatbotJob) {
-  if (job.executionRoute === "oracle") {
-    return job.executionRoute;
-  }
-  throw new Error("Developer workspace requested for a non-development job.");
-}
 
 const GH_WRAPPER = `#!/bin/sh
 set -eu
@@ -112,11 +105,11 @@ function safeJobId(jobId: string) {
   return jobId;
 }
 
-function selectedRepository(job: ChatbotJob, repositories: string[]) {
+function selectedRepository(job: OracleAnswerJob, repositories: string[]) {
   const repository = repositories.find(
     (candidate) =>
       candidate.toLocaleLowerCase("en-US") ===
-      job.repository?.toLocaleLowerCase("en-US"),
+      job.repository.toLocaleLowerCase("en-US"),
   );
   if (!repository) {
     throw new Error("The selected repository is not available on this worker.");
@@ -160,11 +153,10 @@ async function run(
 }
 
 export async function prepareDeveloperWorkspace(
-  job: ChatbotJob,
+  job: OracleAnswerJob,
   options: DeveloperWorkspaceOptions,
   runCommand: RunCommand = run,
 ): Promise<DeveloperWorkspace> {
-  developerMode(job);
   const repository = selectedRepository(job, options.githubRepositories);
   const workspaceId = job.developerTask?.id ?? job.id;
   const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(workspaceId));

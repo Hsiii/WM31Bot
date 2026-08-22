@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotJob } from "../../../src/chatbot/protocol";
+import type { ChatAnswerJob } from "../../../src/chatbot/protocol";
 import { CHATBOT_CONTEXT_BUDGETS } from "../../../src/chatbot/context-policy";
 import { buildPromptPlan, PROMPT_PLAN_VERSIONS } from ".";
 
-const baseJob: ChatbotJob = {
+const baseJob: ChatAnswerJob = {
   id: "prompt-test",
   requesterUserId: "member",
   purpose: "answer",
+  executionRoute: "chat",
+  mcpAccessToken: "test-token",
   channelId: "channel",
   requestMessageId: "request",
   request: "Summarize this",
@@ -87,8 +89,13 @@ describe("prompt plan", () => {
   test("keeps routing capabilities in context rather than policy", () => {
     const plan = buildPromptPlan(
       {
-        ...baseJob,
+        id: baseJob.id,
+        requesterUserId: baseJob.requesterUserId,
         purpose: "execution_route",
+        channelId: baseJob.channelId,
+        requestMessageId: baseJob.requestMessageId,
+        request: baseJob.request,
+        messages: baseJob.messages,
         availableRepositories: ["sago-cream/mini-sago"],
       },
       [],
