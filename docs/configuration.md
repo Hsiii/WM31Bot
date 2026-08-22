@@ -44,9 +44,10 @@ See `.env.production.example` for production state paths and the complete
 scheduled-monitor variable names.
 
 The X monitor keeps the configurable primary pipe and also reposts
-`@hololive_dreams` to Discord channel `1290252977621176361`. The additional
-pipe stores its checkpoint beside `X_POST_STATE_FILE` under
-`x-post-hololive-dreams-state.json`.
+`@thsottiaux` to Discord channel `1515569479541854218` and
+`@hololive_dreams` to channel `1290252977621176361`. Each additional pipe
+stores an isolated checkpoint beside `X_POST_STATE_FILE` and validates its
+destination guild independently.
 
 ## Workers
 
