@@ -51,9 +51,10 @@ describe("X post monitor", () => {
     });
 
     expect(
-      configs.map(({ handle, channelId, feedUrl, stateFile }) => ({
+      configs.map(({ handle, channelId, guildId, feedUrl, stateFile }) => ({
         handle,
         channelId,
+        guildId,
         feedUrl,
         stateFile,
       })),
@@ -61,18 +62,21 @@ describe("X post monitor", () => {
       {
         handle: "thsottiaux",
         channelId: "1527893157168283668",
+        guildId: "guild-1",
         feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
         stateFile: "/app/state/x-post-state.json",
       },
       {
         handle: "thsottiaux",
         channelId: "1515569479541854218",
+        guildId: "917436845187563610",
         feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
         stateFile: "/app/state/x-post-thsottiaux-additional-state.json",
       },
       {
         handle: "hololive_dreams",
         channelId: "1290252977621176361",
+        guildId: "1282936453134815275",
         feedUrl: "https://fxtwitter.com/hololive_dreams/feed.xml?count=20",
         stateFile: "/app/state/x-post-hololive-dreams-state.json",
       },

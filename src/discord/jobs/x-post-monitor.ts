@@ -13,11 +13,13 @@ const DEFAULT_ADDITIONAL_PIPES = [
   {
     handle: "thsottiaux",
     channelId: "1515569479541854218",
+    guildId: "917436845187563610",
     stateFileName: "x-post-thsottiaux-additional-state.json",
   },
   {
     handle: "hololive_dreams",
     channelId: "1290252977621176361",
+    guildId: TARGET_GUILD_ID,
     stateFileName: "x-post-hololive-dreams-state.json",
   },
 ] as const;
@@ -204,10 +206,11 @@ export function getXPostMonitorConfigs(
   return [
     primaryConfig,
     ...DEFAULT_ADDITIONAL_PIPES.map(
-      ({ handle, channelId, stateFileName }): XPostMonitorConfig => ({
+      ({ handle, channelId, guildId, stateFileName }): XPostMonitorConfig => ({
         ...sharedConfig,
         handle,
         channelId,
+        guildId,
         feedUrl: `https://fxtwitter.com/${handle}/feed.xml?count=20`,
         stateFile: stateFileBeside(stateFile, stateFileName),
       }),

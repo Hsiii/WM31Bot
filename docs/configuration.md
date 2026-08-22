@@ -46,7 +46,8 @@ scheduled-monitor variable names.
 The X monitor keeps the configurable primary pipe and also reposts
 `@thsottiaux` to Discord channel `1515569479541854218` and
 `@hololive_dreams` to channel `1290252977621176361`. Each additional pipe
-stores an isolated checkpoint beside `X_POST_STATE_FILE`.
+stores an isolated checkpoint beside `X_POST_STATE_FILE` and validates its
+destination guild independently.
 
 ## Workers
 
