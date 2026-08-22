@@ -324,12 +324,14 @@ describe("Mac agent bridge", () => {
         jobId: job.id,
         ok: false,
         error: "Task stopped.",
+        failureKind: "internal",
         stopped: true,
       }),
     );
     expect(await dispatch.result).toEqual({
       ok: false,
       error: "Task stopped.",
+      failureKind: "internal",
       stopped: true,
     });
     acquired.workflow.release();

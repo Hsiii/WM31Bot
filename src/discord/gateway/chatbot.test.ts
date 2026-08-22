@@ -7,6 +7,7 @@ import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
 import { ChannelQuietTracker } from "./channel-quiet";
 import {
   ChatbotConversationTracker,
+  chatbotFailureReply,
   canMemberSearchChannel,
   chatbotAddressingMode,
   extractChatbotRequest,
@@ -54,6 +55,16 @@ async function waitFor<T>(value: () => T | undefined): Promise<T> {
 }
 
 describe("Discord chatbot", () => {
+  test("keeps worker failures short and actionable", () => {
+    expect(chatbotFailureReply("unavailable")).toBe(
+      "我現在暫時忙不過來 稍後再試一次",
+    );
+    expect(chatbotFailureReply("timeout")).toBe(
+      "我沒等到操作結果 先確認一下再重試",
+    );
+    expect(chatbotFailureReply("internal")).toBe("我這次沒完成 稍後再試一次");
+  });
+
   test("creates concise coding task thread names", () => {
     expect(developerThreadName("  Add   live Codex traces  ")).toBe(
       "Add live Codex traces",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ChatbotJob } from "../../src/chatbot/protocol";
-import { formatJobFailure } from "./client";
+import { failureKindForCause, formatJobFailure } from "./client";
 
 const job: ChatbotJob = {
   id: "job-123",
@@ -21,5 +21,12 @@ describe("worker failure reporting", () => {
     expect(formatJobFailure(job, "testing", "Network timeout")).toBe(
       "Phase: testing\nCause: Network timeout\nRepository: sago-cream/mini-sago\nBranch: minisago/task-456\nRetry: safe\nLogs: worker job job-123",
     );
+  });
+
+  test("classifies failures without exposing their details to Discord", () => {
+    expect(failureKindForCause("Codex worker is busy.")).toBe("unavailable");
+    expect(failureKindForCause("Codex request timed out.")).toBe("timeout");
+    expect(failureKindForCause("Malformed output")).toBe("internal");
+    expect(failureKindForCause("Network timeout", true)).toBe("internal");
   });
 });
