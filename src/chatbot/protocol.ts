@@ -1,8 +1,9 @@
-export const CHATBOT_PROTOCOL_VERSION = 30;
+export const CHATBOT_PROTOCOL_VERSION = 31;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
 export type ChatbotWorkerCapability = "chat" | "dev" | "mac";
+export type ChatbotFailureKind = "unavailable" | "timeout" | "internal";
 
 export type ChatbotAttachment = {
   id: string;
@@ -187,6 +188,7 @@ export type MacAgentClientMessage =
       jobId: string;
       ok: false;
       error: string;
+      failureKind: ChatbotFailureKind;
       stopped?: boolean;
     };
 

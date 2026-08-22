@@ -5,6 +5,7 @@ import {
   CHATBOT_JOB_TIMEOUT_MS,
   CHATBOT_DEV_JOB_TIMEOUT_MS,
   CHATBOT_PROTOCOL_VERSION,
+  type ChatbotFailureKind,
   type ChatbotJob,
   type ChatbotOutgoingFile,
   type ChatbotTaskProgress,
@@ -67,7 +68,12 @@ type Workflow = {
 
 export type MacAgentJobResult =
   | { ok: true; content: string; files?: ChatbotOutgoingFile[] }
-  | { ok: false; error: string; stopped?: boolean };
+  | {
+      ok: false;
+      error: string;
+      failureKind: ChatbotFailureKind;
+      stopped?: boolean;
+    };
 
 export type DispatchResult =
   | { status: "offline" }
@@ -537,7 +543,11 @@ export class MacAgentBridge {
         const activeWorker = this.workers.get(pendingJob.workerId);
         if (activeWorker)
           send(activeWorker.socket, { type: "cancel", jobId: job.id });
-        resolve({ ok: false, error: "Local Codex timed out." });
+        resolve({
+          ok: false,
+          error: "Local Codex timed out.",
+          failureKind: "timeout",
+        });
       }, timeoutMs);
 
       const pendingJob = {
@@ -572,6 +582,7 @@ export class MacAgentBridge {
       pendingJob.resolve({
         ok: false,
         error: "Task stopped without a worker acknowledgement.",
+        failureKind: "internal",
         stopped: true,
       });
     }, 10_000);
@@ -739,6 +750,7 @@ export class MacAgentBridge {
       pendingJob.resolve({
         ok: false,
         error: "Worker returned invalid files.",
+        failureKind: "internal",
       });
       return;
     }
@@ -755,6 +767,7 @@ export class MacAgentBridge {
         : {
             ok: false,
             error: message.error,
+            failureKind: message.failureKind,
             ...(message.stopped ? { stopped: true } : {}),
           },
     );
@@ -785,7 +798,11 @@ export class MacAgentBridge {
       if (pendingJob.workerId !== workerId) continue;
       clearTimeout(pendingJob.timer);
       this.deletePendingJob(pendingJob);
-      pendingJob.resolve({ ok: false, error });
+      pendingJob.resolve({
+        ok: false,
+        error,
+        failureKind: "unavailable",
+      });
     }
   }
 

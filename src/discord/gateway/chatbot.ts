@@ -18,6 +18,7 @@ import {
 } from "../../chatbot/trip-planner";
 import { getGuildMemoryStore } from "../../chatbot/guild-memory";
 import type {
+  ChatbotFailureKind,
   ChatbotAddressingMode,
   ChatbotExecutionRoute,
   ChatbotOutgoingFile,
@@ -27,6 +28,7 @@ import type {
   ChatbotTraceContext,
   ChatbotTaskProgress,
 } from "../../chatbot/protocol";
+
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
@@ -82,6 +84,16 @@ const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
 const DEVELOPER_TASK_TTL_MS = 3 * 24 * 60 * 60_000;
 const guildMemoryStore = getGuildMemoryStore();
+
+export function chatbotFailureReply(kind: ChatbotFailureKind) {
+  if (kind === "unavailable") {
+    return "我現在暫時忙不過來 稍後再試一次";
+  }
+  if (kind === "timeout") {
+    return "我沒等到操作結果 先確認一下再重試";
+  }
+  return "我這次沒完成 稍後再試一次";
+}
 
 function supplementalCapabilities({
   isOwner,
@@ -1035,6 +1047,7 @@ export async function handleChatbotMention({
               workerRoute.status === "busy"
                 ? "The compatible worker is busy."
                 : "No compatible worker is online.",
+            failureKind: "unavailable" as const,
           };
         }
       }
@@ -1417,11 +1430,19 @@ export async function handleChatbotMention({
       const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
-        return { ok: false as const, error: "The worker disconnected." };
+        return {
+          ok: false as const,
+          error: "The worker disconnected.",
+          failureKind: "unavailable" as const,
+        };
       }
 
       if (dispatch.status === "busy") {
-        return { ok: false as const, error: "The worker became busy." };
+        return {
+          ok: false as const,
+          error: "The worker became busy.",
+          failureKind: "unavailable" as const,
+        };
       }
 
       return dispatch.result;
@@ -1431,7 +1452,11 @@ export async function handleChatbotMention({
       : await withTyping(message.channel_id, discordRequest, execute);
   } catch (error) {
     console.error(`Chatbot request ${message.id} failed:`, error);
-    result = { ok: false, error: "聊天機器人請求失敗" };
+    result = {
+      ok: false,
+      error: "聊天機器人請求失敗",
+      failureKind: "internal",
+    };
   } finally {
     if (mcpSession && !deferredDeveloperTask) {
       mcpSnapshot = mcpSession.snapshot();
@@ -1455,7 +1480,7 @@ export async function handleChatbotMention({
     reply = decision.reply;
     reacted ||= decision.reacted;
   } else {
-    reply = "我剛剛卡住了 晚點再叫我一次";
+    reply = chatbotFailureReply(result.failureKind);
   }
 
   if (mcpSnapshot.searchUnavailable && reply) {

@@ -1,5 +1,6 @@
 import {
   CHATBOT_PROTOCOL_VERSION,
+  type ChatbotFailureKind,
   type ChatbotJob,
   type ChatbotMcpTraceCall,
   type MacAgentClientMessage,
@@ -48,6 +49,18 @@ export function formatJobFailure(
     `Retry: ${retryable ? "safe" : "needs review"}`,
     `Logs: worker job ${job.id}`,
   ].join("\n");
+}
+
+export function failureKindForCause(
+  cause: string,
+  stopped = false,
+): ChatbotFailureKind {
+  if (stopped) return "internal";
+  if (/timed? out|timeout/iu.test(cause)) return "timeout";
+  if (/busy|disconnect|network|offline|rate.?limit/iu.test(cause)) {
+    return "unavailable";
+  }
+  return "internal";
 }
 
 function parseServerMessage(value: unknown) {
@@ -286,6 +299,7 @@ export class MacAgentClient {
         jobId: job.id,
         ok: false,
         error: "Codex worker is busy.",
+        failureKind: "unavailable",
       });
       return;
     }
@@ -368,6 +382,7 @@ export class MacAgentClient {
           error: controller.signal.aborted
             ? cause
             : formatJobFailure(job, phase, cause),
+          failureKind: failureKindForCause(cause, controller.signal.aborted),
           ...(controller.signal.aborted ? { stopped: true } : {}),
         });
       }
