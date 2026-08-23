@@ -374,8 +374,9 @@ class InstagramGatewayClient implements VoiceGateway {
 
     if (payload.t === "MESSAGE_CREATE") {
       const message = payload.d as DiscordMessageCreate;
+      const receivedSequence = this.conversations.recordMessage();
       await this.channelTasks.run(message.channel_id, () =>
-        this.handleMessageCreate(message),
+        this.handleMessageCreate(message, receivedSequence),
       );
       return;
     }
@@ -574,7 +575,10 @@ class InstagramGatewayClient implements VoiceGateway {
     }
   }
 
-  private async handleMessageCreate(message: DiscordMessageCreate) {
+  private async handleMessageCreate(
+    message: DiscordMessageCreate,
+    receivedSequence: number,
+  ) {
     const shouldNudgeQuickReply =
       !this.quietChannels.isPaused(message.channel_id) &&
       this.quickReplyNudges.observe(message);
@@ -604,6 +608,7 @@ class InstagramGatewayClient implements VoiceGateway {
           reactionBroker: this.reactionBroker,
           conversationTracker: this.conversations,
           quietTracker: this.quietChannels,
+          receivedSequence,
         });
 
         if (handled) {

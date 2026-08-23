@@ -198,15 +198,22 @@ function supplementalCapabilities({
 type ActiveConversation = {
   requesterUserId: string;
   expiresAt: number;
+  activeAfterSequence: number;
 };
 
 export class ChatbotConversationTracker {
   private conversations = new Map<string, ActiveConversation>();
+  private receivedSequence = 0;
 
   constructor(
     private readonly ttlMs = ACTIVE_CONVERSATION_TTL_MS,
     private readonly now = () => Date.now(),
   ) {}
+
+  recordMessage() {
+    this.receivedSequence += 1;
+    return this.receivedSequence;
+  }
 
   activate(channelId: string, requesterUserId: string) {
     const now = this.now();
@@ -218,12 +225,17 @@ export class ChatbotConversationTracker {
     this.conversations.set(channelId, {
       requesterUserId,
       expiresAt: now + this.ttlMs,
+      activeAfterSequence: this.receivedSequence,
     });
   }
 
-  take(message: DiscordMessage) {
+  take(message: DiscordMessage, receivedSequence: number) {
     const conversation = this.conversations.get(message.channel_id);
     if (!conversation) return false;
+
+    if (receivedSequence <= conversation.activeAfterSequence) {
+      return false;
+    }
 
     this.conversations.delete(message.channel_id);
     return (
@@ -880,6 +892,7 @@ export async function handleChatbotMention({
   reactionBroker,
   conversationTracker,
   quietTracker,
+  receivedSequence,
   invocation,
 }: {
   message: ChatbotMention;
@@ -889,6 +902,7 @@ export async function handleChatbotMention({
   reactionBroker?: DiscordReactionBroker;
   conversationTracker?: ChatbotConversationTracker;
   quietTracker?: ChannelQuietTracker;
+  receivedSequence?: number;
   invocation?: ChatbotInvocation;
 }) {
   const requesterUserId = message.author?.id;
@@ -914,7 +928,11 @@ export async function handleChatbotMention({
   let request =
     invocation?.request ??
     extractChatbotRequest(message, botUserId, accessConfig);
-  if (request === null && conversationTracker?.take(message)) {
+  if (
+    request === null &&
+    receivedSequence !== undefined &&
+    conversationTracker?.take(message, receivedSequence)
+  ) {
     request = message.content?.trim() ?? "";
     addressingMode = "continuation";
   }
