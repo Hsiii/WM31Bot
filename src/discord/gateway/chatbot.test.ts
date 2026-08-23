@@ -465,33 +465,84 @@ describe("Discord chatbot", () => {
 
     conversations.activate("channel-1", "member-1");
 
-    expect(conversations.take(followUp)).toBe(true);
-    expect(conversations.take({ ...followUp, id: "follow-up-2" })).toBe(false);
+    expect(conversations.take(followUp, conversations.recordMessage())).toBe(
+      true,
+    );
+    expect(
+      conversations.take(
+        { ...followUp, id: "follow-up-2" },
+        conversations.recordMessage(),
+      ),
+    ).toBe(false);
 
     conversations.activate("channel-1", "member-1");
     expect(
-      conversations.take({
-        ...followUp,
-        id: "interruption-1",
-        author: { id: "member-2", username: "Other member" },
-      }),
+      conversations.take(
+        {
+          ...followUp,
+          id: "interruption-1",
+          author: { id: "member-2", username: "Other member" },
+        },
+        conversations.recordMessage(),
+      ),
     ).toBe(false);
-    expect(conversations.take({ ...followUp, id: "follow-up-3" })).toBe(false);
+    expect(
+      conversations.take(
+        { ...followUp, id: "follow-up-3" },
+        conversations.recordMessage(),
+      ),
+    ).toBe(false);
 
     conversations.activate("channel-1", "member-1");
     expect(
-      conversations.take({
-        ...followUp,
-        id: "mentioned-member-1",
-        content: "<@member-2> 你記得嗎",
-        mentions: [{ id: "member-2" }],
-      }),
+      conversations.take(
+        {
+          ...followUp,
+          id: "mentioned-member-1",
+          content: "<@member-2> 你記得嗎",
+          mentions: [{ id: "member-2" }],
+        },
+        conversations.recordMessage(),
+      ),
     ).toBe(false);
-    expect(conversations.take({ ...followUp, id: "follow-up-4" })).toBe(false);
+    expect(
+      conversations.take(
+        { ...followUp, id: "follow-up-4" },
+        conversations.recordMessage(),
+      ),
+    ).toBe(false);
 
     conversations.activate("channel-1", "member-1");
     now += 90_000;
-    expect(conversations.take({ ...followUp, id: "follow-up-5" })).toBe(false);
+    expect(
+      conversations.take(
+        { ...followUp, id: "follow-up-5" },
+        conversations.recordMessage(),
+      ),
+    ).toBe(false);
+  });
+
+  test("does not turn messages queued before an answer into follow-ups", () => {
+    const conversations = new ChatbotConversationTracker();
+    const queuedSequence = conversations.recordMessage();
+    const followUp = {
+      id: "queued-message",
+      channel_id: "channel-1",
+      guild_id: "917436845187563610",
+      content: "現在也有記憶",
+      timestamp: "2026-08-23T14:12:34.762Z",
+      author: { id: "member-1", username: "Member" },
+    };
+
+    conversations.activate("channel-1", "member-1");
+
+    expect(conversations.take(followUp, queuedSequence)).toBe(false);
+    expect(
+      conversations.take(
+        { ...followUp, id: "new-follow-up", content: "那明天呢" },
+        conversations.recordMessage(),
+      ),
+    ).toBe(true);
   });
 
   test("stays silent while paused until an addressed wake request", async () => {
