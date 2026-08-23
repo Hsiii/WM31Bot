@@ -21,6 +21,7 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | `MINISAGO_CHATBOT_OWNER_USER_ID`       | Yes       | Sole owner of privileged routing and mutations          |
 | `MINISAGO_CHATBOT_GUILD_IDS`           | No        | Comma-separated guilds whose members may use chat       |
 | `MINISAGO_CHATBOT_CHANNEL_IDS`         | No        | Comma-separated channel exceptions                      |
+| `MINISAGO_CHATBOT_ROLE_IDS`            | No        | Comma-separated roles that may mention the chatbot      |
 | `MINISAGO_AMBIENT_REACTIONS_ENABLED`   | No        | Enable occasional ambient reactions                     |
 | `MINISAGO_AMBIENT_ATTENTION_CHANCE`    | No        | Chance from 0 to 1 that a burst schedules evaluation    |
 | `MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR` | No        | Hourly ambient model-call ceiling; defaults to 4        |

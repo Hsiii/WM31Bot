@@ -12,6 +12,7 @@ const ACCESS_CONFIG = {
   ownerUserId: "917446775873343600",
   guildIds: new Set(["guild-1"]),
   channelIds: new Set<string>(),
+  roleIds: new Set<string>(),
 };
 
 const MESSAGE = {
