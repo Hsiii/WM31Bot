@@ -46,6 +46,20 @@ export class ChannelQuietTracker {
   }
 }
 
+export function isChannelQuietRequest(content: string) {
+  return content
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .some((line) =>
+      [
+        /^(?:please\s+)?(?:(?:be|stay|keep)\s+quiet|shut\s+up|(?:stop|quit)\s+(?:talking|speaking|replying)|(?:don't|do\s+not)\s+(?:talk|speak|reply|respond))(?:\s+(?:for\s+)?(?:a\s+(?:bit|while)|(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:seconds?|minutes?|hours?|days?)))?(?:\s+please)?[.!]?$/iu,
+        /^(?:請|麻煩)?(?:你|妳)?(?:先)?(?:安靜|閉嘴)(?:(?:一下|一會兒?|[零〇一二兩三四五六七八九十百\d.]+\s*(?:秒鐘?|分鐘?|小時|鐘頭|天)))?(?:吧|啦|喔|哦|呀|。|！|!)?$/u,
+        /^(?:請|麻煩)?(?:你|妳)?(?:先)?(?:不要|別|停止)(?:再)?(?:說話|講話|回覆|回話)(?:了|吧|啦|喔|哦|呀|。|！|!)?$/u,
+      ].some((pattern) => pattern.test(line)),
+    );
+}
+
 export function isChannelWakeRequest(content: string) {
   const normalized = content.trim().toLocaleLowerCase("en-US");
   if (!normalized) return false;

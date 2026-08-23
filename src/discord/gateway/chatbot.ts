@@ -61,7 +61,11 @@ import {
   parseExecutionRoute,
   parsePreviousTraceLookup,
 } from "./chatbot-routing";
-import { ChannelQuietTracker, isChannelWakeRequest } from "./channel-quiet";
+import {
+  ChannelQuietTracker,
+  isChannelQuietRequest,
+  isChannelWakeRequest,
+} from "./channel-quiet";
 
 export {
   canMemberSearchChannel,
@@ -1037,7 +1041,8 @@ export async function handleChatbotMention({
 
       if (
         requesterUserId === accessConfig.ownerUserId &&
-        !invocation?.chatOnly
+        !invocation?.chatOnly &&
+        !isChannelQuietRequest(request)
       ) {
         const routeJob: ChatbotJob = {
           id: randomUUID(),
