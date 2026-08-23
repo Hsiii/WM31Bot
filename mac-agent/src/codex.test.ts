@@ -50,6 +50,7 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
   ownerUserId: "917446775873343600",
   guildIds: new Set(),
   channelIds: new Set(),
+  roleIds: new Set(),
 };
 const assertChatbotJobAllowed = (job: CodexJob) =>
   assertChatbotJobAllowedWithConfig(job, ACCESS_CONFIG);
