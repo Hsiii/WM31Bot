@@ -13,6 +13,7 @@ export type ChatbotAccessConfig = {
   ownerUserId: string;
   guildIds: ReadonlySet<string>;
   channelIds: ReadonlySet<string>;
+  roleIds: ReadonlySet<string>;
 };
 
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
@@ -46,6 +47,10 @@ export function getChatbotAccessConfig(
     channelIds: parseSnowflakeList(
       environment.MINISAGO_CHATBOT_CHANNEL_IDS,
       "MINISAGO_CHATBOT_CHANNEL_IDS",
+    ),
+    roleIds: parseSnowflakeList(
+      environment.MINISAGO_CHATBOT_ROLE_IDS,
+      "MINISAGO_CHATBOT_ROLE_IDS",
     ),
   };
 }

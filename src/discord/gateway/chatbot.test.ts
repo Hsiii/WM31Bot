@@ -43,6 +43,7 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
     "1521168712579682567",
   ]),
   channelIds: new Set(["1517766866964316201"]),
+  roleIds: new Set(["1522110684610166907"]),
 };
 
 async function waitFor<T>(value: () => T | undefined): Promise<T> {
@@ -610,6 +611,20 @@ describe("Discord chatbot", () => {
     );
     expect(extractMentionRequest(`hello <@!${BOT_ID}>`, BOT_ID)).toBe("hello");
     expect(extractMentionRequest("summarize this", BOT_ID)).toBeNull();
+    expect(
+      extractMentionRequest(
+        "<@&1522110684610166907> summarize this",
+        BOT_ID,
+        ACCESS_CONFIG.roleIds,
+      ),
+    ).toBe("summarize this");
+    expect(
+      extractMentionRequest(
+        "<@&1522110684610166908> summarize this",
+        BOT_ID,
+        ACCESS_CONFIG.roleIds,
+      ),
+    ).toBeNull();
   });
 
   test("labels how the current request addresses MiniSago", () => {
@@ -624,6 +639,17 @@ describe("Discord chatbot", () => {
     };
 
     expect(chatbotAddressingMode(base, BOT_ID, ACCESS_CONFIG)).toBe("mention");
+    expect(
+      chatbotAddressingMode(
+        {
+          ...base,
+          content: "<@&1522110684610166907> 你怎麼看",
+          mentions: [],
+        },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
+    ).toBe("mention");
     expect(
       chatbotAddressingMode(
         {

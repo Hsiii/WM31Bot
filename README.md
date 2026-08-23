@@ -8,7 +8,7 @@ Codex-powered chat with server context, emote creation and cross-server migratio
 ## Features
 
 - Reacts to community messages with emotes in configured server.
-- Answers mentions in configured server using conversation context, attachments, public web search, and accessible Discord history.
+- Answers member and configured role mentions using conversation context, attachments, public web search, and accessible Discord history.
 - Performs expression management on demand, including adding emojis or stickers from attachments and moving emojis to other servers.
 - Publishes daily TOEFL vocabulary, AniGamer forum voucher code updates, and Codex news on X to configured channels.
 - Improves Instagram and Twitter/X embeds with `kkinstagram.com` and `fxtwitter.com` links.
@@ -19,8 +19,8 @@ Codex-powered chat with server context, emote creation and cross-server migratio
   steering, stop, and continuation, then publishes a draft PR when authorized.
 
 > [!TIP]
-> When mentioning her, choose MiniSago under **Members/Apps**, not role.  
-> When quoting her messages, disable reply ping to prevent triggering another reply.  
+> Mention MiniSago under **Members/Apps**, or use a configured MiniSago role.
+> When quoting her messages, disable reply ping to prevent triggering another reply.
 > She searches only channels the requester can access, so feel free to continue to talk behind someone's back.
 
 ## Self-host MiniSago

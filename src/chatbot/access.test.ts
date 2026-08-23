@@ -10,6 +10,7 @@ const ACCESS_CONFIG = getChatbotAccessConfig({
   MINISAGO_CHATBOT_OWNER_USER_ID: "917446775873343600",
   MINISAGO_CHATBOT_GUILD_IDS: "917436845187563610,1282936453134815275",
   MINISAGO_CHATBOT_CHANNEL_IDS: "1517766866964316201",
+  MINISAGO_CHATBOT_ROLE_IDS: "1522110684610166907",
 });
 
 describe("chatbot access policy", () => {
@@ -20,6 +21,7 @@ describe("chatbot access policy", () => {
       "1282936453134815275",
     ]);
     expect([...ACCESS_CONFIG.channelIds]).toEqual(["1517766866964316201"]);
+    expect([...ACCESS_CONFIG.roleIds]).toEqual(["1522110684610166907"]);
     expect(() => getChatbotAccessConfig({})).toThrow(
       "MINISAGO_CHATBOT_OWNER_USER_ID",
     );
@@ -29,6 +31,12 @@ describe("chatbot access policy", () => {
         MINISAGO_CHATBOT_GUILD_IDS: "not-an-id",
       }),
     ).toThrow("MINISAGO_CHATBOT_GUILD_IDS");
+    expect(() =>
+      getChatbotAccessConfig({
+        MINISAGO_CHATBOT_OWNER_USER_ID: "917446775873343600",
+        MINISAGO_CHATBOT_ROLE_IDS: "not-an-id",
+      }),
+    ).toThrow("MINISAGO_CHATBOT_ROLE_IDS");
   });
 
   test("separates the owner from community users", () => {

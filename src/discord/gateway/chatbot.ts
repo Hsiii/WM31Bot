@@ -321,14 +321,25 @@ export type ChatbotInvocation = {
   ) => Promise<void>;
 };
 
-export function extractMentionRequest(content: string, botUserId: string) {
+export function extractMentionRequest(
+  content: string,
+  botUserId: string,
+  botRoleIds: ReadonlySet<string> = new Set(),
+) {
   const mentionPattern = new RegExp(`<@!?${botUserId}>`, "g");
+  let addressed = false;
+  let request = content.replace(mentionPattern, () => {
+    addressed = true;
+    return "";
+  });
 
-  if (!mentionPattern.test(content)) {
-    return null;
-  }
+  request = request.replace(/<@&(\d{17,20})>/gu, (mention, roleId) => {
+    if (!botRoleIds.has(roleId)) return mention;
+    addressed = true;
+    return "";
+  });
 
-  return content.replace(mentionPattern, "").trim();
+  return addressed ? request.trim() : null;
 }
 
 export function extractChatbotRequest(
@@ -337,7 +348,11 @@ export function extractChatbotRequest(
   accessConfig: ChatbotAccessConfig,
 ) {
   const content = message.content ?? "";
-  const mentionRequest = extractMentionRequest(content, botUserId);
+  const mentionRequest = extractMentionRequest(
+    content,
+    botUserId,
+    accessConfig.roleIds,
+  );
 
   if (mentionRequest !== null) {
     return mentionRequest;
@@ -364,7 +379,13 @@ export function chatbotAddressingMode(
   ) {
     return "reply";
   }
-  if (extractMentionRequest(message.content ?? "", botUserId) !== null) {
+  if (
+    extractMentionRequest(
+      message.content ?? "",
+      botUserId,
+      accessConfig.roleIds,
+    ) !== null
+  ) {
     return "mention";
   }
   if (!message.guild_id && message.author?.id === accessConfig.ownerUserId) {
