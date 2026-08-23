@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { ChannelQuietTracker, isChannelWakeRequest } from "./channel-quiet";
+import {
+  ChannelQuietTracker,
+  isChannelQuietRequest,
+  isChannelWakeRequest,
+} from "./channel-quiet";
 
 describe("channel quiet mode", () => {
   test("uses a bounded default pause and expires it", () => {
@@ -25,6 +29,19 @@ describe("channel quiet mode", () => {
     expect(tracker.wake("channel-1")).toBe(true);
     expect(tracker.isPaused("channel-1")).toBe(false);
     expect(tracker.isPaused("channel-2")).toBe(true);
+  });
+
+  test("recognizes explicit quiet requests without capturing feature work", () => {
+    expect(isChannelQuietRequest("安靜五分鐘")).toBe(true);
+    expect(
+      isChannelQuietRequest(
+        "等等 安靜五分鐘其實不會動嗎\n乾 某次被搞掉了嗎\n安靜五分鐘",
+      ),
+    ).toBe(true);
+    expect(isChannelQuietRequest("please be quiet for 30 minutes")).toBe(true);
+    expect(isChannelQuietRequest("不要再說話了")).toBe(true);
+    expect(isChannelQuietRequest("修好安靜五分鐘功能")).toBe(false);
+    expect(isChannelQuietRequest("recommend a quiet cafe")).toBe(false);
   });
 
   test("recognizes explicit wake requests without treating any mention as wake-up", () => {
