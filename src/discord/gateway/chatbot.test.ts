@@ -4,6 +4,7 @@ import type { ServerWebSocket } from "bun";
 import type { ChatbotAccessConfig } from "../../chatbot/access";
 import { macAgentBridge, type MacAgentSocketData } from "../../chatbot/bridge";
 import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
+import { ChatbotMediaRegistry } from "../../chatbot/media-assets";
 import { ChannelQuietTracker } from "./channel-quiet";
 import {
   addGuildExpressionForRequest,
@@ -1469,29 +1470,21 @@ describe("Discord chatbot", () => {
     );
   });
 
-  test("adds a resolved member avatar as an emoji without local tools", async () => {
+  test("adds any resolved media reference as an emoji", async () => {
     const requests: Array<{ path: string; body?: unknown }> = [];
+    const mediaRegistry = new ChatbotMediaRegistry();
+    const avatar = mediaRegistry.registerUrl({
+      mediaId: "avatar-1",
+      filename: "Fan-avatar.png",
+      contentType: "image/png",
+      url: "https://cdn.discordapp.com/guilds/guild-1/users/123456789012345678/avatars/a_server-avatar.png?size=128",
+    });
     const result = await addGuildExpressionForRequest({
-      input: { member: "Fan", name: "fan" },
+      input: { mediaId: avatar.mediaId, name: "fan" },
       guildId: "guild-1",
-      requestMessage: {
-        id: "request-1",
-        author: "Hsi",
-        timestamp: "2026-08-26T08:00:00.000Z",
-        content: "把凡的頭貼做成表符",
-        attachments: [],
-      },
+      mediaRegistry,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
-        if (path.includes("/members/search?")) {
-          return [
-            {
-              nick: "Fan",
-              avatar: "a_server-avatar",
-              user: { id: "123456789012345678", username: "fan_account" },
-            },
-          ] as never;
-        }
         if (path === "/users/@me/guilds") {
           return [
             {

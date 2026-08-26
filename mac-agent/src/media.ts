@@ -4,6 +4,12 @@ import { basename, extname, isAbsolute, join, relative } from "node:path";
 
 import { z } from "zod";
 
+import {
+  mediaContentType,
+  type MediaClient,
+  type RemoteMedia,
+} from "./media-client";
+
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_DIMENSION = 8_192;
@@ -160,10 +166,16 @@ function imageFilters(input: {
 }
 
 export class MediaProcessor {
+  private readonly remoteAssets = new Map<
+    string,
+    Omit<RemoteMedia, "bytes"> & { path: string; size: number }
+  >();
+
   private constructor(
     private readonly manifest: MediaManifest,
     private readonly runner: MediaCommandRunner,
     private readonly idFactory: () => string,
+    private readonly mediaClient?: MediaClient,
   ) {}
 
   static async create(
@@ -171,6 +183,7 @@ export class MediaProcessor {
     options: {
       runner?: MediaCommandRunner;
       idFactory?: () => string;
+      mediaClient?: MediaClient;
     } = {},
   ) {
     const manifest = manifestSchema.parse(value);
@@ -183,17 +196,43 @@ export class MediaProcessor {
       { ...manifest, root, outputDirectory },
       options.runner ?? runCommand,
       options.idFactory ?? randomUUID,
+      options.mediaClient,
     );
   }
 
-  static async fromFile(path: string) {
-    return MediaProcessor.create(JSON.parse(await readFile(path, "utf8")));
+  static async fromFile(path: string, mediaClient?: MediaClient) {
+    return MediaProcessor.create(JSON.parse(await readFile(path, "utf8")), {
+      mediaClient,
+    });
   }
 
   private async attachment(id: string) {
     const attachment = this.manifest.attachments.find((item) => item.id === id);
-    if (!attachment)
-      throw new Error("Attachment is unavailable for this request.");
+    if (!attachment) {
+      const cached = this.remoteAssets.get(id);
+      if (cached) return cached;
+      if (!this.mediaClient)
+        throw new Error("Media is unavailable for this request.");
+      const remote = await this.mediaClient.read(id);
+      if (
+        !remote.bytes.byteLength ||
+        remote.bytes.byteLength > MAX_INPUT_BYTES
+      ) {
+        throw new Error("Media exceeds the processing limit.");
+      }
+      const storedFilename = `remote-${id.replace(/[^A-Za-z0-9._-]/gu, "_")}`;
+      const path = join(this.manifest.root, storedFilename);
+      await Bun.write(path, remote.bytes);
+      const resolved = {
+        mediaId: id,
+        filename: remote.filename,
+        contentType: remote.contentType,
+        size: remote.bytes.byteLength,
+        path,
+      };
+      this.remoteAssets.set(id, resolved);
+      return resolved;
+    }
     if (basename(attachment.storedFilename) !== attachment.storedFilename) {
       throw new Error("Attachment manifest contains an invalid filename.");
     }
@@ -242,13 +281,27 @@ export class MediaProcessor {
       await rm(path, { force: true });
       throw new Error("Generated artifact exceeds Discord's 8 MB limit.");
     }
-    return { artifactId: output.id, size: info.size };
+    const bytes = new Uint8Array(await readFile(path));
+    await this.mediaClient?.write({
+      mediaId: output.id,
+      filename: output.id,
+      contentType: mediaContentType(output.id),
+      bytes,
+    });
+    this.remoteAssets.set(output.id, {
+      mediaId: output.id,
+      filename: output.id,
+      contentType: mediaContentType(output.id),
+      size: info.size,
+      path,
+    });
+    return { mediaId: output.id, size: info.size };
   }
 
-  async inspect(attachmentId: string) {
-    const attachment = await this.attachment(attachmentId);
+  async inspect(mediaId: string) {
+    const attachment = await this.attachment(mediaId);
     return {
-      attachmentId,
+      mediaId,
       filename: attachment.filename,
       contentType: attachment.contentType,
       ...publicProbe(await this.probePath(attachment.path)),
@@ -256,7 +309,7 @@ export class MediaProcessor {
   }
 
   async transformImage(input: {
-    attachmentId: string;
+    mediaId: string;
     format: "jpeg" | "png" | "webp";
     width?: number;
     height?: number;
@@ -264,7 +317,7 @@ export class MediaProcessor {
     rotate: 0 | 90 | 180 | 270;
     quality: number;
   }) {
-    const attachment = await this.attachment(input.attachmentId);
+    const attachment = await this.attachment(input.mediaId);
     const extension = extname(attachment.filename).toLocaleLowerCase();
     if (
       !attachment.contentType?.startsWith("image/") &&
@@ -302,12 +355,12 @@ export class MediaProcessor {
   }
 
   async extractFrame(input: {
-    attachmentId: string;
+    mediaId: string;
     timeSeconds: number;
     format: "jpeg" | "png" | "webp";
     width?: number;
   }) {
-    const attachment = await this.attachment(input.attachmentId);
+    const attachment = await this.attachment(input.mediaId);
     const probe = await this.probePath(attachment.path);
     if (!probe.streams?.some((stream) => stream.codec_type === "video")) {
       throw new Error("Attachment has no video stream.");
@@ -338,13 +391,13 @@ export class MediaProcessor {
   }
 
   async transcode(input: {
-    attachmentId: string;
+    mediaId: string;
     preset: "audio_mp3" | "gif" | "video_mp4";
     startSeconds: number;
     durationSeconds: number;
     maxWidth: number;
   }) {
-    const attachment = await this.attachment(input.attachmentId);
+    const attachment = await this.attachment(input.mediaId);
     const probe = await this.probePath(attachment.path);
     const hasAudio = probe.streams?.some(
       (stream) => stream.codec_type === "audio",

@@ -7,7 +7,10 @@ import {
   macAgentWebSocketHandler,
   type MacAgentSocketData,
 } from "./chatbot/bridge";
-import { handleChatbotMcpRequest } from "./chatbot/mcp";
+import {
+  handleChatbotMcpRequest,
+  handleChatbotMediaRequest,
+} from "./chatbot/mcp";
 import { startGamerForumMonitor } from "./discord/jobs/gamer-forum-monitor";
 import { startInstagramGateway } from "./discord/gateway/gateway";
 import {
@@ -66,6 +69,10 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
 
   if (pathname === "/api/chatbot/mcp") {
     return handleChatbotMcpRequest(request);
+  }
+
+  if (pathname.startsWith("/api/chatbot/media/")) {
+    return handleChatbotMediaRequest(request);
   }
 
   if (request.method === "POST" && pathname === "/api/github/webhook") {

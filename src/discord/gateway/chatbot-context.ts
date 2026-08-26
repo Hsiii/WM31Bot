@@ -1,9 +1,5 @@
 import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
-import type {
-  ChatbotAttachment,
-  ChatbotMemberResult,
-  ChatbotMessage,
-} from "../../chatbot/protocol";
+import type { ChatbotAttachment, ChatbotMessage } from "../../chatbot/protocol";
 import { getDiscordAvatarUrl } from "./social-proxy";
 
 type DiscordAttachment = {
@@ -306,7 +302,7 @@ export async function lookupGuildMembers({
   const results = await Promise.all(
     queries
       .slice(0, CHATBOT_CONTEXT_LIMITS.maximumMemberLookups)
-      .map(async (query): Promise<ChatbotMemberResult[]> => {
+      .map(async (query) => {
         const member = await resolveGuildMember({
           guildId,
           memberQuery: query,

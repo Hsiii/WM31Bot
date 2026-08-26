@@ -4,6 +4,8 @@ import { basename, isAbsolute, join, relative } from "node:path";
 
 import { z } from "zod";
 
+import { mediaContentType, type MediaClient } from "./media-client";
+
 const MAX_CODE_CHARACTERS = 20_000;
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_INPUT_BYTES = 40 * 1024 * 1024;
@@ -113,6 +115,7 @@ export class PythonProcessor {
     private readonly manifest: PythonManifest,
     private readonly runner: PythonSandboxRunner,
     private readonly idFactory: () => string,
+    private readonly mediaClient?: MediaClient,
   ) {}
 
   static async create(
@@ -120,6 +123,7 @@ export class PythonProcessor {
     options: {
       runner: PythonSandboxRunner;
       idFactory?: () => string;
+      mediaClient?: MediaClient;
     },
   ) {
     const manifest = manifestSchema.parse(value);
@@ -132,12 +136,18 @@ export class PythonProcessor {
       { ...manifest, root, outputDirectory },
       options.runner,
       options.idFactory ?? randomUUID,
+      options.mediaClient,
     );
   }
 
-  static async fromFile(path: string, sandboxUrl: string) {
+  static async fromFile(
+    path: string,
+    sandboxUrl: string,
+    mediaClient?: MediaClient,
+  ) {
     return PythonProcessor.create(JSON.parse(await readFile(path, "utf8")), {
       runner: remotePythonSandbox(sandboxUrl),
+      mediaClient,
     });
   }
 
@@ -150,7 +160,24 @@ export class PythonProcessor {
           (item) => item.id === id,
         );
         if (!attachment) {
-          throw new Error("Attachment is unavailable for this request.");
+          if (!this.mediaClient) {
+            throw new Error("Media is unavailable for this request.");
+          }
+          const remote = await this.mediaClient.read(id);
+          totalBytes += remote.bytes.byteLength;
+          if (
+            !remote.bytes.byteLength ||
+            remote.bytes.byteLength > MAX_INPUT_BYTES ||
+            totalBytes > MAX_TOTAL_INPUT_BYTES
+          ) {
+            throw new Error("Media inputs exceed the processing limit.");
+          }
+          return {
+            id,
+            filename: remote.filename,
+            contentType: remote.contentType,
+            data: Buffer.from(remote.bytes).toString("base64"),
+          };
         }
         if (basename(attachment.storedFilename) !== attachment.storedFilename) {
           throw new Error("Attachment manifest contains an invalid filename.");
@@ -182,7 +209,7 @@ export class PythonProcessor {
 
   async run(input: {
     code: string;
-    attachmentIds: string[];
+    mediaIds: string[];
     outputExtension?: (typeof pythonArtifactExtensions)[number];
   }) {
     if (!input.code.trim() || input.code.length > MAX_CODE_CHARACTERS) {
@@ -190,7 +217,7 @@ export class PythonProcessor {
     }
     const result = await this.runner({
       code: input.code,
-      attachments: await this.attachments(input.attachmentIds),
+      attachments: await this.attachments(input.mediaIds),
       outputExtension: input.outputExtension,
     });
     const response: Record<string, unknown> = {
@@ -205,15 +232,21 @@ export class PythonProcessor {
     if (bytes.byteLength !== result.artifact.size) {
       throw new Error("Python sandbox returned an invalid artifact.");
     }
-    const artifactId = `python-${this.idFactory()}.${input.outputExtension}`;
-    const path = join(this.manifest.outputDirectory, artifactId);
+    const mediaId = `python-${this.idFactory()}.${input.outputExtension}`;
+    const path = join(this.manifest.outputDirectory, mediaId);
     try {
       await Bun.write(path, bytes);
       const info = await stat(path);
       if (!info.isFile() || info.size === 0 || info.size > MAX_OUTPUT_BYTES) {
         throw new Error("Generated artifact exceeds Discord's 8 MB limit.");
       }
-      return { ...response, artifactId, size: info.size };
+      await this.mediaClient?.write({
+        mediaId,
+        filename: mediaId,
+        contentType: mediaContentType(mediaId),
+        bytes: new Uint8Array(await readFile(path)),
+      });
+      return { ...response, mediaId, size: info.size };
     } catch (error) {
       await rm(path, { force: true });
       throw error;

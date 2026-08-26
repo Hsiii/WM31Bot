@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { MediaProcessor } from "./media";
+import { httpMediaClient } from "./media-client";
 import { PythonProcessor, pythonArtifactExtensions } from "./python";
 
 function toolResult(value: Record<string, unknown>) {
@@ -21,13 +22,21 @@ async function main() {
   if (!manifestPath) throw new Error("MINISAGO_MEDIA_MANIFEST is required.");
   const sandboxUrl = process.env.MINISAGO_SANDBOX_URL;
   if (!sandboxUrl) throw new Error("MINISAGO_SANDBOX_URL is required.");
-  const processor = await MediaProcessor.fromFile(manifestPath);
-  const python = await PythonProcessor.fromFile(manifestPath, sandboxUrl);
+  const mcpUrl = process.env.MINISAGO_MCP_URL;
+  const token = process.env.MINISAGO_MCP_TOKEN;
+  if (!mcpUrl || !token) throw new Error("MiniSago media access is required.");
+  const mediaClient = httpMediaClient(mcpUrl, token);
+  const processor = await MediaProcessor.fromFile(manifestPath, mediaClient);
+  const python = await PythonProcessor.fromFile(
+    manifestPath,
+    sandboxUrl,
+    mediaClient,
+  );
   const server = new McpServer(
     { name: "minisago-media", version: "1.0.0" },
     {
       instructions:
-        "Use these request-local tools only when the requester explicitly asks to inspect, compute with, or transform an attachment. Inputs are limited to this request's attachments; outputs are temporary artifacts. Never invent attachment IDs or artifact IDs. Return at most one useful artifact in the final answer. Prefer a specific media tool when it fits. Otherwise use run_python for general request-local computation. Python includes Pillow, NumPy, OpenCV, scikit-image, rembg with the offline lightweight u2netp model, and FFmpeg. It has no network, cannot install packages, receives no credentials, and is limited by time, memory, processes, and output size.",
+        "Use these request-local tools only when the requester explicitly asks to inspect, compute with, or transform media. Every attachment, member avatar, and generated output is addressed by the same mediaId. Tool outputs may be passed directly into later media or Discord tools. Never invent media IDs. Return at most one useful artifact in the final answer. Prefer a specific media tool when it fits. Otherwise use run_python for general request-local computation. Python includes Pillow, NumPy, OpenCV, scikit-image, rembg with the offline lightweight u2netp model, and FFmpeg. It has no network, cannot install packages, receives no credentials, and is limited by time, memory, processes, and output size.",
     },
   );
   const readAnnotations = {
@@ -47,17 +56,17 @@ async function main() {
     "inspect_media",
     {
       description:
-        "Inspect one audio, image, or video attachment from the active request. Returns bounded format, stream, dimension, and duration metadata. Use the exact Discord attachment ID from context.",
+        "Inspect request-scoped audio, image, or video by mediaId. Returns bounded format, stream, dimension, and duration metadata.",
       inputSchema: {
-        attachmentId: z.string().trim().min(1).max(100),
+        mediaId: z.string().trim().min(1).max(200),
       },
       annotations: readAnnotations,
     },
-    async ({ attachmentId }) => {
+    async ({ mediaId }) => {
       try {
         return toolResult({
           status: "complete",
-          ...(await processor.inspect(attachmentId)),
+          ...(await processor.inspect(mediaId)),
         });
       } catch (error) {
         return toolResult({ status: "invalid", error: message(error) });
@@ -69,9 +78,9 @@ async function main() {
     "transform_image",
     {
       description:
-        "Convert, resize, fit, or rotate one image attached to the active request. Produces one temporary artifact and strips metadata. Call only when the requester explicitly asks for the transformation.",
+        "Convert, resize, fit, or rotate request-scoped image media. Returns a mediaId that can be passed directly to another media or Discord tool.",
       inputSchema: {
-        attachmentId: z.string().trim().min(1).max(100),
+        mediaId: z.string().trim().min(1).max(200),
         format: z.enum(["jpeg", "png", "webp"]).default("webp"),
         width: z.number().int().min(16).max(4096).optional(),
         height: z.number().int().min(16).max(4096).optional(),
@@ -101,7 +110,7 @@ async function main() {
       description:
         "Extract one still frame from a video attached to the active request. Produces one temporary image artifact. Call only when the requester explicitly asks for a frame or thumbnail.",
       inputSchema: {
-        attachmentId: z.string().trim().min(1).max(100),
+        mediaId: z.string().trim().min(1).max(200),
         timeSeconds: z.number().min(0).max(600).default(0),
         format: z.enum(["jpeg", "png", "webp"]).default("jpeg"),
         width: z.number().int().min(16).max(4096).optional(),
@@ -126,7 +135,7 @@ async function main() {
       description:
         "Create a short MP4, MP3, or GIF from an audio or video attachment in the active request. Uses fixed codecs and bounded presets; arbitrary FFmpeg arguments are not accepted.",
       inputSchema: {
-        attachmentId: z.string().trim().min(1).max(100),
+        mediaId: z.string().trim().min(1).max(200),
         preset: z.enum(["audio_mp3", "gif", "video_mp4"]),
         startSeconds: z.number().min(0).max(600).default(0),
         durationSeconds: z.number().min(0.1).max(120),
@@ -150,10 +159,10 @@ async function main() {
     "run_python",
     {
       description:
-        "Run bounded Python for a computation or attachment transformation not covered by another tool. Read MINISAGO_INPUTS_JSON for selected request-local input paths. If outputExtension is set, write exactly one result to MINISAGO_OUTPUT_PATH and return its artifact ID. Pillow, NumPy, OpenCV, scikit-image, rembg (offline lightweight u2netp model), and FFmpeg are available. The runtime has no network or package installation.",
+        "Run bounded Python for a computation or media transformation not covered by another tool. Read MINISAGO_INPUTS_JSON for selected request-local input paths. If outputExtension is set, write exactly one result to MINISAGO_OUTPUT_PATH and return its mediaId. Pillow, NumPy, OpenCV, scikit-image, rembg (offline lightweight u2netp model), and FFmpeg are available. The runtime has no network or package installation.",
       inputSchema: {
         code: z.string().min(1).max(20_000),
-        attachmentIds: z.array(z.string().trim().min(1).max(100)).max(10),
+        mediaIds: z.array(z.string().trim().min(1).max(200)).max(10),
         outputExtension: z.enum(pythonArtifactExtensions).optional(),
       },
       annotations: transformAnnotations,

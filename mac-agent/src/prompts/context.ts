@@ -35,12 +35,12 @@ function addressingReferences(request: string) {
 }
 
 function promptAttachment({
-  id,
+  id: mediaId,
   filename,
   contentType,
 }: ChatbotMessage["attachments"][number]) {
   return {
-    id,
+    mediaId,
     filename,
     ...(contentType ? { contentType } : {}),
   };

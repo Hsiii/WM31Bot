@@ -145,7 +145,7 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("returns member avatar URLs through context lookup", async () => {
+  test("returns composable member avatar media references", async () => {
     const session = registerChatbotMcpSession({
       ...handlers(),
       resolveContext: async () => ({
@@ -157,8 +157,11 @@ describe("MiniSago MCP server", () => {
             {
               query: "Daniel",
               names: ["Daniel"],
-              avatarUrl:
-                "https://cdn.discordapp.com/avatars/user-1/avatar.png?size=4096",
+              avatar: {
+                mediaId: "avatar-1",
+                filename: "Daniel-avatar.png",
+                contentType: "image/png",
+              },
             },
           ],
         },
@@ -178,8 +181,10 @@ describe("MiniSago MCP server", () => {
         results: [
           {
             query: "Daniel",
-            avatarUrl:
-              "https://cdn.discordapp.com/avatars/user-1/avatar.png?size=4096",
+            avatar: {
+              mediaId: "avatar-1",
+              filename: "Daniel-avatar.png",
+            },
           },
         ],
       },
@@ -580,11 +585,11 @@ describe("MiniSago MCP server", () => {
 
     await client.callTool({
       name: "add_guild_expression",
-      arguments: { member: "Fan", name: "fan" },
+      arguments: { mediaId: "avatar-1", name: "fan" },
     });
     expect(additions.at(-1)).toEqual({
       kind: "emoji",
-      member: "Fan",
+      mediaId: "avatar-1",
       name: "fan",
     });
 

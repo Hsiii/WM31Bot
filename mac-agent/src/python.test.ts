@@ -58,13 +58,13 @@ describe("request-local Python", () => {
     await expect(
       processor.run({
         code: "print('done')",
-        attachmentIds: ["attachment-1"],
+        mediaIds: ["attachment-1"],
         outputExtension: "png",
       }),
     ).resolves.toEqual({
       stdout: "done",
       stderr: "",
-      artifactId: "python-result.png",
+      mediaId: "python-result.png",
       size: 6,
     });
     expect(received).toEqual({
@@ -81,13 +81,13 @@ describe("request-local Python", () => {
     });
   });
 
-  test("rejects attachment IDs outside the active request", async () => {
+  test("rejects media IDs outside the active request", async () => {
     const processor = await fixture(async () => ({
       stdout: "",
       stderr: "",
     }));
     await expect(
-      processor.run({ code: "pass", attachmentIds: ["another-request"] }),
+      processor.run({ code: "pass", mediaIds: ["another-request"] }),
     ).rejects.toThrow("unavailable for this request");
   });
 
@@ -100,7 +100,7 @@ describe("request-local Python", () => {
     await expect(
       processor.run({
         code: "pass",
-        attachmentIds: [],
+        mediaIds: [],
         outputExtension: "txt",
       }),
     ).rejects.toThrow("invalid artifact");

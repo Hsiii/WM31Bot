@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { DiscordRequest } from "../gateway/chatbot";
 import {
-  addGuildEmojiFromAttachment,
-  addGuildStickerFromAttachment,
+  addGuildEmojiFromMedia,
+  addGuildStickerFromMedia,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
-  selectExpressionAttachment,
 } from "./emojis";
 
 const CREATE_EXPRESSIONS = (1n << 43n).toString();
@@ -126,50 +125,14 @@ describe("guild expression tools", () => {
     ).rejects.toThrow("Create Expressions permission in Target");
   });
 
-  test("selects an image from the replied-to message", () => {
-    const attachment = {
-      id: "image-1",
-      filename: "party-parrot.gif",
-      contentType: "image/gif",
-      url: "https://cdn.discordapp.com/attachments/1/2/party-parrot.gif",
-    };
-
-    expect(
-      selectExpressionAttachment({
-        attachments: [],
-        referencedAttachments: [attachment],
-      }),
-    ).toBe(attachment);
-  });
-
-  test("requires a filename when multiple images are available", () => {
-    const images = ["first.png", "second.webp"].map((filename, index) => ({
-      id: `image-${index}`,
-      filename,
-      contentType: index === 0 ? "image/png" : "image/webp",
-      url: `https://cdn.discordapp.com/attachments/1/2/${filename}`,
-    }));
-
-    expect(() => selectExpressionAttachment({ attachments: images })).toThrow(
-      "specify the exact filename",
-    );
-    expect(
-      selectExpressionAttachment({
-        attachments: images,
-        selector: "second.webp",
-      }),
-    ).toBe(images[1]);
-  });
-
-  test("adds an attached image to a guild and derives its name", async () => {
+  test("adds image media to a guild and derives its name", async () => {
     const requests: Array<{ path: string; body?: unknown }> = [];
-    const result = await addGuildEmojiFromAttachment({
+    const result = await addGuildEmojiFromMedia({
       destinationGuild: "Target",
-      attachment: {
-        id: "image-1",
+      media: {
         filename: "party-parrot.png",
         contentType: "image/png",
-        url: "https://cdn.discordapp.com/attachments/1/2/party-parrot.png",
+        bytes: new Uint8Array([1, 2, 3]),
       },
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
@@ -189,12 +152,6 @@ describe("guild expression tools", () => {
               }
         ) as never;
       },
-      fetchEmoji: async (url) => {
-        expect(String(url)).toBe(
-          "https://cdn.discordapp.com/attachments/1/2/party-parrot.png",
-        );
-        return new Response(new Uint8Array([1, 2, 3]));
-      },
     });
 
     expect(result).toMatchObject({
@@ -211,15 +168,14 @@ describe("guild expression tools", () => {
     });
   });
 
-  test("adds an attached sticker with multipart metadata", async () => {
+  test("adds sticker media with multipart metadata", async () => {
     let uploaded: FormData | undefined;
-    const result = await addGuildStickerFromAttachment({
+    const result = await addGuildStickerFromMedia({
       destinationGuild: "Target",
-      attachment: {
-        id: "sticker-1",
+      media: {
         filename: "party-parrot.png",
         contentType: "image/png",
-        url: "https://cdn.discordapp.com/attachments/1/2/party-parrot.png",
+        bytes: new Uint8Array([1, 2, 3]),
       },
       description: "A parrot celebrates.",
       tags: "🎉",
@@ -242,7 +198,6 @@ describe("guild expression tools", () => {
           format_type: 1,
         } as never;
       },
-      fetchSticker: async () => new Response(new Uint8Array([1, 2, 3])),
     });
 
     expect(result).toMatchObject({
@@ -260,27 +215,5 @@ describe("guild expression tools", () => {
     expect(file.name).toBe("party-parrot.png");
     expect(file.type).toBe("image/png");
     expect([...new Uint8Array(await file.arrayBuffer())]).toEqual([1, 2, 3]);
-  });
-
-  test("rejects non-Discord attachment URLs", async () => {
-    await expect(
-      addGuildEmojiFromAttachment({
-        destinationGuild: "Target",
-        attachment: {
-          id: "image-1",
-          filename: "image.png",
-          contentType: "image/png",
-          url: "https://example.com/image.png",
-        },
-        discordRequest: async () =>
-          [
-            {
-              id: "target",
-              name: "Target",
-              permissions: CREATE_EXPRESSIONS,
-            },
-          ] as never,
-      }),
-    ).rejects.toThrow("must be a Discord attachment");
   });
 });

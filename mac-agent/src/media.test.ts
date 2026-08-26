@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { MediaProcessor, mediaLimits, type MediaCommandRunner } from "./media";
+import type { MediaClient } from "./media-client";
 
 const temporaryDirectories: string[] = [];
 
@@ -20,6 +21,7 @@ async function fixture(
       { codec_type: "video", codec_name: "png", width: 800, height: 600 },
     ],
   },
+  mediaClient?: MediaClient,
 ) {
   const root = await mkdtemp(join(tmpdir(), "minisago-media-"));
   temporaryDirectories.push(root);
@@ -50,7 +52,7 @@ async function fixture(
         },
       ],
     },
-    { runner, idFactory: () => "fixed" },
+    { runner, idFactory: () => "fixed", mediaClient },
   );
   return { commands, processor, root };
 }
@@ -76,7 +78,7 @@ describe("request-local media processor", () => {
     });
 
     expect(await processor.inspect("attachment-1")).toEqual({
-      attachmentId: "attachment-1",
+      mediaId: "attachment-1",
       filename: "source.png",
       contentType: "image/png",
       format: "png_pipe",
@@ -96,11 +98,11 @@ describe("request-local media processor", () => {
     });
   });
 
-  test("builds a fixed image transform and returns only its artifact ID", async () => {
+  test("builds a fixed image transform and returns its media ID", async () => {
     const { commands, processor } = await fixture();
 
     const result = await processor.transformImage({
-      attachmentId: "attachment-1",
+      mediaId: "attachment-1",
       format: "webp",
       width: 320,
       height: 240,
@@ -109,7 +111,7 @@ describe("request-local media processor", () => {
       quality: 82,
     });
 
-    expect(result).toEqual({ artifactId: "media-fixed.webp", size: 9 });
+    expect(result).toEqual({ mediaId: "media-fixed.webp", size: 9 });
     expect(commands[1]?.command).toBe("/usr/bin/ffmpeg");
     expect(commands[1]?.args).toContain("-nostdin");
     expect(commands[1]?.args).toContain("-map_metadata");
@@ -117,6 +119,39 @@ describe("request-local media processor", () => {
       "scale=320:240:force_original_aspect_ratio=increase,crop=320:240,transpose=1",
     );
     expect(commands[1]?.args.at(-1)).toEndWith("/outputs/media-fixed.webp");
+  });
+
+  test("composes remote media into a published output that can be reused", async () => {
+    const published: Array<{ mediaId: string; bytes: Uint8Array }> = [];
+    const mediaClient: MediaClient = {
+      read: async (mediaId) => ({
+        mediaId,
+        filename: "avatar.png",
+        contentType: "image/png",
+        bytes: new TextEncoder().encode("avatar"),
+      }),
+      write: async ({ mediaId, bytes }) => {
+        published.push({ mediaId, bytes });
+      },
+    };
+    const { processor } = await fixture(undefined, mediaClient);
+
+    const transformed = await processor.transformImage({
+      mediaId: "avatar-from-context",
+      format: "webp",
+      width: 128,
+      fit: "cover",
+      rotate: 0,
+      quality: 82,
+    });
+
+    expect(published[0]?.mediaId).toBe(transformed.mediaId);
+    await expect(processor.inspect(transformed.mediaId)).resolves.toMatchObject(
+      {
+        mediaId: transformed.mediaId,
+        filename: transformed.mediaId,
+      },
+    );
   });
 
   test("enforces preset-specific duration limits", async () => {
@@ -130,7 +165,7 @@ describe("request-local media processor", () => {
 
     await expect(
       processor.transcode({
-        attachmentId: "attachment-1",
+        mediaId: "attachment-1",
         preset: "gif",
         startSeconds: 0,
         durationSeconds: 16,
@@ -154,7 +189,7 @@ describe("request-local media processor", () => {
 
     await expect(
       processor.transformImage({
-        attachmentId: "attachment-1",
+        mediaId: "attachment-1",
         format: "png",
         fit: "contain",
         rotate: 0,
