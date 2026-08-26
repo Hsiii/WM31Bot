@@ -37,7 +37,9 @@ export type SharedGuildEmoji = {
   available?: boolean;
 };
 
-type ExpressionFetch = (input: string | URL | Request) => Promise<Response>;
+export type ExpressionFetch = (
+  input: string | URL | Request,
+) => Promise<Response>;
 
 export type ExpressionAttachment = {
   id: string;
@@ -294,6 +296,37 @@ export async function addGuildEmojiFromAttachment({
     animated: created.animated ?? contentType === "image/gif",
     guild: destination,
   };
+}
+
+export function addGuildEmojiFromAvatar({
+  destinationGuild,
+  avatarUrl,
+  name,
+  discordRequest,
+  fetchEmoji = fetch,
+}: {
+  destinationGuild: string;
+  avatarUrl: string;
+  name: string;
+  discordRequest: DiscordRequest;
+  fetchEmoji?: ExpressionFetch;
+}) {
+  const imageUrl = new URL(avatarUrl);
+  imageUrl.pathname = imageUrl.pathname.replace(/\.[^.]+$/u, ".png");
+  imageUrl.searchParams.set("size", "128");
+
+  return addGuildEmojiFromAttachment({
+    destinationGuild,
+    attachment: {
+      id: "member-avatar",
+      filename: "member-avatar.png",
+      contentType: "image/png",
+      url: imageUrl.toString(),
+    },
+    name,
+    discordRequest,
+    fetchEmoji,
+  });
 }
 
 export async function addGuildStickerFromAttachment({
