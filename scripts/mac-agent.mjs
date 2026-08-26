@@ -158,7 +158,21 @@ async function install() {
   ]);
   await chmod(sessionMonitor, 0o700);
 
+  const bunPath = Bun.which("bun") || process.execPath;
+  const ghPath = Bun.which("gh") || "/usr/bin/gh";
+
   const environment = [
+    envLine(
+      "PATH",
+      [
+        dirname(bunPath),
+        dirname(ghPath),
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+      ].join(":"),
+    ),
     envLine(
       "MINISAGO_BRIDGE_URL",
       process.env.MINISAGO_BRIDGE_URL?.trim() ||
@@ -218,7 +232,6 @@ async function install() {
   });
   await chmod(environmentFile, 0o600);
 
-  const bunPath = Bun.which("bun") || process.execPath;
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
