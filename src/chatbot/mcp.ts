@@ -27,6 +27,40 @@ const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
 const DEFAULT_REMINDER_TIMEZONE = "Asia/Taipei";
 
+export function normalizeReminderSchedule(input: {
+  content: string;
+  runAt?: string;
+  cron?: string;
+  timezone?: string;
+}) {
+  const content = input.content.trim();
+  const runAt = input.runAt?.trim();
+  const cron = input.cron?.trim().replace(/\s+/gu, " ");
+  const timezone = input.timezone?.trim();
+  if (Boolean(runAt) === Boolean(cron)) {
+    throw new Error("Provide exactly one of runAt or cron.");
+  }
+  if (runAt) {
+    if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(runAt)) {
+      throw new Error("runAt must include Z or a UTC offset.");
+    }
+    const parsed = new Date(runAt);
+    if (!Number.isFinite(parsed.getTime())) {
+      throw new Error("runAt must be a valid ISO 8601 timestamp.");
+    }
+    return {
+      content,
+      runAt: parsed.toISOString(),
+      ...(timezone ? { timezone } : {}),
+    };
+  }
+  return {
+    content,
+    cron: cron!,
+    timezone: timezone || DEFAULT_REMINDER_TIMEZONE,
+  };
+}
+
 const searchHas = z.enum([
   "image",
   "sound",
@@ -980,7 +1014,7 @@ function createServer(session: ChatbotMcpSession) {
       "create_reminder",
       {
         description:
-          "Create a reminder in the current Discord channel for the current requester. Wall-clock and recurring requests default to Asia/Taipei when the user gives no timezone or location. For a one-time wall-clock reminder, provide runAt as an ISO 8601 timestamp including Z or a UTC offset and timezone as the IANA timezone used to resolve it. Relative-duration timers do not need a timezone. For a recurring reminder, provide a standard five-field cron expression and an IANA timezone. Provide exactly one schedule type.",
+          "Create a reminder in the current Discord channel for the current requester. Provide either an ISO 8601 runAt with an offset or a five-field cron. The host canonicalizes timestamps and whitespace. Recurring schedules default to Asia/Taipei. A one-time schedule has a timezone only when one was needed to resolve it.",
         inputSchema: {
           content: z.string().trim().min(1).max(1_500),
           runAt: z.string().trim().max(50).optional(),
@@ -996,19 +1030,11 @@ function createServer(session: ChatbotMcpSession) {
       },
       async (input) => {
         try {
-          if (Boolean(input.runAt) === Boolean(input.cron)) {
-            return toolResult({
-              status: "invalid",
-              error: "Provide exactly one of runAt or cron.",
-            });
-          }
-          const reminderInput =
-            input.cron && !input.timezone
-              ? { ...input, timezone: DEFAULT_REMINDER_TIMEZONE }
-              : input;
           return toolResult({
             status: "complete",
-            reminder: await session.handlers.createReminder!(reminderInput),
+            reminder: await session.handlers.createReminder!(
+              normalizeReminderSchedule(input),
+            ),
           });
         } catch (error) {
           return toolResult({

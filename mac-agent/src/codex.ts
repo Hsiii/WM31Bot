@@ -826,6 +826,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
             : {}),
           ...mediaMcp?.environment,
           ...macFilesMcp?.environment,
+          ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
         },
       ),
     });

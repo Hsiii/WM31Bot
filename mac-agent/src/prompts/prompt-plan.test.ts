@@ -74,7 +74,7 @@ describe("prompt plan", () => {
     );
   });
 
-  test("loads the language reference only for Chinese context", () => {
+  test("loads only the language reference needed by the context", () => {
     const english = buildPromptPlan(baseJob, [], []);
     const chinese = buildPromptPlan(
       { ...baseJob, request: "大家說不揪是什麼意思" },
@@ -83,7 +83,8 @@ describe("prompt plan", () => {
     );
 
     expect(english.developerInstructions).not.toContain("各各=各付各的");
-    expect(chinese.developerInstructions).toContain("各各=各付各的");
+    expect(chinese.developerInstructions).toContain("不揪 is usually");
+    expect(chinese.developerInstructions).not.toContain("各各=各付各的");
   });
 
   test("keeps routing capabilities in context rather than policy", () => {

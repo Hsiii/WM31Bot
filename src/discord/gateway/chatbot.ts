@@ -32,6 +32,7 @@ import type {
   AnswerJob,
   OracleAnswerJob,
 } from "../../chatbot/protocol";
+import { parseChatbotAnswerDecision } from "../../chatbot/answer-contract";
 
 import {
   DiscordReactionBroker,
@@ -85,6 +86,7 @@ export {
   parseExecutionRoute,
   parsePreviousTraceLookup,
 } from "./chatbot-routing";
+export { parseChatbotAnswerDecision } from "../../chatbot/answer-contract";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
@@ -249,48 +251,6 @@ export class ChatbotConversationTracker {
       message.author?.id === conversation.requesterUserId &&
       !message.mentions?.length
     );
-  }
-}
-
-export type ChatbotAnswerDecision = {
-  reply: string | null;
-  reactionEmoji?: string;
-};
-
-export function parseChatbotAnswerDecision(
-  content: string,
-): ChatbotAnswerDecision {
-  try {
-    const value = JSON.parse(content) as {
-      reply?: unknown;
-      reaction?: unknown;
-    };
-    const reply =
-      typeof value.reply === "string"
-        ? value.reply.trim()
-        : value.reply === null
-          ? null
-          : undefined;
-    const reaction =
-      value.reaction &&
-      typeof value.reaction === "object" &&
-      "emoji" in value.reaction &&
-      typeof value.reaction.emoji === "string"
-        ? value.reaction.emoji.trim()
-        : undefined;
-    if (
-      reply !== undefined &&
-      (value.reaction === null || reaction !== undefined) &&
-      (reply || reaction)
-    ) {
-      return {
-        reply: reply || null,
-        ...(reaction ? { reactionEmoji: reaction } : {}),
-      };
-    }
-    return { reply: null };
-  } catch {
-    return { reply: content.trim() || null };
   }
 }
 
