@@ -160,19 +160,17 @@ async function install() {
 
   const bunPath = Bun.which("bun") || process.execPath;
   const ghPath = Bun.which("gh") || "/usr/bin/gh";
+  const workerPath = [
+    dirname(bunPath),
+    dirname(ghPath),
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+  ].join(":");
 
   const environment = [
-    envLine(
-      "PATH",
-      [
-        dirname(bunPath),
-        dirname(ghPath),
-        "/usr/bin",
-        "/bin",
-        "/usr/sbin",
-        "/sbin",
-      ].join(":"),
-    ),
+    envLine("PATH", workerPath),
     envLine(
       "MINISAGO_BRIDGE_URL",
       process.env.MINISAGO_BRIDGE_URL?.trim() ||
@@ -246,6 +244,11 @@ async function install() {
   </array>
   <key>WorkingDirectory</key>
   <string>${escapeXml(repositoryRoot)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${escapeXml(workerPath)}</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
