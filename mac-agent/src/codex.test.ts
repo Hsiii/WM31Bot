@@ -204,6 +204,8 @@ describe("Codex chatbot runner", () => {
       mediaMcpConfig(
         "/tmp/request/media-manifest.json",
         "http://sandbox:8080/",
+        "https://sago.example/api/chatbot/mcp",
+        "token-1",
         "/usr/local/bin/bun",
         "/app/mac-agent/src/media-mcp.ts",
       ),
@@ -214,7 +216,7 @@ describe("Codex chatbot runner", () => {
         "--config",
         'mcp_servers.minisago_media.args=["/app/mac-agent/src/media-mcp.ts"]',
         "--config",
-        'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL"]',
+        'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL","MINISAGO_MCP_URL","MINISAGO_MCP_TOKEN"]',
         "--config",
         "mcp_servers.minisago_media.required=true",
         "--config",
@@ -227,6 +229,8 @@ describe("Codex chatbot runner", () => {
       environment: {
         MINISAGO_MEDIA_MANIFEST: "/tmp/request/media-manifest.json",
         MINISAGO_SANDBOX_URL: "http://sandbox:8080/",
+        MINISAGO_MCP_URL: "https://sago.example/api/chatbot/mcp",
+        MINISAGO_MCP_TOKEN: "token-1",
       },
     });
   });
@@ -446,11 +450,11 @@ describe("Codex chatbot runner", () => {
             type: "mcp_tool_call",
             server: "minisago_media",
             tool: "transform_image",
-            arguments: { attachmentId: "attachment-1", width: 320 },
+            arguments: { mediaId: "attachment-1", width: 320 },
             result: {
               structured_content: {
                 status: "complete",
-                artifactId: "media-result.webp",
+                mediaId: "media-result.webp",
               },
             },
             status: "completed",
@@ -495,7 +499,7 @@ describe("Codex chatbot runner", () => {
     expect(calls).toEqual([
       {
         name: "media.transform_image",
-        arguments: { attachmentId: "attachment-1", width: 320 },
+        arguments: { mediaId: "attachment-1", width: 320 },
         status: "completed",
       },
       {
@@ -741,7 +745,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain(
       "the request's target and takes priority over nearby messages",
     );
-    expect(prompt).toContain('"id":"attachment-1"');
+    expect(prompt).toContain('"mediaId":"attachment-1"');
     expect(prompt).toContain('"filename":"notes.txt"');
     expect(prompt).toContain('"author":"Daniel"');
     expect(prompt).toContain('"reactions":[{"emoji":"😂","count":4}]');

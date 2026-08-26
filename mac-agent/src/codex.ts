@@ -272,6 +272,8 @@ export function canUseMediaTools(
 export function mediaMcpConfig(
   manifestPath: string,
   sandboxUrl: string,
+  mcpUrl: string,
+  mcpToken: string,
   bunPath = process.execPath,
   serverPath = MEDIA_MCP_SERVER_PATH,
 ) {
@@ -282,7 +284,7 @@ export function mediaMcpConfig(
       "--config",
       `mcp_servers.minisago_media.args=[${JSON.stringify(serverPath)}]`,
       "--config",
-      'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL"]',
+      'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL","MINISAGO_MCP_URL","MINISAGO_MCP_TOKEN"]',
       "--config",
       "mcp_servers.minisago_media.required=true",
       "--config",
@@ -295,6 +297,8 @@ export function mediaMcpConfig(
     environment: {
       MINISAGO_MEDIA_MANIFEST: manifestPath,
       MINISAGO_SANDBOX_URL: sandboxUrl,
+      MINISAGO_MCP_URL: mcpUrl,
+      MINISAGO_MCP_TOKEN: mcpToken,
     },
   };
 }
@@ -596,7 +600,12 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       versions: prompt.versions,
     });
     const mediaMcp = hasMediaTools
-      ? mediaMcpConfig(prepared.mediaManifestPath, options.sandboxUrl)
+      ? mediaMcpConfig(
+          prepared.mediaManifestPath,
+          options.sandboxUrl,
+          options.mcpUrl,
+          job.mcpAccessToken,
+        )
       : undefined;
     const codexArguments = [
       options.codexPath,

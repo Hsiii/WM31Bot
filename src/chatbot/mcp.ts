@@ -17,6 +17,11 @@ import type {
   CodexUsageSnapshot,
 } from "./protocol";
 import type { TripPlanEditInput, TripPlanReadInput } from "./trip-planner";
+import {
+  ChatbotMediaRegistry,
+  chatbotMediaLimits,
+  readBoundedMediaBytes,
+} from "./media-assets";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
@@ -169,16 +174,16 @@ export function budgetResolvedContext(
 export type ChatbotGuildExpressionInput = {
   kind?: "emoji" | "sticker";
   emoji?: string;
-  member?: string;
   sourceGuild?: string;
   destinationGuild?: string;
   name?: string;
-  attachment?: string;
+  mediaId?: string;
   description?: string;
   tags?: string;
 };
 
 export type ChatbotMcpSessionHandlers = {
+  mediaRegistry?: ChatbotMediaRegistry;
   describeCapabilities?: () => ChatbotMcpCapability[];
   getPreviousTrace: () => Promise<{
     status: ChatbotMcpStatus;
@@ -295,6 +300,7 @@ type ChatbotMcpSession = {
   expiresAt: number;
   handlers: ChatbotMcpSessionHandlers;
   searchUnavailable: boolean;
+  mediaRegistry?: ChatbotMediaRegistry;
 };
 
 export type ChatbotMcpSessionSnapshot = {
@@ -325,7 +331,12 @@ function sanitizeToolValue(value: unknown): unknown {
     Object.entries(record).flatMap(([key, item]) =>
       isAttachment && key === "url"
         ? []
-        : [[key, sanitizeToolValue(item)] as const],
+        : [
+            [
+              isAttachment && key === "id" ? "mediaId" : key,
+              sanitizeToolValue(item),
+            ] as const,
+          ],
     ),
   );
 }
@@ -441,7 +452,7 @@ function availableCapabilities(
       category: "discord",
       availability: "available",
       description:
-        "List shared servers and custom emojis, then add an attached emoji or sticker, turn a member avatar into an emoji, or copy an existing custom emoji, when the owner asks.",
+        "List shared servers and custom emojis, then add an emoji or sticker from any request media reference, or copy an existing custom emoji, when the owner asks.",
       tools: [
         "list_shared_guilds",
         "list_guild_emojis",
@@ -923,15 +934,14 @@ function createServer(session: ChatbotMcpSession) {
       "add_guild_expression",
       {
         description:
-          "Add a custom emoji or sticker to a Discord server. To turn a member's avatar into an emoji, set member to their exact name or mention and provide an ASCII name. Set kind to sticker for a new sticker and provide tags as a related Unicode emoji or search term; description is optional alt text. For an attachment, omit member, sourceGuild, and emoji; use attachment only to select an exact filename when multiple compatible files exist. Copying an existing custom emoji requires kind emoji plus both sourceGuild and emoji. destinationGuild defaults to the current server. Only call this when the requester clearly asks to add or copy the expression. If it returns invalid, report that error accurately; never call it cancelled.",
+          "Add a custom emoji or sticker to a Discord server. Use mediaId from an attachment, member avatar, or media tool output. Set kind to sticker and provide tags as a related Unicode emoji or search term; description is optional alt text. Copying an existing custom emoji requires kind emoji plus both sourceGuild and emoji. destinationGuild defaults to the current server. Only call this when the requester clearly asks to add or copy the expression. If it returns invalid, report that error accurately; never call it cancelled.",
         inputSchema: {
           kind: z.enum(["emoji", "sticker"]).default("emoji"),
           emoji: z.string().trim().min(1).max(100).optional(),
-          member: z.string().trim().min(1).max(100).optional(),
           sourceGuild: z.string().trim().min(1).max(100).optional(),
           destinationGuild: z.string().trim().min(1).max(100).optional(),
           name: z.string().trim().min(2).max(32).optional(),
-          attachment: z.string().trim().min(1).max(255).optional(),
+          mediaId: z.string().trim().min(1).max(200).optional(),
           description: z.string().max(100).optional(),
           tags: z.string().trim().min(1).max(200).optional(),
         },
@@ -1072,7 +1082,7 @@ function bearerToken(request: Request) {
 
 export function registerChatbotMcpSession(
   handlers: ChatbotMcpSessionHandlers,
-  options: { ttlMs?: number } = {},
+  options: { ttlMs?: number; mediaRegistry?: ChatbotMediaRegistry } = {},
 ) {
   pruneSessions();
   const token = randomBytes(32).toString("base64url");
@@ -1085,6 +1095,7 @@ export function registerChatbotMcpSession(
       ),
     handlers,
     searchUnavailable: false,
+    mediaRegistry: options.mediaRegistry ?? handlers.mediaRegistry,
   };
   sessions.set(token, session);
 
@@ -1103,11 +1114,72 @@ export function registerChatbotMcpSession(
   };
 }
 
-export async function handleChatbotMcpRequest(request: Request) {
+function authenticatedSession(request: Request) {
   pruneSessions();
   const token = bearerToken(request);
   const session = token ? sessions.get(token) : undefined;
-  if (!session || session.expiresAt <= Date.now()) {
+  return session && session.expiresAt > Date.now()
+    ? { token: token!, session }
+    : undefined;
+}
+
+export async function handleChatbotMediaRequest(request: Request) {
+  const authenticated = authenticatedSession(request);
+  if (!authenticated?.session.mediaRegistry) {
+    return Response.json({ error: "invalid_token" }, { status: 401 });
+  }
+  const marker = "/api/chatbot/media/";
+  const mediaId = decodeURIComponent(
+    new URL(request.url).pathname.slice(marker.length),
+  );
+  try {
+    if (request.method === "GET") {
+      const asset = await authenticated.session.mediaRegistry.read(mediaId);
+      return new Response(asset.bytes, {
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": asset.contentType ?? "application/octet-stream",
+          "X-MiniSago-Filename": encodeURIComponent(asset.filename),
+        },
+      });
+    }
+    if (request.method === "POST") {
+      const declared = Number(request.headers.get("content-length") ?? 0);
+      if (declared > chatbotMediaLimits.outputBytes) {
+        return Response.json({ error: "media_too_large" }, { status: 413 });
+      }
+      const bytes = await readBoundedMediaBytes(
+        new Response(request.body, { headers: request.headers }),
+        chatbotMediaLimits.outputBytes,
+      );
+      const filename = decodeURIComponent(
+        request.headers.get("x-minisago-filename") ?? mediaId,
+      );
+      const reference = authenticated.session.mediaRegistry.put({
+        mediaId,
+        filename,
+        contentType: request.headers.get("content-type") ?? undefined,
+        bytes,
+      });
+      return Response.json(reference, {
+        status: 201,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    return new Response("Method not allowed", { status: 405 });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Media unavailable." },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+}
+
+export async function handleChatbotMcpRequest(request: Request) {
+  const authenticated = authenticatedSession(request);
+  const token = authenticated?.token;
+  const session = authenticated?.session;
+  if (!session) {
     return Response.json(
       { error: "invalid_token" },
       {

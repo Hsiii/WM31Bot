@@ -98,12 +98,14 @@ features are omitted for other requesters, and capabilities that need a routed
 worker or explicit request are marked conditional. Discord identity and
 destinations remain bound by the host wherever possible.
 
-Linux answer jobs also receive a worker-local stdio MCP server for media
-attached to the active request. Its typed tools inspect media, transform images,
-extract video frames, and produce bounded MP4, MP3, or GIF artifacts through
-fixed FFmpeg presets. It accepts attachment IDs rather than paths or URLs and
-has no network access. The server and its manifest are recreated for each job;
-it is separate from the hosted authority-bearing MCP endpoint.
+Linux answer jobs also receive a worker-local stdio MCP server for media in the
+active request. Attachments, resolved member avatars, and generated outputs all
+use the same opaque `mediaId` interface, so one tool's output can be passed
+directly to another media or Discord tool. Typed tools inspect media, transform
+images, extract video frames, and produce bounded MP4, MP3, or GIF artifacts
+through fixed FFmpeg presets. The worker can exchange bytes only with the
+bearer-bound request media endpoint; it accepts no paths, URLs, or arbitrary
+network destinations. The server, token, and local manifest are request-scoped.
 
 Reminder identity and destination are fixed to the requester and current
 channel. Relative timers need no timezone; wall-clock and recurring requests

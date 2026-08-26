@@ -76,8 +76,11 @@ escapes, symlinks, unsupported media extensions, files above 8 MB, and more than
 one output before sending bytes to the hosted service. Generated files are
 deleted with the downloaded attachments after the response.
 
-The Linux media MCP accepts only attachment IDs from its sealed per-job
-manifest. It exposes typed transformations rather than shell commands or raw
+The Linux media MCP accepts only opaque media IDs registered to the active
+bearer token. The host registry admits Discord CDN inputs and bounded generated
+bytes; it never resolves caller-supplied paths or URLs. This lets attachments,
+member avatars, and generated outputs compose without broadening network or
+filesystem authority. Typed transformations replace shell commands and raw
 FFmpeg arguments. Inspection omits source metadata and tags; transformations
 strip output metadata. Inputs are limited to 20 MB, 10 minutes, 8,192 pixels per
 dimension, and 40 megapixels. Commands use fixed local protocols, two threads,

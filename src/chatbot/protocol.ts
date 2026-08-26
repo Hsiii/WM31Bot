@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 31;
+export const CHATBOT_PROTOCOL_VERSION = 32;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -11,6 +11,13 @@ export type ChatbotAttachment = {
   contentType?: string;
   size: number;
   url: string;
+};
+
+export type ChatbotMediaRef = {
+  mediaId: string;
+  filename: string;
+  contentType?: string;
+  size?: number;
 };
 
 export type ChatbotOutgoingFile = {
@@ -53,7 +60,7 @@ export type ChatbotToolCapability = {
 export type ChatbotMemberResult = {
   query: string;
   names: string[];
-  avatarUrl: string;
+  avatar: ChatbotMediaRef;
 };
 
 export type ChatbotMcpTraceCall = {

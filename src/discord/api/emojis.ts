@@ -4,10 +4,6 @@ const CREATE_GUILD_EXPRESSIONS = 1n << 43n;
 const ADMINISTRATOR = 1n << 3n;
 const MAX_EMOJI_BYTES = 256 * 1024;
 const MAX_STICKER_BYTES = 512 * 1024;
-const DISCORD_CDN_HOSTS = new Set([
-  "cdn.discordapp.com",
-  "media.discordapp.net",
-]);
 const CUSTOM_EMOJI = /^<(a?):([A-Za-z0-9_]{2,32}):(\d{17,20})>$/u;
 const EMOJI_NAME = /^[A-Za-z0-9_]{2,32}$/u;
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
@@ -41,11 +37,10 @@ export type ExpressionFetch = (
   input: string | URL | Request,
 ) => Promise<Response>;
 
-export type ExpressionAttachment = {
-  id: string;
+export type ExpressionMedia = {
   filename: string;
   contentType?: string;
-  url: string;
+  bytes: Uint8Array;
 };
 
 export type SharedEmojiGuild = {
@@ -148,11 +143,11 @@ function resolveEmoji(emojis: SharedGuildEmoji[], value: string) {
   return matches[0]!;
 }
 
-function attachmentContentType(attachment: ExpressionAttachment) {
-  const declared = attachment.contentType?.toLocaleLowerCase();
+function imageContentType(media: ExpressionMedia) {
+  const declared = media.contentType?.toLocaleLowerCase();
   if (declared && IMAGE_CONTENT_TYPES.has(declared)) return declared;
 
-  const extension = attachment.filename.split(".").at(-1)?.toLocaleLowerCase();
+  const extension = media.filename.split(".").at(-1)?.toLocaleLowerCase();
   return extension === "jpg" || extension === "jpeg"
     ? "image/jpeg"
     : extension && IMAGE_CONTENT_TYPES.has(`image/${extension}`)
@@ -160,68 +155,16 @@ function attachmentContentType(attachment: ExpressionAttachment) {
       : undefined;
 }
 
-function stickerContentType(attachment: ExpressionAttachment) {
-  const declared = attachment.contentType?.toLocaleLowerCase();
+function stickerContentType(media: ExpressionMedia) {
+  const declared = media.contentType?.toLocaleLowerCase();
   if (declared && STICKER_CONTENT_TYPES.has(declared)) return declared;
 
-  const extension = attachment.filename.split(".").at(-1)?.toLocaleLowerCase();
+  const extension = media.filename.split(".").at(-1)?.toLocaleLowerCase();
   return extension === "json"
     ? "application/json"
     : extension && STICKER_CONTENT_TYPES.has(`image/${extension}`)
       ? `image/${extension}`
       : undefined;
-}
-
-export function selectExpressionAttachment({
-  attachments,
-  referencedAttachments = [],
-  selector,
-  kind = "emoji",
-}: {
-  attachments: ExpressionAttachment[];
-  referencedAttachments?: ExpressionAttachment[];
-  selector?: string;
-  kind?: "emoji" | "sticker";
-}) {
-  const images = [...attachments, ...referencedAttachments].filter(
-    (attachment) =>
-      (kind === "sticker" ? stickerContentType : attachmentContentType)(
-        attachment,
-      ) !== undefined,
-  );
-  if (selector) {
-    const query = selector.trim().toLocaleLowerCase();
-    const matches = images.filter(
-      (attachment) =>
-        attachment.id === selector ||
-        attachment.filename.toLocaleLowerCase() === query,
-    );
-    if (matches.length === 1) return matches[0]!;
-    throw new Error(
-      matches.length > 1
-        ? `More than one attached image is named ${selector}.`
-        : `No attached image matched ${selector}.`,
-    );
-  }
-  if (images.length !== 1) {
-    throw new Error(
-      images.length === 0
-        ? "Attach an image or reply to a message containing one."
-        : "More than one image is attached; specify the exact filename.",
-    );
-  }
-  return images[0]!;
-}
-
-function assertDiscordAttachment(attachment: ExpressionAttachment) {
-  const imageUrl = new URL(attachment.url);
-  if (
-    imageUrl.protocol !== "https:" ||
-    !DISCORD_CDN_HOSTS.has(imageUrl.hostname)
-  ) {
-    throw new Error("The file must be a Discord attachment.");
-  }
-  return imageUrl;
 }
 
 function defaultEmojiName(filename: string) {
@@ -233,18 +176,16 @@ function defaultEmojiName(filename: string) {
   return normalized.length === 1 ? `${normalized}_` : normalized;
 }
 
-export async function addGuildEmojiFromAttachment({
+export async function addGuildEmojiFromMedia({
   destinationGuild,
-  attachment,
+  media,
   name,
   discordRequest,
-  fetchEmoji = fetch,
 }: {
   destinationGuild: string;
-  attachment: ExpressionAttachment;
+  media: ExpressionMedia;
   name?: string;
   discordRequest: DiscordRequest;
-  fetchEmoji?: ExpressionFetch;
 }) {
   const destination = resolveGuild(
     await listSharedEmojiGuilds(discordRequest),
@@ -256,23 +197,17 @@ export async function addGuildEmojiFromAttachment({
     );
   }
 
-  const destinationName = name?.trim() || defaultEmojiName(attachment.filename);
+  const destinationName = name?.trim() || defaultEmojiName(media.filename);
   if (!EMOJI_NAME.test(destinationName)) {
     throw new Error(
       "Give the emoji a 2-32 character name using letters, numbers, or underscores.",
     );
   }
-  const contentType = attachmentContentType(attachment);
+  const contentType = imageContentType(media);
   if (!contentType) {
     throw new Error("Discord emoji images must be PNG, JPEG, GIF, or WebP.");
   }
-  const imageUrl = assertDiscordAttachment(attachment);
-
-  const imageResponse = await fetchEmoji(imageUrl);
-  if (!imageResponse.ok) {
-    throw new Error("Discord could not download the attached image.");
-  }
-  const image = new Uint8Array(await imageResponse.arrayBuffer());
+  const image = media.bytes;
   if (image.byteLength > MAX_EMOJI_BYTES) {
     throw new Error(
       "The attached image is larger than Discord's 256 KiB limit.",
@@ -298,53 +233,20 @@ export async function addGuildEmojiFromAttachment({
   };
 }
 
-export function addGuildEmojiFromAvatar({
+export async function addGuildStickerFromMedia({
   destinationGuild,
-  avatarUrl,
-  name,
-  discordRequest,
-  fetchEmoji = fetch,
-}: {
-  destinationGuild: string;
-  avatarUrl: string;
-  name: string;
-  discordRequest: DiscordRequest;
-  fetchEmoji?: ExpressionFetch;
-}) {
-  const imageUrl = new URL(avatarUrl);
-  imageUrl.pathname = imageUrl.pathname.replace(/\.[^.]+$/u, ".png");
-  imageUrl.searchParams.set("size", "128");
-
-  return addGuildEmojiFromAttachment({
-    destinationGuild,
-    attachment: {
-      id: "member-avatar",
-      filename: "member-avatar.png",
-      contentType: "image/png",
-      url: imageUrl.toString(),
-    },
-    name,
-    discordRequest,
-    fetchEmoji,
-  });
-}
-
-export async function addGuildStickerFromAttachment({
-  destinationGuild,
-  attachment,
+  media,
   name,
   description = "",
   tags,
   discordRequest,
-  fetchSticker = fetch,
 }: {
   destinationGuild: string;
-  attachment: ExpressionAttachment;
+  media: ExpressionMedia;
   name?: string;
   description?: string;
   tags: string;
   discordRequest: DiscordRequest;
-  fetchSticker?: ExpressionFetch;
 }) {
   const destination = resolveGuild(
     await listSharedEmojiGuilds(discordRequest),
@@ -356,7 +258,7 @@ export async function addGuildStickerFromAttachment({
     );
   }
 
-  const destinationName = name?.trim() || defaultEmojiName(attachment.filename);
+  const destinationName = name?.trim() || defaultEmojiName(media.filename);
   if (destinationName.length < 2 || destinationName.length > 30) {
     throw new Error("Give the sticker a 2-30 character name.");
   }
@@ -368,17 +270,12 @@ export async function addGuildStickerFromAttachment({
       "Give the sticker a related emoji or tag (max 200 characters).",
     );
   }
-  const contentType = stickerContentType(attachment);
+  const contentType = stickerContentType(media);
   if (!contentType) {
     throw new Error("Discord stickers must be PNG, APNG, GIF, or Lottie JSON.");
   }
 
-  const fileUrl = assertDiscordAttachment(attachment);
-  const fileResponse = await fetchSticker(fileUrl);
-  if (!fileResponse.ok) {
-    throw new Error("Discord could not download the attached sticker.");
-  }
-  const file = new Uint8Array(await fileResponse.arrayBuffer());
+  const file = media.bytes;
   if (file.byteLength > MAX_STICKER_BYTES) {
     throw new Error(
       "The attached sticker is larger than Discord's 512 KiB limit.",
@@ -392,7 +289,7 @@ export async function addGuildStickerFromAttachment({
   formData.append(
     "file",
     new Blob([file], { type: contentType }),
-    attachment.filename,
+    media.filename,
   );
   const created = await discordRequest<{
     id: string;

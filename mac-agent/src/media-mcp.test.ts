@@ -42,6 +42,8 @@ describe("MiniSago media MCP", () => {
         ...getDefaultEnvironment(),
         MINISAGO_MEDIA_MANIFEST: manifestPath,
         MINISAGO_SANDBOX_URL: "http://sandbox:8080",
+        MINISAGO_MCP_URL: "http://localhost:3000/api/chatbot/mcp",
+        MINISAGO_MCP_TOKEN: "request-token",
       },
       stderr: "pipe",
     });

@@ -7,6 +7,7 @@ import {
   type WorkflowLease,
 } from "../../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
+import { ChatbotMediaRegistry } from "../../chatbot/media-assets";
 import {
   registerChatbotMcpSession,
   type ChatbotGuildExpressionInput,
@@ -37,13 +38,11 @@ import {
   type DiscordReactionCapabilities,
 } from "../api/reactions";
 import {
-  addGuildEmojiFromAvatar,
-  addGuildEmojiFromAttachment,
-  addGuildStickerFromAttachment,
+  addGuildEmojiFromMedia,
+  addGuildStickerFromMedia,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
-  selectExpressionAttachment,
   type ExpressionFetch,
 } from "../api/emojis";
 import { getChatbotReminderScheduler } from "../jobs/reminders";
@@ -894,52 +893,17 @@ async function withTyping<T>(
 export async function addGuildExpressionForRequest({
   input,
   guildId,
-  requestMessage,
+  mediaRegistry,
   discordRequest,
   fetchEmoji,
 }: {
   input: ChatbotGuildExpressionInput;
   guildId: string;
-  requestMessage: ChatbotMessage;
+  mediaRegistry: ChatbotMediaRegistry;
   discordRequest: DiscordRequest;
   fetchEmoji?: ExpressionFetch;
 }) {
   const destinationGuild = input.destinationGuild ?? guildId;
-
-  if (input.member) {
-    if (input.kind === "sticker") {
-      throw new Error("Member avatars can only be added as emojis.");
-    }
-    if (input.emoji || input.sourceGuild || input.attachment) {
-      throw new Error(
-        "Use member by itself when adding a member avatar as an emoji.",
-      );
-    }
-    if (!input.name) {
-      throw new Error(
-        "Provide an emoji name when adding a member avatar. Use 2-32 letters, numbers, or underscores.",
-      );
-    }
-
-    const member = (
-      await lookupGuildMembers({
-        guildId,
-        queries: [input.member],
-        discordRequest,
-      })
-    )[0];
-    if (!member) {
-      throw new Error(`No member matched ${input.member}.`);
-    }
-
-    return addGuildEmojiFromAvatar({
-      destinationGuild,
-      avatarUrl: member.avatarUrl,
-      name: input.name,
-      discordRequest,
-      fetchEmoji,
-    });
-  }
 
   if (input.emoji || input.sourceGuild) {
     if (input.kind === "sticker") {
@@ -962,34 +926,32 @@ export async function addGuildExpressionForRequest({
     });
   }
 
-  const attachment = selectExpressionAttachment({
-    attachments: requestMessage.attachments,
-    referencedAttachments: requestMessage.referencedMessage?.attachments,
-    selector: input.attachment,
-    kind: input.kind,
-  });
+  if (!input.mediaId) {
+    throw new Error(
+      "Provide mediaId from an attachment, member avatar, or media tool output.",
+    );
+  }
+  const media = await mediaRegistry.read(input.mediaId, fetchEmoji);
   if (input.kind === "sticker") {
     if (!input.tags) {
       throw new Error(
         "Provide a related Unicode emoji or search tag for the sticker.",
       );
     }
-    return addGuildStickerFromAttachment({
+    return addGuildStickerFromMedia({
       destinationGuild,
-      attachment,
+      media,
       name: input.name,
       description: input.description,
       tags: input.tags,
       discordRequest,
-      fetchSticker: fetchEmoji,
     });
   }
-  return addGuildEmojiFromAttachment({
+  return addGuildEmojiFromMedia({
     destinationGuild,
-    attachment,
+    media,
     name: input.name,
     discordRequest,
-    fetchEmoji,
   });
 }
 
@@ -1123,6 +1085,8 @@ export async function handleChatbotMention({
               botUserId,
               discordRequest,
             });
+      const mediaRegistry = new ChatbotMediaRegistry();
+      mediaRegistry.registerMessages([requestMessage, ...messages]);
       let serverMemory: ChatbotJob["serverMemory"];
       if (message.guild_id) {
         try {
@@ -1236,8 +1200,9 @@ export async function handleChatbotMention({
         }
       }
 
-      const recentMessages = (historyCount: number) =>
-        historyCount <= CHATBOT_CONTEXT_LIMITS.nearbyMessages
+      const recentMessages = async (historyCount: number) => {
+        const resolved = await (historyCount <=
+        CHATBOT_CONTEXT_LIMITS.nearbyMessages
           ? Promise.resolve(
               historyCount === 0 ? [] : messages.slice(-historyCount),
             )
@@ -1247,10 +1212,13 @@ export async function handleChatbotMention({
               botUserId,
               discordRequest,
               messageLimit: historyCount,
-            });
+            }));
+        mediaRegistry.registerMessages(resolved);
+        return resolved;
+      };
       const searchMessages = message.guild_id
-        ? (queries: DiscordSearchQuery[]) =>
-            searchGuildMessages({
+        ? async (queries: DiscordSearchQuery[]) => {
+            const resolved = await searchGuildMessages({
               guildId: message.guild_id!,
               requesterUserId,
               requesterRoleIds: message.member?.roles,
@@ -1258,15 +1226,35 @@ export async function handleChatbotMention({
               requestMessageId: message.id,
               queries,
               discordRequest,
-            })
+            });
+            mediaRegistry.registerMessages(resolved);
+            return resolved;
+          }
         : undefined;
       const lookupMembers = message.guild_id
-        ? (queries: string[]) =>
-            lookupGuildMembers({
+        ? async (queries: string[]) => {
+            const resolved = await lookupGuildMembers({
               guildId: message.guild_id!,
               queries,
               discordRequest,
-            })
+            });
+            return resolved.map(({ avatarUrl, ...result }) => {
+              const avatarUrl128 = new URL(avatarUrl);
+              avatarUrl128.pathname = avatarUrl128.pathname.replace(
+                /\.[^.]+$/u,
+                ".png",
+              );
+              avatarUrl128.searchParams.set("size", "128");
+              return {
+                ...result,
+                avatar: mediaRegistry.registerUrl({
+                  filename: `${result.names[0] ?? "member"}-avatar.png`,
+                  contentType: "image/png",
+                  url: avatarUrl128.toString(),
+                }),
+              };
+            });
+          }
         : undefined;
       const reminderScheduler = getChatbotReminderScheduler();
       const tripPlanner = tripPlannerAvailableForGuild(message.guild_id)
@@ -1274,6 +1262,7 @@ export async function handleChatbotMention({
         : undefined;
 
       mcpSession = registerChatbotMcpSession({
+        mediaRegistry,
         getPreviousTrace: async () => previousTrace,
         getCodexUsage: () => workflow.getCodexUsage(),
         ...(quietTracker
@@ -1371,7 +1360,7 @@ export async function handleChatbotMention({
                 addGuildExpressionForRequest({
                   input,
                   guildId: message.guild_id!,
-                  requestMessage,
+                  mediaRegistry,
                   discordRequest,
                 }),
             }
