@@ -9,6 +9,7 @@ import {
 import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
 import {
   registerChatbotMcpSession,
+  type ChatbotGuildExpressionInput,
   type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
 } from "../../chatbot/mcp";
@@ -36,12 +37,14 @@ import {
   type DiscordReactionCapabilities,
 } from "../api/reactions";
 import {
+  addGuildEmojiFromAvatar,
   addGuildEmojiFromAttachment,
   addGuildStickerFromAttachment,
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
   selectExpressionAttachment,
+  type ExpressionFetch,
 } from "../api/emojis";
 import { getChatbotReminderScheduler } from "../jobs/reminders";
 import { sendChannelMessage } from "../api/channel-messages";
@@ -888,6 +891,108 @@ async function withTyping<T>(
   }
 }
 
+export async function addGuildExpressionForRequest({
+  input,
+  guildId,
+  requestMessage,
+  discordRequest,
+  fetchEmoji,
+}: {
+  input: ChatbotGuildExpressionInput;
+  guildId: string;
+  requestMessage: ChatbotMessage;
+  discordRequest: DiscordRequest;
+  fetchEmoji?: ExpressionFetch;
+}) {
+  const destinationGuild = input.destinationGuild ?? guildId;
+
+  if (input.member) {
+    if (input.kind === "sticker") {
+      throw new Error("Member avatars can only be added as emojis.");
+    }
+    if (input.emoji || input.sourceGuild || input.attachment) {
+      throw new Error(
+        "Use member by itself when adding a member avatar as an emoji.",
+      );
+    }
+    if (!input.name) {
+      throw new Error(
+        "Provide an emoji name when adding a member avatar. Use 2-32 letters, numbers, or underscores.",
+      );
+    }
+
+    const member = (
+      await lookupGuildMembers({
+        guildId,
+        queries: [input.member],
+        discordRequest,
+      })
+    )[0];
+    if (!member) {
+      throw new Error(`No member matched ${input.member}.`);
+    }
+
+    return addGuildEmojiFromAvatar({
+      destinationGuild,
+      avatarUrl: member.avatarUrl,
+      name: input.name,
+      discordRequest,
+      fetchEmoji,
+    });
+  }
+
+  if (input.emoji || input.sourceGuild) {
+    if (input.kind === "sticker") {
+      throw new Error(
+        "Existing sticker copying is not supported; attach the sticker file instead.",
+      );
+    }
+    if (!input.emoji || !input.sourceGuild) {
+      throw new Error(
+        "Provide both sourceGuild and emoji when copying an existing emoji.",
+      );
+    }
+    return copyGuildEmoji({
+      emoji: input.emoji,
+      sourceGuild: input.sourceGuild,
+      destinationGuild,
+      name: input.name,
+      discordRequest,
+      fetchEmoji,
+    });
+  }
+
+  const attachment = selectExpressionAttachment({
+    attachments: requestMessage.attachments,
+    referencedAttachments: requestMessage.referencedMessage?.attachments,
+    selector: input.attachment,
+    kind: input.kind,
+  });
+  if (input.kind === "sticker") {
+    if (!input.tags) {
+      throw new Error(
+        "Provide a related Unicode emoji or search tag for the sticker.",
+      );
+    }
+    return addGuildStickerFromAttachment({
+      destinationGuild,
+      attachment,
+      name: input.name,
+      description: input.description,
+      tags: input.tags,
+      discordRequest,
+      fetchSticker: fetchEmoji,
+    });
+  }
+  return addGuildEmojiFromAttachment({
+    destinationGuild,
+    attachment,
+    name: input.name,
+    discordRequest,
+    fetchEmoji,
+  });
+}
+
 export async function handleChatbotMention({
   message,
   botUserId,
@@ -1262,66 +1367,13 @@ export async function handleChatbotMention({
                 })),
               listGuildEmojis: (guild: string) =>
                 listGuildEmojis({ guild, discordRequest }),
-              addGuildExpression: (input: {
-                kind?: "emoji" | "sticker";
-                emoji?: string;
-                sourceGuild?: string;
-                destinationGuild?: string;
-                name?: string;
-                attachment?: string;
-                description?: string;
-                tags?: string;
-              }) => {
-                const destinationGuild =
-                  input.destinationGuild ?? message.guild_id!;
-                if (input.emoji || input.sourceGuild) {
-                  if (input.kind === "sticker") {
-                    throw new Error(
-                      "Existing sticker copying is not supported; attach the sticker file instead.",
-                    );
-                  }
-                  if (!input.emoji || !input.sourceGuild) {
-                    throw new Error(
-                      "Provide both sourceGuild and emoji when copying an existing emoji.",
-                    );
-                  }
-                  return copyGuildEmoji({
-                    emoji: input.emoji,
-                    sourceGuild: input.sourceGuild,
-                    destinationGuild,
-                    name: input.name,
-                    discordRequest,
-                  });
-                }
-                const attachment = selectExpressionAttachment({
-                  attachments: requestMessage.attachments,
-                  referencedAttachments:
-                    requestMessage.referencedMessage?.attachments,
-                  selector: input.attachment,
-                  kind: input.kind,
-                });
-                if (input.kind === "sticker") {
-                  if (!input.tags) {
-                    throw new Error(
-                      "Provide a related Unicode emoji or search tag for the sticker.",
-                    );
-                  }
-                  return addGuildStickerFromAttachment({
-                    destinationGuild,
-                    attachment,
-                    name: input.name,
-                    description: input.description,
-                    tags: input.tags,
-                    discordRequest,
-                  });
-                }
-                return addGuildEmojiFromAttachment({
-                  destinationGuild,
-                  attachment,
-                  name: input.name,
+              addGuildExpression: (input: ChatbotGuildExpressionInput) =>
+                addGuildExpressionForRequest({
+                  input,
+                  guildId: message.guild_id!,
+                  requestMessage,
                   discordRequest,
-                });
-              },
+                }),
             }
           : {}),
         ...(requesterUserId === accessConfig.ownerUserId

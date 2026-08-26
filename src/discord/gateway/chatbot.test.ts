@@ -6,6 +6,7 @@ import { macAgentBridge, type MacAgentSocketData } from "../../chatbot/bridge";
 import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
 import { ChannelQuietTracker } from "./channel-quiet";
 import {
+  addGuildExpressionForRequest,
   ChatbotConversationTracker,
   chatbotFailureReply,
   canMemberSearchChannel,
@@ -1466,6 +1467,66 @@ describe("Discord chatbot", () => {
     expect(results[0]?.avatarUrl).toBe(
       "https://cdn.discordapp.com/avatars/123456789012345678/global-avatar.png?size=4096",
     );
+  });
+
+  test("adds a resolved member avatar as an emoji without local tools", async () => {
+    const requests: Array<{ path: string; body?: unknown }> = [];
+    const result = await addGuildExpressionForRequest({
+      input: { member: "Fan", name: "fan" },
+      guildId: "guild-1",
+      requestMessage: {
+        id: "request-1",
+        author: "Hsi",
+        timestamp: "2026-08-26T08:00:00.000Z",
+        content: "把凡的頭貼做成表符",
+        attachments: [],
+      },
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.includes("/members/search?")) {
+          return [
+            {
+              nick: "Fan",
+              avatar: "a_server-avatar",
+              user: { id: "123456789012345678", username: "fan_account" },
+            },
+          ] as never;
+        }
+        if (path === "/users/@me/guilds") {
+          return [
+            {
+              id: "guild-1",
+              name: "Current",
+              permissions: (1n << 43n).toString(),
+            },
+          ] as never;
+        }
+        return {
+          id: "987654321098765432",
+          name: "fan",
+          animated: false,
+        } as never;
+      },
+      fetchEmoji: async (url) => {
+        expect(String(url)).toBe(
+          "https://cdn.discordapp.com/guilds/guild-1/users/123456789012345678/avatars/a_server-avatar.png?size=128",
+        );
+        return new Response(new Uint8Array([1, 2, 3]));
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: "emoji",
+      name: "fan",
+      guild: { id: "guild-1", name: "Current" },
+    });
+    expect(requests.at(-1)).toEqual({
+      path: "/guilds/guild-1/emojis",
+      body: {
+        name: "fan",
+        image: "data:image/png;base64,AQID",
+      },
+    });
   });
 
   test("preserves the model's punctuation and line breaks", () => {

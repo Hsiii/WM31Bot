@@ -580,6 +580,16 @@ describe("MiniSago MCP server", () => {
 
     await client.callTool({
       name: "add_guild_expression",
+      arguments: { member: "Fan", name: "fan" },
+    });
+    expect(additions.at(-1)).toEqual({
+      kind: "emoji",
+      member: "Fan",
+      name: "fan",
+    });
+
+    await client.callTool({
+      name: "add_guild_expression",
       arguments: { name: "from_image" },
     });
     expect(additions.at(-1)).toEqual({ kind: "emoji", name: "from_image" });
