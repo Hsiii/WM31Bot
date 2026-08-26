@@ -38,6 +38,21 @@ function defaultAvatarIndex(message: DiscordProxyMessage) {
   return userId ? Number((BigInt(userId) >> 22n) % 6n) : 0;
 }
 
+export function getDiscordAvatarUrl(message: DiscordProxyMessage, size = 128) {
+  const author = message.author;
+  if (message.guild_id && author?.id && message.member?.avatar) {
+    const hash = message.member.avatar;
+    return `https://cdn.discordapp.com/guilds/${message.guild_id}/users/${author.id}/avatars/${hash}.${avatarExtension(hash)}?size=${size}`;
+  }
+
+  if (author?.id && author.avatar) {
+    const hash = author.avatar;
+    return `https://cdn.discordapp.com/avatars/${author.id}/${hash}.${avatarExtension(hash)}?size=${size}`;
+  }
+
+  return `https://cdn.discordapp.com/embed/avatars/${defaultAvatarIndex(message)}.png`;
+}
+
 export function getSocialProxyIdentity(message: DiscordProxyMessage) {
   const author = message.author;
   const username =
@@ -46,25 +61,9 @@ export function getSocialProxyIdentity(message: DiscordProxyMessage) {
     author?.username?.trim() ||
     "Discord User";
 
-  if (message.guild_id && author?.id && message.member?.avatar) {
-    const hash = message.member.avatar;
-    return {
-      username: username.slice(0, 80),
-      avatarUrl: `https://cdn.discordapp.com/guilds/${message.guild_id}/users/${author.id}/avatars/${hash}.${avatarExtension(hash)}?size=128`,
-    };
-  }
-
-  if (author?.id && author.avatar) {
-    const hash = author.avatar;
-    return {
-      username: username.slice(0, 80),
-      avatarUrl: `https://cdn.discordapp.com/avatars/${author.id}/${hash}.${avatarExtension(hash)}?size=128`,
-    };
-  }
-
   return {
     username: username.slice(0, 80),
-    avatarUrl: `https://cdn.discordapp.com/embed/avatars/${defaultAvatarIndex(message)}.png`,
+    avatarUrl: getDiscordAvatarUrl(message),
   };
 }
 

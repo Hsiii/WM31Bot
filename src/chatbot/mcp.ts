@@ -721,7 +721,7 @@ function createServer(session: ChatbotMcpSession) {
     "resolve_context",
     {
       description:
-        "Read more current-channel history, search older accessible messages, resolve member aliases, and optionally inspect the previous answer trace in one parallel batch. Use only the fields needed for the request.",
+        "Read more current-channel history, search older accessible messages, resolve member aliases and avatar URLs, and optionally inspect the previous answer trace in one parallel batch. Use only the fields needed for the request.",
       inputSchema: {
         historyCount: z
           .number()
