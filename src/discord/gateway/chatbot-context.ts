@@ -219,11 +219,7 @@ export function isConversationContextMessage(
   requestMessageId: string,
   botUserId: string,
 ) {
-  return (
-    message.id !== requestMessageId &&
-    !message.webhook_id &&
-    (!message.author?.bot || message.author?.id === botUserId)
-  );
+  return message.id !== requestMessageId && !message.webhook_id;
 }
 
 export function isHumanContextMessage(

@@ -920,6 +920,58 @@ describe("Discord chatbot", () => {
     });
   });
 
+  test("responds when another bot mentions MiniSago", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "message-other-bot",
+        channel_id: "channel-1",
+        guild_id: "917436845187563610",
+        content: `<@${BOT_ID}> hello from another bot`,
+        timestamp: "2026-08-26T11:00:00.000Z",
+        author: { id: "other-bot", username: "Other Bot", bot: true },
+        mentions: [{ id: BOT_ID }],
+      },
+      botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "message-other-bot" }] as never;
+        }
+        return undefined as never;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(requests.at(-1)).toEqual({
+      path: "/channels/channel-1/messages",
+      body: {
+        content: "我現在沒接上工作機 晚點再叫我一次 💤",
+        allowed_mentions: { parse: [] },
+      },
+    });
+  });
+
+  test("ignores MiniSago's own messages", async () => {
+    const handled = await handleChatbotMention({
+      message: {
+        id: "message-self",
+        channel_id: "channel-1",
+        guild_id: "917436845187563610",
+        content: `<@${BOT_ID}> accidental self mention`,
+        timestamp: "2026-08-26T11:00:00.000Z",
+        author: { id: BOT_ID, username: "MiniSago", bot: true },
+        mentions: [{ id: BOT_ID }],
+      },
+      botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
+      discordRequest: async () => undefined as never,
+    });
+
+    expect(handled).toBe(false);
+  });
+
   test("routes slash command failures through the private responder", async () => {
     const responses: Array<string | string[] | null> = [];
     const discordPaths: string[] = [];
@@ -1210,7 +1262,7 @@ describe("Discord chatbot", () => {
     ).toBe(false);
   });
 
-  test("backfills beyond seven days until it has 100 human messages", async () => {
+  test("backfills beyond seven days until it has 100 context messages", async () => {
     const recentPage = Array.from({ length: 100 }, (_, index) => ({
       id: `recent-${index}`,
       channel_id: "channel-1",
@@ -1219,8 +1271,9 @@ describe("Discord chatbot", () => {
       author: {
         id: `user-${index}`,
         username: `Recent ${index}`,
-        bot: index % 2 === 1,
+        bot: index % 4 === 0,
       },
+      webhook_id: index % 2 === 1 ? `webhook-${index}` : undefined,
     }));
     const olderPage = Array.from({ length: 50 }, (_, index) => ({
       id: `older-${index}`,
@@ -1248,7 +1301,7 @@ describe("Discord chatbot", () => {
     expect(messages.at(-1)?.id).toBe("recent-0");
   });
 
-  test("loads a small human context window around the request", async () => {
+  test("loads a small context window around the request", async () => {
     const requestedPaths: string[] = [];
     const nearby = Array.from({ length: 25 }, (_, index) => ({
       id: index === 4 ? "request" : `message-${index}`,
@@ -1276,13 +1329,13 @@ describe("Discord chatbot", () => {
       "/channels/channel-1/messages?around=request&limit=25",
     ]);
     expect(messages).toHaveLength(20);
-    expect(messages[0]?.id).toBe("message-21");
+    expect(messages[0]?.id).toBe("message-20");
     expect(messages.at(-1)?.id).toBe("message-0");
     expect(messages.some((message) => message.id === "request")).toBe(false);
-    expect(messages.some((message) => message.id === "message-3")).toBe(false);
+    expect(messages.some((message) => message.id === "message-3")).toBe(true);
   });
 
-  test("keeps MiniSago replies as assistant context but excludes other bots", () => {
+  test("keeps MiniSago replies and other bot messages as context", () => {
     const base = {
       id: "message-1",
       channel_id: "channel-1",
@@ -1298,7 +1351,7 @@ describe("Discord chatbot", () => {
         "request",
         BOT_ID,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(toChatbotMessage(base, BOT_ID).role).toBe("assistant");
   });
 

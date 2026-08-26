@@ -628,7 +628,7 @@ class DeveloperTaskRegistry {
   async handle(message: DiscordMessage) {
     const task = this.tasks.get(message.channel_id);
     if (!task || message.author?.id !== task.requesterUserId) return false;
-    if (message.author.bot || message.webhook_id) return false;
+    if (message.webhook_id) return false;
     const request = message.content?.trim() ?? "";
     if (!request) return true;
 
@@ -985,7 +985,7 @@ export async function handleChatbotMention({
       ? invocation.respond(content, files)
       : postChatbotResponse(message, content, discordRequest, files);
 
-  if (!requesterUserId || message.author?.bot || message.webhook_id) {
+  if (!requesterUserId || requesterUserId === botUserId || message.webhook_id) {
     return false;
   }
 
