@@ -4,6 +4,7 @@ import type {
   ChatbotMemberResult,
   ChatbotMessage,
 } from "../../chatbot/protocol";
+import { getDiscordAvatarUrl } from "./social-proxy";
 
 type DiscordAttachment = {
   id: string;
@@ -54,10 +55,13 @@ export type DiscordMessage = {
 
 type DiscordGuildMember = {
   nick?: string | null;
+  avatar?: string | null;
   user?: {
     id?: string;
     username?: string;
     global_name?: string | null;
+    avatar?: string | null;
+    discriminator?: string;
   };
 };
 
@@ -308,8 +312,25 @@ export async function lookupGuildMembers({
           memberQuery: query,
           discordRequest,
         });
-        const names = member ? memberNames(member) : [];
-        return names.length > 0 ? [{ query, names }] : [];
+        if (!member) return [];
+
+        const names = memberNames(member);
+        if (names.length === 0) return [];
+
+        return [
+          {
+            query,
+            names,
+            avatarUrl: getDiscordAvatarUrl(
+              {
+                guild_id: guildId,
+                author: member.user,
+                member,
+              },
+              4096,
+            ),
+          },
+        ];
       }),
   );
 

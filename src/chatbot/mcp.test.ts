@@ -145,6 +145,50 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("returns member avatar URLs through context lookup", async () => {
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      resolveContext: async () => ({
+        history: { status: "complete" as const, messages: [] },
+        search: { status: "not_requested" as const, results: [] },
+        members: {
+          status: "complete" as const,
+          results: [
+            {
+              query: "Daniel",
+              names: ["Daniel"],
+              avatarUrl:
+                "https://cdn.discordapp.com/avatars/user-1/avatar.png?size=4096",
+            },
+          ],
+        },
+        previousTrace: { status: "not_requested" as const },
+      }),
+    });
+    const client = await connect(session.token);
+
+    const result = await client.callTool({
+      name: "resolve_context",
+      arguments: { memberQueries: ["Daniel"] },
+    });
+
+    expect(result.structuredContent).toMatchObject({
+      members: {
+        status: "complete",
+        results: [
+          {
+            query: "Daniel",
+            avatarUrl:
+              "https://cdn.discordapp.com/avatars/user-1/avatar.png?size=4096",
+          },
+        ],
+      },
+    });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("validates context tool arguments", async () => {
     const session = registerChatbotMcpSession(handlers());
     const client = await connect(session.token);

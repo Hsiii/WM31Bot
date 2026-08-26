@@ -53,6 +53,7 @@ export type ChatbotToolCapability = {
 export type ChatbotMemberResult = {
   query: string;
   names: string[];
+  avatarUrl: string;
 };
 
 export type ChatbotMcpTraceCall = {

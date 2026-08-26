@@ -1417,10 +1417,12 @@ describe("Discord chatbot", () => {
         paths.push(path);
         const member = {
           nick: "Kiseki",
+          avatar: "a_server-avatar",
           user: {
             id: "123456789012345678",
             username: "kiseki_account",
             global_name: "Daniel",
+            avatar: "global-avatar",
           },
         };
         return (path.includes("/members/search?") ? [member] : member) as never;
@@ -1433,12 +1435,37 @@ describe("Discord chatbot", () => {
       {
         query: "kiseki",
         names: ["Kiseki", "Daniel", "kiseki_account"],
+        avatarUrl:
+          "https://cdn.discordapp.com/guilds/guild-1/users/123456789012345678/avatars/a_server-avatar.gif?size=4096",
       },
       {
         query: "<@123456789012345678>",
         names: ["Kiseki", "Daniel", "kiseki_account"],
+        avatarUrl:
+          "https://cdn.discordapp.com/guilds/guild-1/users/123456789012345678/avatars/a_server-avatar.gif?size=4096",
       },
     ]);
+  });
+
+  test("falls back to a member's global avatar", async () => {
+    const results = await lookupGuildMembers({
+      guildId: "guild-1",
+      queries: ["Daniel"],
+      discordRequest: async () =>
+        [
+          {
+            user: {
+              id: "123456789012345678",
+              username: "Daniel",
+              avatar: "global-avatar",
+            },
+          },
+        ] as never,
+    });
+
+    expect(results[0]?.avatarUrl).toBe(
+      "https://cdn.discordapp.com/avatars/123456789012345678/global-avatar.png?size=4096",
+    );
   });
 
   test("preserves the model's punctuation and line breaks", () => {
