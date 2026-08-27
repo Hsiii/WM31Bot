@@ -122,6 +122,45 @@ describe("prompt plan", () => {
     expect(english.context).toContain(
       '"addressee":"MiniSago (迷你西米露)","mode":"continuation","directSelfReferences":["Sago","you"]',
     );
+    expect(english.developerInstructions).toContain(
+      "Capabilities, services, features, tools, behavior, implementation, messages, and prior actions belonging to MiniSago are yours",
+    );
+  });
+
+  test("presents earlier MiniSago replies as self-authored context", () => {
+    const plan = buildPromptPlan(
+      {
+        ...baseJob,
+        request: "",
+        addressingMode: "mention",
+        messages: [
+          {
+            id: "clarification",
+            role: "user",
+            author: "Requester",
+            timestamp: "2026-08-27T15:12:16.132Z",
+            content:
+              "nah I mean the services that don't require registration, the global ones",
+            attachments: [],
+          },
+          {
+            id: "earlier-reply",
+            role: "assistant",
+            author: "迷你西米露",
+            timestamp: "2026-08-27T15:10:41.048Z",
+            content: "如果你是指這個伺服器目前沒有訂閱頻道的服務",
+            attachments: [],
+          },
+        ],
+      },
+      [],
+      [],
+    );
+
+    expect(plan.context).toContain('"role":"assistant","author":"self"');
+    expect(plan.context).not.toContain(
+      '"role":"assistant","author":"迷你西米露"',
+    );
   });
 
   test("keeps routing capabilities in context rather than policy", () => {
@@ -181,6 +220,6 @@ describe("prompt plan", () => {
       "does not by itself specify the intended operation",
     );
     expect(plan.context).toContain('"mediaId":"retry-image"');
-    expect(plan.versions.policy).toBe(7);
+    expect(plan.versions.policy).toBe(8);
   });
 });

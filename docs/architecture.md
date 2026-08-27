@@ -153,6 +153,14 @@ The answer schema requires a bounded `referenceResolution` classification so
 the reply stays consistent with that decision; the gateway consumes only the
 reply and reaction fields and does not post the classification to Discord.
 
+The worker and host also enforce MiniSago's first-person identity at the answer
+boundary. A genuine self-introduction marks only the self-name in structured
+reply text; the host validates and removes that marker before posting. An
+unmarked self-name triggers one tool-free, networkless repair pass that may
+rewrite the reference as first person or mark a genuine introduction. The
+worker rejects the answer if the repaired reply still violates the identity
+contract.
+
 Policy, task, and context formats have independent versions. Traces record
 those versions and layer sizes, but never private reasoning. Prompt-injection
 and budget cases are covered by structural evaluations in

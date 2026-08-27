@@ -4,6 +4,7 @@ import type { ServerWebSocket } from "bun";
 import type { ChatbotAccessConfig } from "./access";
 import { macAgentBridge, type MacAgentSocketData } from "./bridge";
 import { CHATBOT_PROTOCOL_VERSION } from "../../contracts/worker-contract";
+import { enforceFirstPersonIdentity } from "../../contracts/answer-contract";
 import { ChatbotMediaRegistry } from "./media-assets";
 import { ChannelQuietTracker } from "../discord/channel-quiet";
 import {
@@ -634,6 +635,49 @@ describe("Discord chatbot", () => {
     expect(
       parseChatbotAnswerDecision(
         JSON.stringify({ reply: "x".repeat(1_901), reaction: null }),
+      ),
+    ).toEqual({ reply: null });
+  });
+
+  test("enforces first-person MiniSago identity before posting", () => {
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "You mean MiniSago's globally available built-ins.",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "You mean my globally available built-ins." });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "這些是迷你西米露的全域功能",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "這些是我的全域功能" });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "MiniSago handles reminders.",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: null });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: enforceFirstPersonIdentity(
+            "<self-introduction>MiniSago</self-introduction> here, reporting in.",
+            false,
+          ),
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "MiniSago here, reporting in." });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({ reply: "I'm MiniSago.", reaction: null }),
       ),
     ).toEqual({ reply: null });
   });
