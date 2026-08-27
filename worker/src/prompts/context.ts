@@ -49,8 +49,8 @@ function promptAttachment({
 function promptMessage(message: ChatbotMessage): Record<string, unknown> {
   return {
     ...(message.role ? { role: message.role } : {}),
-    author: message.author,
-    ...(message.authorAliases?.length
+    author: message.role === "assistant" ? "self" : message.author,
+    ...(message.role !== "assistant" && message.authorAliases?.length
       ? { authorAliases: message.authorAliases }
       : {}),
     timestamp: message.timestamp,

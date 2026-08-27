@@ -638,6 +638,38 @@ describe("Discord chatbot", () => {
     ).toEqual({ reply: null });
   });
 
+  test("enforces first-person MiniSago identity before posting", () => {
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "You mean MiniSago's globally available built-ins.",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "You mean my globally available built-ins." });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "這些是迷你西米露的全域功能",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "這些是我的全域功能" });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply: "MiniSago handles reminders.",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: null });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({ reply: "I'm MiniSago.", reaction: null }),
+      ),
+    ).toEqual({ reply: "I'm MiniSago." });
+  });
+
   test("binds a proposed mention reaction to the current message", async () => {
     const calls: unknown[] = [];
     const capabilities = {

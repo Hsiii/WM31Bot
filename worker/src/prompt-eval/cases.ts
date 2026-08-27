@@ -266,6 +266,48 @@ export const PROMPT_CASES: PromptCase[] = [
     expectation: {},
   },
   {
+    id: "first-person-capabilities-mention-only",
+    source: {
+      kind: "discord-regression",
+      thread: "Diagnose Discord reply and attachme…",
+      symptom: "mention-only",
+    },
+    job: {
+      ...answerJob("first-person-capabilities-mention-only", "", {
+        messages: [
+          message(
+            "earlier-answer",
+            "迷你西米露",
+            "這個伺服器目前沒有訂閱的服務只有 Daily TOEFL vocabulary",
+            "assistant",
+          ),
+          message(
+            "clarification",
+            "Requester",
+            "nah I mean the services that don't require registration, the global ones",
+          ),
+        ],
+      }),
+      capabilities: [
+        {
+          id: "conversation",
+          category: "conversation",
+          availability: "available",
+          description: "Answer questions from the supplied conversation.",
+        },
+        {
+          id: "reminders",
+          category: "reminders",
+          availability: "available",
+          description: "Create, list, and cancel reminders.",
+        },
+      ],
+    },
+    expectation: {
+      forbiddenReplyPatterns: [/\b(?:MiniSago|Sago)[’']s\b/iu, /迷你西米露的/u],
+    },
+  },
+  {
     id: "generated-attachment",
     source: {
       kind: "discord-regression",
