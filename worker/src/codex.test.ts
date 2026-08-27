@@ -28,6 +28,7 @@ import {
   codexProfileForJob as codexProfileForJobWithConfig,
   COMMUNITY_CHATBOT_PROFILE,
   developerFilesystemPermissions,
+  EMOJI_RENAME_MCP_APPROVAL_CONFIG,
   EXPRESSION_ADD_MCP_APPROVAL_CONFIG,
   SERVER_MEMORY_MCP_APPROVAL_CONFIG,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
@@ -166,6 +167,9 @@ describe("Codex chatbot runner", () => {
   test("pre-approves bounded MCP mutations", () => {
     expect(EXPRESSION_ADD_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"',
+    );
+    expect(EMOJI_RENAME_MCP_APPROVAL_CONFIG).toBe(
+      'mcp_servers.minisago.tools.rename_guild_emoji.approval_mode="approve"',
     );
     expect(CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG).toBe(
       'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"',

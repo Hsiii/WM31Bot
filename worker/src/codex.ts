@@ -46,6 +46,8 @@ const MAC_FILES_MCP_SERVER_PATH = join(
 );
 export const EXPRESSION_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"';
+export const EMOJI_RENAME_MCP_APPROVAL_CONFIG =
+  'mcp_servers.minisago.tools.rename_guild_emoji.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.send_channel_message.approval_mode="approve"';
 export const SERVER_MEMORY_MCP_APPROVAL_CONFIG =
@@ -732,6 +734,8 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
         )}"`,
         "--config",
         EXPRESSION_ADD_MCP_APPROVAL_CONFIG,
+        "--config",
+        EMOJI_RENAME_MCP_APPROVAL_CONFIG,
         "--config",
         CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
         "--config",

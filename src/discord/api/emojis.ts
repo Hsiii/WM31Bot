@@ -1,6 +1,7 @@
 import type { DiscordRequest } from "../../chatbot/chatbot";
 
 const CREATE_GUILD_EXPRESSIONS = 1n << 43n;
+const MANAGE_GUILD_EXPRESSIONS = 1n << 30n;
 const ADMINISTRATOR = 1n << 3n;
 const MAX_EMOJI_BYTES = 256 * 1024;
 const MAX_STICKER_BYTES = 512 * 1024;
@@ -47,6 +48,7 @@ export type SharedEmojiGuild = {
   id: string;
   name: string;
   canCreateExpressions: boolean;
+  canManageExpressions: boolean;
 };
 
 function canCreateExpressions(permissions: string) {
@@ -54,6 +56,14 @@ function canCreateExpressions(permissions: string) {
   return (
     (bits & ADMINISTRATOR) === ADMINISTRATOR ||
     (bits & CREATE_GUILD_EXPRESSIONS) === CREATE_GUILD_EXPRESSIONS
+  );
+}
+
+function canManageExpressions(permissions: string) {
+  const bits = BigInt(permissions);
+  return (
+    (bits & ADMINISTRATOR) === ADMINISTRATOR ||
+    (bits & MANAGE_GUILD_EXPRESSIONS) === MANAGE_GUILD_EXPRESSIONS
   );
 }
 
@@ -65,6 +75,7 @@ export async function listSharedEmojiGuilds(discordRequest: DiscordRequest) {
         id: guild.id,
         name: guild.name,
         canCreateExpressions: canCreateExpressions(guild.permissions),
+        canManageExpressions: canManageExpressions(guild.permissions),
       }),
     )
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -381,5 +392,53 @@ export async function copyGuildEmoji({
     animated: created.animated ?? animated,
     sourceGuild: source,
     guild: destination,
+  };
+}
+
+export async function renameGuildEmoji({
+  guild,
+  emoji,
+  name,
+  discordRequest,
+}: {
+  guild: string;
+  emoji: string;
+  name: string;
+  discordRequest: DiscordRequest;
+}) {
+  const resolvedGuild = resolveGuild(
+    await listSharedEmojiGuilds(discordRequest),
+    guild,
+  );
+  if (!resolvedGuild.canManageExpressions) {
+    throw new Error(
+      `You need the Manage Expressions permission in ${resolvedGuild.name}.`,
+    );
+  }
+
+  const destinationName = name.trim();
+  if (!EMOJI_NAME.test(destinationName)) {
+    throw new Error(
+      "Emoji names must be 2-32 letters, numbers, or underscores.",
+    );
+  }
+  const emojis = await discordRequest<SharedGuildEmoji[]>(
+    `/guilds/${resolvedGuild.id}/emojis`,
+  );
+  const sourceEmoji = resolveEmoji(emojis, emoji);
+  const renamed = await discordRequest<SharedGuildEmoji>(
+    `/guilds/${resolvedGuild.id}/emojis/${sourceEmoji.id}`,
+    {
+      method: "PATCH",
+      body: { name: destinationName },
+    },
+  );
+
+  return {
+    kind: "emoji" as const,
+    id: renamed.id,
+    name: renamed.name,
+    animated: renamed.animated ?? sourceEmoji.animated ?? false,
+    guild: resolvedGuild,
   };
 }

@@ -22,7 +22,7 @@ Configure workers separately using [Workers](workers.md).
 
 ## Permissions
 
-The synchronized permission bitfield is `9123048549440`:
+The synchronized permission bitfield is `9124122291264`:
 
 - Add Reactions
 - View Channels
@@ -32,6 +32,7 @@ The synchronized permission bitfield is `9123048549440`:
 - Read Message History
 - Connect
 - Manage Webhooks
+- Manage Expressions
 - Manage Threads
 - Create Public Threads
 - Send Messages in Threads
@@ -43,7 +44,8 @@ Webhooks let those replacements retain the sender's display name and avatar
 while showing the improved social embed. Thread permissions support review
 discussions. Add Reactions supports answer and ambient reactions. Connect lets
 the host-bound MCP tools join and leave voice channels. Create Expressions is
-needed in every destination guild where the owner may add emoji.
+needed in every destination guild where the owner may add emoji. Manage
+Expressions is needed where the owner may rename emoji.
 
 ## Gateway ownership
 

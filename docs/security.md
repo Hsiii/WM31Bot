@@ -6,15 +6,15 @@ permissions.
 
 ## Capability boundary
 
-| Capability                                      | Community | Owner                    |
-| ----------------------------------------------- | --------- | ------------------------ |
-| Conversation and public web research            | Yes       | Yes                      |
-| Permission-filtered Discord context             | Yes       | Yes                      |
-| Host-bound reminders and voice actions          | Yes       | Yes                      |
-| Cross-channel messaging and expression creation | No        | Yes                      |
-| Repository checkout and developer commands      | No        | Yes                      |
-| GitHub mutation                                 | No        | Owner-routed tasks only  |
-| Mac file search and upload                      | No        | Explicit Mac target only |
+| Capability                                        | Community | Owner                    |
+| ------------------------------------------------- | --------- | ------------------------ |
+| Conversation and public web research              | Yes       | Yes                      |
+| Permission-filtered Discord context               | Yes       | Yes                      |
+| Host-bound reminders and voice actions            | Yes       | Yes                      |
+| Cross-channel messaging and expression management | No        | Yes                      |
+| Repository checkout and developer commands        | No        | Yes                      |
+| GitHub mutation                                   | No        | Owner-routed tasks only  |
+| Mac file search and upload                        | No        | Explicit Mac target only |
 
 The hosted service checks requester identity before dispatch. The worker checks
 the declared capabilities again before Codex runs. Authorization never depends
@@ -32,9 +32,10 @@ Member roles, join dates, presence, and reaction-member lists are not sent to
 Codex. Host-bound tools cannot use model arguments to substitute another
 requester, guild, member, or channel.
 
-The owner may copy an emoji between shared guilds or create one from an image
-attached directly to the request or its replied-to message. The destination bot
-role must have Create Expressions. Community users never receive this tool.
+The owner may copy an emoji between shared guilds, create one from an image
+attached directly to the request or its replied-to message, or rename an
+existing emoji. The destination bot role must have Create Expressions to add
+and Manage Expressions to rename. Community users never receive these tools.
 
 ## Worker authentication and isolation
 

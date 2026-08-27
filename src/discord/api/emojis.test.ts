@@ -7,12 +7,14 @@ import {
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
+  renameGuildEmoji,
 } from "./emojis";
 
 const CREATE_EXPRESSIONS = (1n << 43n).toString();
+const MANAGE_EXPRESSIONS = (1n << 30n).toString();
 
 describe("guild expression tools", () => {
-  test("lists every shared guild and reports create permission", async () => {
+  test("lists every shared guild and reports expression permissions", async () => {
     const guilds = await listSharedEmojiGuilds(
       async () =>
         [
@@ -22,8 +24,18 @@ describe("guild expression tools", () => {
     );
 
     expect(guilds).toEqual([
-      { id: "1", name: "Alpha", canCreateExpressions: true },
-      { id: "2", name: "Zulu", canCreateExpressions: false },
+      {
+        id: "1",
+        name: "Alpha",
+        canCreateExpressions: true,
+        canManageExpressions: false,
+      },
+      {
+        id: "2",
+        name: "Zulu",
+        canCreateExpressions: false,
+        canManageExpressions: false,
+      },
     ]);
   });
 
@@ -47,6 +59,7 @@ describe("guild expression tools", () => {
         id: "source",
         name: "Source",
         canCreateExpressions: false,
+        canManageExpressions: false,
       },
       emojis: [
         {
@@ -215,5 +228,74 @@ describe("guild expression tools", () => {
     expect(file.name).toBe("party-parrot.png");
     expect(file.type).toBe("image/png");
     expect([...new Uint8Array(await file.arrayBuffer())]).toEqual([1, 2, 3]);
+  });
+
+  test("renames an emoji by exact name", async () => {
+    const requests: Array<{
+      path: string;
+      method?: string;
+      body?: unknown;
+    }> = [];
+    const result = await renameGuildEmoji({
+      guild: "Target",
+      emoji: "fan_avatar",
+      name: "FrierenSleep",
+      discordRequest: async (path, options) => {
+        requests.push({ path, method: options?.method, body: options?.body });
+        if (path === "/users/@me/guilds") {
+          return [
+            {
+              id: "target",
+              name: "Target",
+              permissions: MANAGE_EXPRESSIONS,
+            },
+          ] as never;
+        }
+        if (path === "/guilds/target/emojis") {
+          return [
+            {
+              id: "123456789012345678",
+              name: "fan_avatar",
+              animated: false,
+            },
+          ] as never;
+        }
+        return {
+          id: "123456789012345678",
+          name: "FrierenSleep",
+          animated: false,
+        } as never;
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: "emoji",
+      id: "123456789012345678",
+      name: "FrierenSleep",
+      guild: { id: "target", name: "Target" },
+    });
+    expect(requests.at(-1)).toEqual({
+      path: "/guilds/target/emojis/123456789012345678",
+      method: "PATCH",
+      body: { name: "FrierenSleep" },
+    });
+  });
+
+  test("rejects renaming without Manage Expressions", async () => {
+    await expect(
+      renameGuildEmoji({
+        guild: "Target",
+        emoji: "fan_avatar",
+        name: "FrierenSleep",
+        discordRequest: async () =>
+          [
+            {
+              id: "target",
+              name: "Target",
+              permissions: CREATE_EXPRESSIONS,
+            },
+          ] as never,
+      }),
+    ).rejects.toThrow("Manage Expressions permission in Target");
   });
 });

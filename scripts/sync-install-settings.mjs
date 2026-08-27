@@ -22,6 +22,7 @@ const requiredGuildPermissionFlags = [
   ["READ_MESSAGE_HISTORY", 1n << 16n],
   ["CONNECT", 1n << 20n],
   ["MANAGE_WEBHOOKS", 1n << 29n],
+  ["MANAGE_GUILD_EXPRESSIONS", 1n << 30n],
   ["MANAGE_THREADS", 1n << 34n],
   ["CREATE_PUBLIC_THREADS", 1n << 35n],
   ["SEND_MESSAGES_IN_THREADS", 1n << 38n],
