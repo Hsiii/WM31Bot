@@ -6,7 +6,7 @@ import {
 import { answerContext } from "./context";
 import { taiwaneseLanguageReference } from "./language";
 
-export const PROMPT_VERSION = 47;
+export const PROMPT_VERSION = 48;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
@@ -119,7 +119,9 @@ export const DEV_MODE_INSTRUCTIONS = `This is an owner-authorized development ta
 
 export const CODEX_THREAD_INSTRUCTIONS = `Work as Codex directly. Send concise progress commentary while you work, then a self-contained final answer that leads with the outcome. Do not speak as MiniSago, return a chat wrapper, classify personal references, or add Discord-specific acknowledgements. Do not use Discord messaging or reaction tools for progress or the final answer; the host presents your progress as temporary thinking traces and keeps your final answer as the durable thread response.`;
 
-export const CHAT_MODE_INSTRUCTIONS = `Chat may change external state only through bounded tools. Never run direct commands.`;
+export const CHAT_MODE_INSTRUCTIONS = `Chat may change external state only through bounded tools. Never run direct commands.
+
+For a follow-up about an unfinished requested action, do not merely answer the question or apologize. Before replying, either complete the original action with the bounded tool and inputs already in context, or name the exact missing input or capability. This applies even when the follow-up asks only why or whether it was done.`;
 
 export function macFileInstructions(roots: string[]) {
   return `This owner request is explicitly routed to Hsi's Mac. The bounded file-search tool may search only within these folders: ${JSON.stringify(roots)}.
