@@ -723,6 +723,9 @@ describe("Codex chatbot runner", () => {
     expect(prompt).not.toContain("warm and bouncy");
     expect(prompt).not.toContain("generic assistant voice");
     expect(prompt).not.toContain("make the phrasing yours");
+    expect(prompt).not.toContain("just to sound like MiniSago");
+    expect(prompt).not.toContain("tone rules or an assigned persona");
+    expect(prompt).not.toContain("forced slang");
     expect(prompt).toContain("Answer from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
     expect(prompt).toContain("Use the reminder tools");
