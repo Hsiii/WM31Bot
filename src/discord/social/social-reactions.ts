@@ -6,14 +6,17 @@ import {
   type DispatchResult,
   type MacAgentJobResult,
 } from "../../chatbot/bridge";
-import type { ChatbotJob, ChatbotMessage } from "../../chatbot/protocol";
+import type {
+  ChatbotJob,
+  ChatbotMessage,
+} from "../../../contracts/worker-contract";
 import {
   getNearbyHumanMessages,
   isChatbotAuthorized,
   toChatbotMessage,
   type ChatbotMention,
   type DiscordRequest,
-} from "./chatbot";
+} from "../../chatbot/chatbot";
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,

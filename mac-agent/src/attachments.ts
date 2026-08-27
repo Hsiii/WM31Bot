@@ -4,7 +4,10 @@ import { basename, extname, join } from "node:path";
 
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import type { ChatbotAttachment, CodexJob } from "../../src/chatbot/protocol";
+import type {
+  ChatbotAttachment,
+  CodexJob,
+} from "../../contracts/worker-contract";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;

@@ -12,7 +12,7 @@ import {
   handleChatbotMediaRequest,
 } from "./chatbot/mcp";
 import { startGamerForumMonitor } from "./discord/jobs/gamer-forum-monitor";
-import { startInstagramGateway } from "./discord/gateway/gateway";
+import { startInstagramGateway } from "./discord/gateway";
 import {
   handleGithubWebhookRequest,
   isGithubWebhookConfigured,
@@ -23,7 +23,7 @@ import {
   configureChatbotReminderScheduler,
   type Reminder,
 } from "./discord/jobs/reminders";
-import { createDiscordRequest } from "./discord/gateway/chatbot";
+import { createDiscordRequest } from "./chatbot/chatbot";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });

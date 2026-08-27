@@ -1,7 +1,7 @@
 import type {
   ChatbotMcpTraceCall,
   ChatbotTaskProgress,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 
 const SESSION_IDLE_TTL_MS = 3 * 24 * 60 * 60_000;
 

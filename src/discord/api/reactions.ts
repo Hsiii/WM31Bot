@@ -1,5 +1,5 @@
-import type { ChatbotToolCapability } from "../../chatbot/protocol";
-import type { DiscordRequest } from "../gateway/chatbot";
+import type { ChatbotToolCapability } from "../../../contracts/worker-contract";
+import type { DiscordRequest } from "../../chatbot/chatbot";
 import {
   canAddDiscordReactions,
   channelPermissions,

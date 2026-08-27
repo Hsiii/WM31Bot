@@ -1,7 +1,7 @@
 import type {
   CodexUsageSnapshot,
   CodexUsageWindow,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 import { codexEnvironment } from "./codex";
 
 const USAGE_READ_TIMEOUT_MS = 5_000;

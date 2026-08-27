@@ -1,4 +1,4 @@
-import type { CodexJob } from "../../../src/chatbot/protocol";
+import type { CodexJob } from "../../../contracts/worker-contract";
 import {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_OUTPUT_SCHEMA,

@@ -1,7 +1,7 @@
 import { access, chmod, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { OracleAnswerJob } from "../../src/chatbot/protocol";
+import type { OracleAnswerJob } from "../../contracts/worker-contract";
 
 type DeveloperWorkspaceOptions = {
   githubConfigDir: string;

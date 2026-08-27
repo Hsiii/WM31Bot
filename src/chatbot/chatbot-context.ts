@@ -1,6 +1,9 @@
-import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
-import type { ChatbotAttachment, ChatbotMessage } from "../../chatbot/protocol";
-import { getDiscordAvatarUrl } from "./social-proxy";
+import { CHATBOT_CONTEXT_LIMITS } from "./context-limits";
+import type {
+  ChatbotAttachment,
+  ChatbotMessage,
+} from "../../contracts/worker-contract";
+import { getDiscordAvatarUrl } from "../discord/social/social-proxy";
 
 type DiscordAttachment = {
   id: string;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatAnswerJob } from "../../../src/chatbot/protocol";
-import { CHATBOT_CONTEXT_BUDGETS } from "../../../src/chatbot/context-policy";
+import type { ChatAnswerJob } from "../../../contracts/worker-contract";
+import { CHATBOT_CONTEXT_BUDGETS } from "../../../contracts/context-budget";
 import { buildPromptPlan, PROMPT_PLAN_VERSIONS } from ".";
 
 const baseJob: ChatAnswerJob = {

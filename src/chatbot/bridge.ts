@@ -13,7 +13,7 @@ import {
   type CodexUsageSnapshot,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
-} from "./protocol";
+} from "../../contracts/worker-contract";
 
 export type MacAgentSocketData = {
   authenticated: boolean;

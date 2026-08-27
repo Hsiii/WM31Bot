@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatbotJob } from "../../src/chatbot/protocol";
+import type { ChatbotJob } from "../../contracts/worker-contract";
 import { failureKindForCause, formatJobFailure } from "./client";
 
 const job: ChatbotJob = {

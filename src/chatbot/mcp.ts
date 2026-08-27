@@ -9,13 +9,13 @@ import {
   budgetMessages,
   CHATBOT_CONTEXT_BUDGETS,
   type ContextOmission,
-} from "./context-policy";
+} from "../../contracts/context-budget";
 import type {
   ChatbotMemberResult,
   ChatbotMessage,
   ChatbotTraceContext,
   CodexUsageSnapshot,
-} from "./protocol";
+} from "../../contracts/worker-contract";
 import type { TripPlanEditInput, TripPlanReadInput } from "./trip-planner";
 import {
   ChatbotMediaRegistry,

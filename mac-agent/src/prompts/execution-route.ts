@@ -1,4 +1,4 @@
-import type { ExecutionRouteJob } from "../../../src/chatbot/protocol";
+import type { ExecutionRouteJob } from "../../../contracts/worker-contract";
 import { requestContext } from "./context";
 
 export const EXECUTION_ROUTE_OUTPUT_SCHEMA = {

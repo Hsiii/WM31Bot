@@ -1,8 +1,8 @@
-import type { AnswerJob } from "../../../src/chatbot/protocol";
+import type { AnswerJob } from "../../../contracts/worker-contract";
 import {
   CHATBOT_REACTION_MAX_CHARACTERS,
   CHATBOT_REPLY_MAX_CHARACTERS,
-} from "../../../src/chatbot/answer-contract";
+} from "../../../contracts/answer-contract";
 import { answerContext } from "./context";
 import {
   conversationDisplayName,

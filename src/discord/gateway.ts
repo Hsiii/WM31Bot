@@ -2,16 +2,16 @@ import {
   getInstagramReplyUrls,
   getSocialLinkReplacement,
   getTwitterReplyUrls,
-} from "./social-links";
+} from "./social/social-links";
 import {
   canReplaceSocialMessage,
   getSocialProxyIdentity,
-} from "./social-proxy";
+} from "./social/social-proxy";
 import {
   ChatbotConversationTracker,
   createDiscordRequest,
   handleChatbotMention,
-} from "./chatbot";
+} from "../chatbot/chatbot";
 import {
   createEphemeralInteractionResponder,
   deferEphemeralInteraction,
@@ -23,13 +23,13 @@ import { ChannelQuietTracker } from "./channel-quiet";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
-} from "../../chatbot/access";
+} from "../chatbot/access";
 import {
   AmbientReactionController,
   getAmbientReactionPolicy,
   type AmbientReactionPolicy,
-} from "./social-reactions";
-import { DiscordReactionBroker } from "../api/reactions";
+} from "./social/social-reactions";
+import { DiscordReactionBroker } from "./api/reactions";
 import {
   QuickReplyNudgeTracker,
   QUICK_REPLY_TARGET_USER_ID,
@@ -42,7 +42,7 @@ import {
   type JoinVoiceChannelResult,
   type LeaveVoiceChannelResult,
   type VoiceGateway,
-} from "../api/voice";
+} from "./api/voice";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";

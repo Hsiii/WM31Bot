@@ -2,7 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 
 import { MacAgentBridge, type MacAgentSocketData } from "./bridge";
-import { CHATBOT_PROTOCOL_VERSION, type ChatbotJob } from "./protocol";
+import {
+  CHATBOT_PROTOCOL_VERSION,
+  type ChatbotJob,
+} from "../../contracts/worker-contract";
 
 const originalSecrets = {
   mac: process.env.MINISAGO_MAC_BRIDGE_SECRET,

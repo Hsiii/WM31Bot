@@ -1,7 +1,7 @@
 import type {
   ChatbotExecutionRoute,
   ChatbotTraceContext,
-} from "../../chatbot/protocol";
+} from "../../contracts/worker-contract";
 
 export function parsePreviousTraceLookup(content: string): {
   status: "complete" | "not_found" | "unavailable";

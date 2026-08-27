@@ -2,7 +2,7 @@ import type {
   AnswerJob,
   ChatbotMessage,
   CodexJob,
-} from "../../../src/chatbot/protocol";
+} from "../../../contracts/worker-contract";
 import {
   budgetJsonItems,
   budgetMessages,
@@ -10,7 +10,7 @@ import {
   CHATBOT_CONTEXT_BUDGETS,
   type ContextOmission,
   truncateContextText,
-} from "../../../src/chatbot/context-policy";
+} from "../../../contracts/context-budget";
 import { conversationDisplayName } from "./language";
 
 function block(name: string, value: unknown) {

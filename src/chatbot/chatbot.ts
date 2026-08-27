@@ -1,24 +1,24 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotAccessConfig } from "../../chatbot/access";
+import type { ChatbotAccessConfig } from "./access";
 import {
   macAgentBridge,
   type MacAgentJobResult,
   type WorkflowLease,
-} from "../../chatbot/bridge";
-import { CHATBOT_CONTEXT_LIMITS } from "../../chatbot/context-limits";
-import { ChatbotMediaRegistry } from "../../chatbot/media-assets";
+} from "./bridge";
+import { CHATBOT_CONTEXT_LIMITS } from "./context-limits";
+import { ChatbotMediaRegistry } from "./media-assets";
 import {
   registerChatbotMcpSession,
   type ChatbotGuildExpressionInput,
   type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
-} from "../../chatbot/mcp";
+} from "./mcp";
 import {
   createTripPlannerClient,
   tripPlannerAvailableForGuild,
-} from "../../chatbot/trip-planner";
-import { getGuildMemoryStore } from "../../chatbot/guild-memory";
+} from "./trip-planner";
+import { getGuildMemoryStore } from "./guild-memory";
 import type {
   ChatbotFailureKind,
   ChatbotAddressingMode,
@@ -31,13 +31,13 @@ import type {
   ChatbotTaskProgress,
   AnswerJob,
   OracleAnswerJob,
-} from "../../chatbot/protocol";
-import { parseChatbotAnswerDecision } from "../../chatbot/answer-contract";
+} from "../../contracts/worker-contract";
+import { parseChatbotAnswerDecision } from "../../contracts/answer-contract";
 
 import {
   DiscordReactionBroker,
   type DiscordReactionCapabilities,
-} from "../api/reactions";
+} from "../discord/api/reactions";
 import {
   addGuildEmojiFromMedia,
   addGuildStickerFromMedia,
@@ -45,10 +45,13 @@ import {
   listGuildEmojis,
   listSharedEmojiGuilds,
   type ExpressionFetch,
-} from "../api/emojis";
-import { getChatbotReminderScheduler } from "../jobs/reminders";
-import { sendChannelMessage } from "../api/channel-messages";
-import { joinMemberVoiceChannel, leaveVoiceChannel } from "../api/voice";
+} from "../discord/api/emojis";
+import { getChatbotReminderScheduler } from "../discord/jobs/reminders";
+import { sendChannelMessage } from "../discord/api/channel-messages";
+import {
+  joinMemberVoiceChannel,
+  leaveVoiceChannel,
+} from "../discord/api/voice";
 import {
   getNearbyHumanMessages,
   getRecentHumanMessages,
@@ -68,7 +71,7 @@ import {
   ChannelQuietTracker,
   isChannelQuietRequest,
   isChannelWakeRequest,
-} from "./channel-quiet";
+} from "../discord/channel-quiet";
 
 export {
   canMemberSearchChannel,
@@ -86,7 +89,7 @@ export {
   parseExecutionRoute,
   parsePreviousTraceLookup,
 } from "./chatbot-routing";
-export { parseChatbotAnswerDecision } from "../../chatbot/answer-contract";
+export { parseChatbotAnswerDecision } from "../../contracts/answer-contract";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;

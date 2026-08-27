@@ -1,4 +1,4 @@
-import type { AnswerJob, CodexJob } from "../../../src/chatbot/protocol";
+import type { AnswerJob, CodexJob } from "../../../contracts/worker-contract";
 
 const HAN_SCRIPT = /\p{Script=Han}/gu;
 const LATIN_SCRIPT = /\p{Script=Latin}/gu;

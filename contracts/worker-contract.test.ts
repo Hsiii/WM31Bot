@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseChatbotJob } from "./protocol";
+import { parseChatbotJob } from "./worker-contract";
 
 const common = {
   id: "job-1",

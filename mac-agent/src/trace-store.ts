@@ -7,7 +7,7 @@ import type {
   CodexJob,
   ChatbotPromptTelemetry,
   ChatbotTraceContext,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1_000;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1_000;

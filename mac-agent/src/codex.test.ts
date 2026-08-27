@@ -9,7 +9,7 @@ import type {
   MacAnswerJob,
   OracleAnswerJob,
   SocialActionJob,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 import {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
   ANSWER_OUTPUT_SCHEMA,

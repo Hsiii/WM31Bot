@@ -1,4 +1,4 @@
-import type { ChatbotMessage } from "./protocol";
+import type { ChatbotMessage } from "./worker-contract";
 
 export const CHATBOT_CONTEXT_BUDGETS = {
   currentRequestCharacters: 12_000,

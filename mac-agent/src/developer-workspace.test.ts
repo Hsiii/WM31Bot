@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { OracleAnswerJob } from "../../src/chatbot/protocol";
+import type { OracleAnswerJob } from "../../contracts/worker-contract";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 
 const roots: string[] = [];

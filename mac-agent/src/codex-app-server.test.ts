@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import type { ChatbotTaskProgress } from "../../src/chatbot/protocol";
+import type { ChatbotTaskProgress } from "../../contracts/worker-contract";
 import { CodexAppServerManager } from "./codex-app-server";
 
 const fakeServer = join(

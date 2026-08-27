@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 
-import type { ChatbotAccessConfig } from "../../chatbot/access";
-import { macAgentBridge, type MacAgentSocketData } from "../../chatbot/bridge";
-import { CHATBOT_PROTOCOL_VERSION } from "../../chatbot/protocol";
-import { ChatbotMediaRegistry } from "../../chatbot/media-assets";
-import { ChannelQuietTracker } from "./channel-quiet";
+import type { ChatbotAccessConfig } from "./access";
+import { macAgentBridge, type MacAgentSocketData } from "./bridge";
+import { CHATBOT_PROTOCOL_VERSION } from "../../contracts/worker-contract";
+import { ChatbotMediaRegistry } from "./media-assets";
+import { ChannelQuietTracker } from "../discord/channel-quiet";
 import {
   addGuildExpressionForRequest,
   ChatbotConversationTracker,

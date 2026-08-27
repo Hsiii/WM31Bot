@@ -6,7 +6,7 @@ import {
   type ChatbotMcpTraceCall,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 import type { MacAgentConfig } from "./config";
 import {
   checkCodexAuthentication,

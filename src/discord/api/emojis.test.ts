@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DiscordRequest } from "../gateway/chatbot";
+import type { DiscordRequest } from "../../chatbot/chatbot";
 import {
   addGuildEmojiFromMedia,
   addGuildStickerFromMedia,

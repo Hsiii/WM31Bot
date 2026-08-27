@@ -1,5 +1,5 @@
-import type { ChatbotOutgoingFile } from "../../chatbot/protocol";
-import type { DiscordRequest } from "./chatbot-context";
+import type { ChatbotOutgoingFile } from "../../contracts/worker-contract";
+import type { DiscordRequest } from "../chatbot/chatbot-context";
 
 export const ASK_COMMAND_NAME = "ask";
 export const EPHEMERAL_MESSAGE_FLAG = 1 << 6;

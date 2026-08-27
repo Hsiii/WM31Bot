@@ -14,7 +14,7 @@ import type {
   CodexJob,
   MacAnswerJob,
   OracleAnswerJob,
-} from "../../src/chatbot/protocol";
+} from "../../contracts/worker-contract";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 import {

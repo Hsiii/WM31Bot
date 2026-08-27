@@ -1,4 +1,4 @@
-import type { DiscordRequest } from "../gateway/chatbot";
+import type { DiscordRequest } from "../../chatbot/chatbot";
 
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
 const SENDABLE_CHANNEL_TYPES = new Set([0, 5, 10, 11, 12]);
