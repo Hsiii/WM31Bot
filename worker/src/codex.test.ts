@@ -377,6 +377,14 @@ describe("Codex chatbot runner", () => {
     const answerJob: ChatAnswerJob = {
       ...job,
       purpose: "answer",
+      capabilities: [
+        {
+          id: "conversation",
+          category: "conversation",
+          availability: "available",
+          description: "Answer from the supplied Discord conversation.",
+        },
+      ],
       availableTools: [
         {
           name: "discord.add_reaction",
@@ -389,6 +397,9 @@ describe("Codex chatbot runner", () => {
     };
     const prompt = buildCodexPrompt(answerJob, [], []);
 
+    expect(prompt).toContain("host-derived and authoritative");
+    expect(prompt).toContain("<available_capabilities_json>");
+    expect(prompt).toContain('"id":"conversation"');
     expect(prompt).toContain("<available_reactions_json>");
     expect(prompt).toContain("sago:emoji-1");
     expect(prompt).toContain("Return at least one of reply or reaction");

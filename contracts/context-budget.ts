@@ -5,6 +5,7 @@ export const CHATBOT_CONTEXT_BUDGETS = {
   messageCharacters: 4_000,
   initialMessagesCharacters: 32_000,
   extractedAttachmentsCharacters: 24_000,
+  capabilitiesCharacters: 8_000,
   availableToolsCharacters: 8_000,
   ignoredAttachmentsCharacters: 2_000,
   initialContextCharacters: 64_000,

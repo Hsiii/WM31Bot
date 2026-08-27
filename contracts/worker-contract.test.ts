@@ -37,6 +37,14 @@ describe("chatbot job protocol", () => {
         purpose: "answer",
         executionRoute: "chat",
         mcpAccessToken: "token",
+        capabilities: [
+          {
+            id: "conversation",
+            category: "conversation",
+            availability: "available",
+            description: "Answer from supplied context.",
+          },
+        ],
       })?.purpose,
     ).toBe("answer");
     expect(
@@ -66,6 +74,15 @@ describe("chatbot job protocol", () => {
         purpose: "answer",
         executionRoute: "oracle",
         mcpAccessToken: "token",
+      }),
+    ).toBeNull();
+    expect(
+      parseChatbotJob({
+        ...common,
+        purpose: "answer",
+        executionRoute: "chat",
+        mcpAccessToken: "token",
+        capabilities: [{ id: "conversation", category: "unknown" }],
       }),
     ).toBeNull();
   });

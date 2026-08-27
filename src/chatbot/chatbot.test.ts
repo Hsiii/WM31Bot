@@ -192,6 +192,18 @@ describe("Discord chatbot", () => {
       );
       expect(answerJob.job.channelId).toBe("coding-thread");
       expect(answerJob.job.developerTask.id).toBeString();
+      expect(answerJob.job.capabilities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "repository_work",
+            availability: "available",
+          }),
+          expect.objectContaining({
+            id: "discord_context",
+            tools: ["resolve_context"],
+          }),
+        ]),
+      );
       expect(
         discordCalls.find(
           ({ path }) =>

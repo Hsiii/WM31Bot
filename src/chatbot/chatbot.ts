@@ -11,7 +11,6 @@ import { ChatbotMediaRegistry } from "./media-assets";
 import {
   registerChatbotMcpSession,
   type ChatbotGuildExpressionInput,
-  type ChatbotMcpCapability,
   type ChatbotMcpSessionSnapshot,
 } from "./mcp";
 import {
@@ -20,6 +19,7 @@ import {
 } from "./trip-planner";
 import { getGuildMemoryStore } from "./guild-memory";
 import type {
+  ChatbotCapability,
   ChatbotFailureKind,
   ChatbotAddressingMode,
   ChatbotExecutionRoute,
@@ -122,8 +122,8 @@ function supplementalCapabilities({
   availableRepositories: string[];
   chatbotRepository?: string;
   executionRoute: ChatbotExecutionRoute;
-}): ChatbotMcpCapability[] {
-  const capabilities: ChatbotMcpCapability[] = [
+}): ChatbotCapability[] {
+  const capabilities: ChatbotCapability[] = [
     {
       id: "conversation",
       category: "conversation",
@@ -1223,10 +1223,20 @@ export async function handleChatbotMention({
       const tripPlanner = tripPlannerAvailableForGuild(message.guild_id)
         ? createTripPlannerClient(process.env, `minisago-${message.id}`)
         : undefined;
+      const requestCapabilities = supplementalCapabilities({
+        isOwner: requesterUserId === accessConfig.ownerUserId,
+        hasAttachments:
+          requestMessage.attachments.length > 0 ||
+          Boolean(requestMessage.referencedMessage?.attachments.length),
+        hasReactions: Boolean(reactionCapabilities?.tools.length),
+        availableRepositories: workflow.availableRepositories,
+        chatbotRepository: workflow.chatbotRepository,
+        executionRoute,
+      });
 
       mcpSession = registerChatbotMcpSession({
+        supplementalCapabilities: requestCapabilities,
         mediaRegistry,
-        getPreviousTrace: async () => previousTrace,
         getCodexUsage: () => workflow.getCodexUsage(),
         ...(quietTracker
           ? {
@@ -1408,17 +1418,6 @@ export async function handleChatbotMention({
               leaveVoiceChannel: () => leaveVoiceChannel(message.guild_id!),
             }
           : {}),
-        describeCapabilities: () =>
-          supplementalCapabilities({
-            isOwner: requesterUserId === accessConfig.ownerUserId,
-            hasAttachments:
-              requestMessage.attachments.length > 0 ||
-              Boolean(requestMessage.referencedMessage?.attachments.length),
-            hasReactions: Boolean(reactionCapabilities?.tools.length),
-            availableRepositories: workflow.availableRepositories,
-            chatbotRepository: workflow.chatbotRepository,
-            executionRoute,
-          }),
       });
       if (executionRoute === "oracle") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
       const answerBase = {
@@ -1432,6 +1431,7 @@ export async function handleChatbotMention({
         requestMessage,
         messages,
         mcpAccessToken: mcpSession.token,
+        capabilities: mcpSession.capabilities,
         ...(reactionCapabilities?.tools.length
           ? { availableTools: reactionCapabilities.tools }
           : {}),

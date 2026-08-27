@@ -90,13 +90,12 @@ The consolidated `resolve_context` tool can request, in parallel:
 Other tools cover Codex usage, reminders, voice, owner channel messages, and
 owner emoji and sticker creation. In the configured Kyushu guild, host-bound
 trip tools read the shared itinerary and apply typed schedule edits through the
-planner API; they never expose database credentials or accept a guild argument. The
-read-only `describe_capabilities` tool reports the
-exact MCP surface exposed to the active request together with request-scoped
-conversation, attachment, reaction, development, and Mac capabilities. Owner
-features are omitted for other requesters, and capabilities that need a routed
-worker or explicit request are marked conditional. Discord identity and
-destinations remain bound by the host wherever possible.
+planner API; they never expose database credentials or accept a guild argument.
+The host injects a request-scoped capability catalog into the answer context.
+It includes conversation, attachment, reaction, development, Mac, and MCP
+capabilities. Owner features are omitted for other requesters, and capabilities
+that need a routed worker or explicit request are marked conditional. Discord
+identity and destinations remain bound by the host wherever possible.
 
 Linux answer jobs also receive a worker-local stdio MCP server for media in the
 active request. Attachments, resolved member avatars, and generated outputs all
