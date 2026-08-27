@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { sendChannelMessage } from "./channel-messages";
-import type { DiscordRequest } from "../gateway/chatbot";
+import type { DiscordRequest } from "../../chatbot/chatbot";
 
 describe("sendChannelMessage", () => {
   test("resolves exact server and channel names before sending", async () => {

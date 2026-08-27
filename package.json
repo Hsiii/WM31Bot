@@ -15,9 +15,9 @@
     "format:check": "prettier . --check",
     "fetch:vocab": "bun scripts/fetch-wiktionary-vocab.mjs",
     "sync:install": "bun --env-file=.env.local scripts/sync-install-settings.mjs",
-    "mac-agent:install": "bun --env-file=.env.local scripts/mac-agent.mjs install",
-    "mac-agent:status": "bun scripts/mac-agent.mjs status",
-    "mac-agent:uninstall": "bun scripts/mac-agent.mjs uninstall",
+    "mac-agent:install": "bun --env-file=.env.local scripts/worker.mjs install",
+    "mac-agent:status": "bun scripts/worker.mjs status",
+    "mac-agent:uninstall": "bun scripts/worker.mjs uninstall",
     "worker:update": "bun run mac-agent:install"
   },
   "dependencies": {

@@ -10,16 +10,16 @@ const workerCompose = await Bun.file(
   new URL("./compose.worker.yaml", import.meta.url),
 ).text();
 const sandboxBroker = await Bun.file(
-  new URL("./mac-agent/src/sandbox-broker.ts", import.meta.url),
+  new URL("./worker/src/sandbox-broker.ts", import.meta.url),
 ).text();
 const sandboxRequirements = await Bun.file(
-  new URL("./mac-agent/requirements-sandbox.txt", import.meta.url),
+  new URL("./worker/requirements-sandbox.txt", import.meta.url),
 ).text();
 const pythonRuntime = await Bun.file(
-  new URL("./mac-agent/src/python-runtime.py", import.meta.url),
+  new URL("./worker/src/media/python-runtime.py", import.meta.url),
 ).text();
 const pythonClient = await Bun.file(
-  new URL("./mac-agent/src/python.ts", import.meta.url),
+  new URL("./worker/src/media/python.ts", import.meta.url),
 ).text();
 
 test("worker image includes conservative media processing tools", () => {
@@ -40,7 +40,7 @@ test("worker image includes a minimal Python runtime", () => {
   for (const packageName of ["python3", "python3-venv"]) {
     expect(dockerfile).toContain(`    ${packageName} \\\n`);
   }
-  expect(dockerfile).toContain("mac-agent/requirements-sandbox.txt");
+  expect(dockerfile).toContain("worker/requirements-sandbox.txt");
   expect(dockerfile).toContain('new_session("u2netp")');
   expect(dockerfile).toContain("NUMBA_CACHE_DIR=/opt/minisago-numba-cache");
   expect(dockerfile).toContain("remove(Image.new");
@@ -66,9 +66,13 @@ test("images copy code from the consolidated source layout", () => {
   expect(dockerfile).toContain(
     "COPY --chown=bun:bun src/chatbot /app/src/chatbot",
   );
+  expect(dockerfile).toContain("COPY --chown=bun:bun contracts /app/contracts");
   expect(dockerfile).not.toContain("COPY --chown=bun:bun lib /app/lib");
   expect(hostedDockerfile).toContain(
     "COPY --from=builder --chown=bun:bun /app/src ./src",
+  );
+  expect(hostedDockerfile).toContain(
+    "COPY --from=builder --chown=bun:bun /app/contracts ./contracts",
   );
   expect(hostedDockerfile).not.toContain("/app/lib");
   expect(hostedDockerfile).not.toContain("/app/data");

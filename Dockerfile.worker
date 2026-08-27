@@ -25,12 +25,12 @@ RUN apt-get update \
   && git config --system user.email 94444077+sago-cream@users.noreply.github.com \
   && git config --system credential.https://github.com.helper '!/usr/bin/gh auth git-credential'
 
-WORKDIR /app/mac-agent
+WORKDIR /app/worker
 
-COPY --chown=bun:bun mac-agent/package.json mac-agent/bun.lock ./
+COPY --chown=bun:bun worker/package.json worker/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-COPY mac-agent/requirements-sandbox.txt ./requirements-sandbox.txt
+COPY worker/requirements-sandbox.txt ./requirements-sandbox.txt
 RUN python3 -m venv /opt/minisago-python \
   && /opt/minisago-python/bin/pip install --no-cache-dir -r requirements-sandbox.txt
 RUN mkdir -p /opt/minisago-models /opt/minisago-numba-cache \
@@ -38,8 +38,9 @@ RUN mkdir -p /opt/minisago-models /opt/minisago-numba-cache \
 RUN chmod -R a+rX /opt/minisago-python /opt/minisago-models /opt/minisago-numba-cache
 
 COPY --chown=bun:bun src/chatbot /app/src/chatbot
-COPY --chown=bun:bun mac-agent/src ./src
-COPY --chown=bun:bun mac-agent/tsconfig.json ./tsconfig.json
+COPY --chown=bun:bun contracts /app/contracts
+COPY --chown=bun:bun worker/src ./src
+COPY --chown=bun:bun worker/tsconfig.json ./tsconfig.json
 COPY --chmod=755 scripts/worker-entrypoint.sh /usr/local/bin/worker-entrypoint
 
 RUN mkdir -p /home/bun/.codex /home/bun/.config/gh /var/lib/minisago /workspace/worktrees \

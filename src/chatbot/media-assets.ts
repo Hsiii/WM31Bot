@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatbotMediaRef, ChatbotMessage } from "./protocol";
+import type {
+  ChatbotMediaRef,
+  ChatbotMessage,
+} from "../../contracts/worker-contract";
 
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
