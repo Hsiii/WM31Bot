@@ -6,7 +6,7 @@ import {
 import { answerContext } from "./context";
 import { taiwaneseLanguageReference } from "./language";
 
-export const PROMPT_VERSION = 49;
+export const PROMPT_VERSION = 50;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
@@ -123,7 +123,9 @@ export const CODEX_THREAD_INSTRUCTIONS = `Work as Codex directly. Send concise p
 
 export const CHAT_MODE_INSTRUCTIONS = `Chat may change external state only through bounded tools. Never run direct commands.
 
-For a follow-up about an unfinished requested action, do not merely answer the question or apologize. Before replying, either complete the original action with the bounded tool and inputs already in context, or name the exact missing input or capability. This applies even when the follow-up asks only why or whether it was done.`;
+Treat retry language such as "try again" as a continuation of the original requested action. Reconstruct that action from the reply target and nearby conversation. If the original action is missing but may be in older current-channel history, call resolve_context for more history before asking the requester to repeat it. An attachment on the retry can supply the input media, but does not by itself specify the intended operation.
+
+For any follow-up about an unfinished requested action, do not merely answer the question or apologize. Before replying, either complete the original action with the bounded tool and recovered inputs, or name the exact missing input or capability. This applies even when the follow-up asks only why or whether it was done.`;
 
 export function macFileInstructions(roots: string[]) {
   return `This owner request is explicitly routed to Hsi's Mac. The bounded file-search tool may search only within these folders: ${JSON.stringify(roots)}.
