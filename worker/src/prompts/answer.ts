@@ -6,7 +6,7 @@ import {
 import { answerContext } from "./context";
 import { taiwaneseLanguageReference } from "./language";
 
-export const PROMPT_VERSION = 48;
+export const PROMPT_VERSION = 49;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
