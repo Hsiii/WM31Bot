@@ -1,4 +1,25 @@
-import type { AnswerJob } from "../../../src/chatbot/protocol";
+import type { AnswerJob, CodexJob } from "../../../src/chatbot/protocol";
+
+const HAN_SCRIPT = /\p{Script=Han}/gu;
+const LATIN_SCRIPT = /\p{Script=Latin}/gu;
+
+function activeConversationText(job: CodexJob) {
+  const request = job.request.trim() || job.requestMessage?.content.trim();
+  if (request) return request;
+  return (
+    [...job.messages].reverse().find((message) => message.content.trim())
+      ?.content ?? ""
+  );
+}
+
+export function conversationDisplayName(job: CodexJob) {
+  const text = activeConversationText(job);
+  const hanCharacters = text.match(HAN_SCRIPT)?.length ?? 0;
+  const latinCharacters = text.match(LATIN_SCRIPT)?.length ?? 0;
+  return hanCharacters > 0 && hanCharacters * 2 >= latinCharacters
+    ? "迷你西米露"
+    : "MiniSago";
+}
 
 type SlangReference = {
   terms: readonly string[];

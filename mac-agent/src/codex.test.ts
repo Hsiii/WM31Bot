@@ -683,6 +683,7 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(prompt).toContain("casually opened Discord");
+    expect(prompt).toContain("迷你西米露 is her name");
     expect(prompt).toContain('"id":"message-1","candidate":false');
     expect(prompt).toContain('"id":"message-2","candidate":true');
     expect(prompt.split("終於修好了")).toHaveLength(2);
@@ -714,7 +715,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(43);
+    expect(PROMPT_VERSION).toBe(44);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -736,7 +737,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Stay accurate without sounding like a report");
     expect(prompt).toContain("Speak as MiniSago in the first person");
     expect(prompt).toContain(
-      "resolve them from antecedents, reply links, message roles, and topic",
+      "Use conversation_addressing_json, antecedents, reply links, message roles, and topic",
     );
     expect(prompt).toContain(
       "Assistant-role messages are your earlier replies",
@@ -824,17 +825,16 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(prompt).toContain(
-      '<conversation_addressing_json>\n{"addressee":"MiniSago","mode":"continuation","directSelfReferences":[],"possibleSelfReferences":["她"]}',
+      '<conversation_addressing_json>\n{"addressee":"迷你西米露","mode":"continuation","directSelfReferences":[],"possibleSelfReferences":["她"]}',
     );
     expect(prompt).toContain(
-      "Classify a possible self-reference as other only when supplied content contains a specific other antecedent",
+      "classify one as other only when supplied context names a specific antecedent",
     );
-    expect(prompt).toContain("When a reference means you, answer with I or 我");
     expect(prompt).toContain(
-      "classify each personal expression in the current request",
+      "classify each answer-relevant personal expression",
     );
-    expect(prompt).toContain("Make reply strictly consistent with it");
-    expect(prompt).toContain("if a pronoun would be unclear");
+    expect(prompt).toContain("Keep the reply consistent");
+    expect(prompt).toContain("when a pronoun would blur the referent");
     expect(ANSWER_OUTPUT_SCHEMA.required).toContain("referenceResolution");
     expect(
       ANSWER_OUTPUT_SCHEMA.properties.referenceResolution.items.properties
