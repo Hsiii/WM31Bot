@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun src/index.ts",
     "build": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "eval:prompts": "bun src/prompt-eval/run.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
