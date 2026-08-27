@@ -23,6 +23,18 @@ import {
   chatbotMediaLimits,
   readBoundedMediaBytes,
 } from "./media-assets";
+import {
+  SCOPED_FEATURE_DEFINITIONS,
+  type FeatureAvailabilityMutation,
+  type FeatureAvailabilitySnapshot,
+  type FeaturePolicy,
+  type ScopedFeatureId,
+} from "../discord/feature-availability";
+import {
+  MANAGED_SERVICE_DEFINITIONS,
+  type ManagedServiceId,
+  type ManagedServiceListing,
+} from "../discord/service-subscriptions";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
@@ -208,6 +220,16 @@ export type ChatbotGuildEmojiRenameInput = {
 export type ChatbotMcpSessionHandlers = {
   mediaRegistry?: ChatbotMediaRegistry;
   supplementalCapabilities?: ChatbotCapability[];
+  listFeatureAvailability?: () => FeatureAvailabilitySnapshot;
+  configureFeatureAvailability?: (
+    input: FeatureAvailabilityMutation,
+  ) => Promise<FeaturePolicy>;
+  listManagedServices?: () => ManagedServiceListing;
+  configureServiceSubscription?: (input: {
+    service: ManagedServiceId;
+    action: "subscribe" | "unsubscribe";
+    channelId: string;
+  }) => Promise<ManagedServiceListing>;
   resolveContext: (input: {
     historyCount: number;
     includePreviousTrace: boolean;
@@ -415,6 +437,29 @@ function availableCapabilities(
       tools: ["get_codex_usage"],
     });
   }
+  if (
+    handlers.listFeatureAvailability &&
+    handlers.configureFeatureAvailability
+  ) {
+    capabilities.push({
+      id: "feature_availability",
+      category: "system",
+      availability: "available",
+      description:
+        "List, enable, disable, or restore inherited feature availability for a Discord server or channel without a deployment.",
+      tools: ["list_feature_availability", "configure_feature_availability"],
+    });
+  }
+  if (handlers.listManagedServices && handlers.configureServiceSubscription) {
+    capabilities.push({
+      id: "managed_services",
+      category: "system",
+      availability: "available",
+      description:
+        "List background posting services and subscribe or unsubscribe exact Discord destination channels without a deployment.",
+      tools: ["list_managed_services", "configure_service_subscription"],
+    });
+  }
   if (handlers.manageServerMemory) {
     capabilities.push({
       id: "server_memory",
@@ -524,6 +569,127 @@ function createServer(session: ChatbotMcpSession) {
     openWorldHint: false,
   } as const;
 
+  if (
+    session.handlers.listFeatureAvailability &&
+    session.handlers.configureFeatureAvailability
+  ) {
+    server.registerTool(
+      "list_feature_availability",
+      {
+        description:
+          "List the server-side availability policy for every configurable MiniSago feature. Channel rules override guild rules, which override each feature's default. Use before changing coverage or when the owner asks where a feature is enabled.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () =>
+        toolResult({
+          status: "complete",
+          descriptions: SCOPED_FEATURE_DEFINITIONS,
+          policy: session.handlers.listFeatureAvailability!(),
+        }),
+    );
+
+    server.registerTool(
+      "configure_feature_availability",
+      {
+        description:
+          "Change one MiniSago feature's availability for an exact Discord guild or channel ID. Use enable or disable to add an override. Use inherit to remove the override and fall back to the guild or feature default. Only call when the owner explicitly asks to change feature coverage.",
+        inputSchema: {
+          feature: z.enum(
+            Object.keys(SCOPED_FEATURE_DEFINITIONS) as [
+              ScopedFeatureId,
+              ...ScopedFeatureId[],
+            ],
+          ),
+          scope: z.enum(["guild", "channel"]),
+          targetId: z.string().regex(/^\d{17,20}$/u),
+          action: z.enum(["enable", "disable", "inherit"]),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            feature: input.feature,
+            policy: await session.handlers.configureFeatureAvailability!(input),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update feature availability.",
+          });
+        }
+      },
+    );
+  }
+  if (
+    session.handlers.listManagedServices &&
+    session.handlers.configureServiceSubscription
+  ) {
+    server.registerTool(
+      "list_managed_services",
+      {
+        description:
+          "List every managed background posting service and its current Discord destinations. Return channelMention values verbatim in the answer so Discord renders clickable channel links.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () =>
+        toolResult({
+          status: "complete",
+          ...session.handlers.listManagedServices!(),
+        }),
+    );
+
+    server.registerTool(
+      "configure_service_subscription",
+      {
+        description:
+          "Subscribe or unsubscribe one exact Discord channel for an existing background posting service. Call only when the owner explicitly asks to change a service destination. List services first when the intended service is unclear.",
+        inputSchema: {
+          service: z.enum(
+            Object.keys(MANAGED_SERVICE_DEFINITIONS) as [
+              ManagedServiceId,
+              ...ManagedServiceId[],
+            ],
+          ),
+          action: z.enum(["subscribe", "unsubscribe"]),
+          channelId: z.string().regex(/^\d{17,20}$/u),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            ...(await session.handlers.configureServiceSubscription!(input)),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update the service subscription.",
+          });
+        }
+      },
+    );
+  }
   if (session.handlers.pauseChannelActivity) {
     server.registerTool(
       "pause_channel_activity",

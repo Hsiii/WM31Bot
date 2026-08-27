@@ -1,24 +1,30 @@
-import { TARGET_GUILD_ID } from "../config";
 import { createDiscordRequest } from "../api/request";
+import {
+  deliverToServiceDestinations,
+  getServiceSubscriptionStore,
+  type ManagedServiceId,
+  type ServiceDestination,
+} from "../service-subscriptions";
 import { decodeEntities, readJsonFile, writeJsonFile } from "./job-utils";
 
 const DEFAULT_HANDLE = "thsottiaux";
-const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
 const DEFAULT_ADDITIONAL_PIPES = [
   {
     handle: "thsottiaux",
-    channelId: "1515569479541854218",
-    guildId: "917436845187563610",
+    service: "x_posts_thsottiaux",
     stateFileName: "x-post-thsottiaux-additional-state.json",
   },
   {
     handle: "hololive_dreams",
-    channelId: "1290252977621176361",
-    guildId: TARGET_GUILD_ID,
+    service: "x_posts_hololive_dreams",
     stateFileName: "x-post-hololive-dreams-state.json",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  handle: string;
+  service: ManagedServiceId;
+  stateFileName: string;
+}>;
 const DEFAULT_CHECK_INTERVAL_MS = 300_000;
 const STATE_CHECKPOINT_INTERVAL_MS = 3_600_000;
 const USER_AGENT = "MiniSago/0.1";
@@ -32,9 +38,8 @@ export type XPost = {
 };
 
 type XPostMonitorConfig = {
+  service: ManagedServiceId;
   botToken: string;
-  channelId: string;
-  guildId: string;
   handle: string;
   feedUrl: string;
   stateFile: string;
@@ -186,12 +191,11 @@ export function getXPostMonitorConfigs(
   const stateFile = env.X_POST_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
   const sharedConfig = {
     botToken,
-    guildId: env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     checkIntervalMs: parseCheckIntervalMs(env.X_POST_CHECK_INTERVAL_MS),
   };
   const primaryConfig: XPostMonitorConfig = {
     ...sharedConfig,
-    channelId: env.X_POST_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
+    service: "x_posts_primary",
     handle,
     feedUrl:
       env.X_POST_FEED_URL?.trim() ||
@@ -202,11 +206,10 @@ export function getXPostMonitorConfigs(
   return [
     primaryConfig,
     ...DEFAULT_ADDITIONAL_PIPES.map(
-      ({ handle, channelId, guildId, stateFileName }): XPostMonitorConfig => ({
+      ({ handle, service, stateFileName }): XPostMonitorConfig => ({
         ...sharedConfig,
+        service,
         handle,
-        channelId,
-        guildId,
         feedUrl: `https://fxtwitter.com/${handle}/feed.xml?count=20`,
         stateFile: stateFileBeside(stateFile, stateFileName),
       }),
@@ -228,19 +231,23 @@ async function fetchLatestXPosts(feedUrl: string) {
   return parseXPosts(await response.text());
 }
 
-async function sendXPost(config: XPostMonitorConfig, post: XPost) {
+async function sendXPost(
+  config: XPostMonitorConfig,
+  destination: ServiceDestination,
+  post: XPost,
+) {
   const discordRequest = createDiscordRequest(config.botToken);
   const channel = await discordRequest<DiscordChannel>(
-    `/channels/${config.channelId}`,
+    `/channels/${destination.channelId}`,
   );
 
-  if (channel?.guild_id !== config.guildId) {
+  if (channel?.guild_id !== destination.guildId) {
     throw new Error(
-      `X post channel ${config.channelId} belongs to guild ${channel?.guild_id ?? "unknown"}, not configured guild ${config.guildId}.`,
+      `X post channel ${destination.channelId} belongs to guild ${channel?.guild_id ?? "unknown"}, not configured guild ${destination.guildId}.`,
     );
   }
 
-  await discordRequest(`/channels/${config.channelId}/messages`, {
+  await discordRequest(`/channels/${destination.channelId}/messages`, {
     method: "POST",
     body: buildXPostMessage(post, config.handle),
   });
@@ -250,6 +257,11 @@ async function sendXPostAlertsIfNeeded(
   config: XPostMonitorConfig,
   now = new Date(),
 ) {
+  const destinations = getServiceSubscriptionStore().destinations(
+    config.service,
+  );
+  if (destinations.length === 0) return;
+
   const posts = await fetchLatestXPosts(config.feedUrl);
   const latestPost = posts.sort((a, b) => comparePostIds(a.id, b.id)).at(-1);
 
@@ -276,13 +288,23 @@ async function sendXPostAlertsIfNeeded(
     .sort((a, b) => comparePostIds(a.id, b.id));
 
   for (const post of newPosts) {
-    await sendXPost(config, post);
+    const delivery = await deliverToServiceDestinations(
+      destinations,
+      (destination) => sendXPost(config, destination, post),
+    );
+    if (delivery.failedChannelIds.length) {
+      console.warn(
+        `@${config.handle} X post ${post.id} failed for channels ${delivery.failedChannelIds.join(", ")}.`,
+      );
+    }
     await writeJsonFile(config.stateFile, {
       lastPostId: post.id,
       lastPostUrl: post.url,
       lastCheckedAt: now.toISOString(),
     });
-    console.log(`Sent @${config.handle} X post ${post.id} to Discord.`);
+    console.log(
+      `Sent @${config.handle} X post ${post.id} to ${delivery.delivered} Discord channel(s).`,
+    );
   }
 
   if (
@@ -324,7 +346,7 @@ export function startXPostMonitor() {
     void tick();
     const timer = setInterval(() => void tick(), config.checkIntervalMs);
     console.log(
-      `X post monitor enabled for @${config.handle} to channel ${config.channelId} every ${config.checkIntervalMs}ms.`,
+      `X post monitor enabled for @${config.handle} every ${config.checkIntervalMs}ms.`,
     );
     return timer;
   });

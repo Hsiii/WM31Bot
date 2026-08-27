@@ -51,32 +51,28 @@ describe("X post monitor", () => {
     });
 
     expect(
-      configs.map(({ handle, channelId, guildId, feedUrl, stateFile }) => ({
+      configs.map(({ service, handle, feedUrl, stateFile }) => ({
+        service,
         handle,
-        channelId,
-        guildId,
         feedUrl,
         stateFile,
       })),
     ).toEqual([
       {
+        service: "x_posts_primary",
         handle: "thsottiaux",
-        channelId: "1527893157168283668",
-        guildId: "guild-1",
         feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
         stateFile: "/app/state/x-post-state.json",
       },
       {
+        service: "x_posts_thsottiaux",
         handle: "thsottiaux",
-        channelId: "1515569479541854218",
-        guildId: "917436845187563610",
         feedUrl: "https://fxtwitter.com/thsottiaux/feed.xml?count=20",
         stateFile: "/app/state/x-post-thsottiaux-additional-state.json",
       },
       {
+        service: "x_posts_hololive_dreams",
         handle: "hololive_dreams",
-        channelId: "1290252977621176361",
-        guildId: "1282936453134815275",
         feedUrl: "https://fxtwitter.com/hololive_dreams/feed.xml?count=20",
         stateFile: "/app/state/x-post-hololive-dreams-state.json",
       },

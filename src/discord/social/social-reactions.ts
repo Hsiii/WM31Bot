@@ -63,6 +63,7 @@ type ObserveAmbientMessageOptions = {
   botUserId: string;
   accessConfig: ChatbotAccessConfig;
   discordRequest: DiscordRequest;
+  featureEnabled?: boolean;
 };
 
 type TimerHandle = unknown;
@@ -321,6 +322,7 @@ export class AmbientReactionController {
     botUserId,
     accessConfig,
     discordRequest,
+    featureEnabled,
   }: ObserveAmbientMessageOptions) {
     const now = this.now();
     const policy = this.policy;
@@ -331,15 +333,17 @@ export class AmbientReactionController {
       !freshHumanMessage(message, botUserId, now, MAXIMUM_MESSAGE_AGE_MS) ||
       !message.guild_id ||
       !(
-        accessConfig.guildIds.has(message.guild_id) ||
-        accessConfig.channelIds.has(message.channel_id)
+        featureEnabled ??
+        (accessConfig.guildIds.has(message.guild_id) ||
+          accessConfig.channelIds.has(message.channel_id))
       ) ||
-      !isChatbotAuthorized(
-        authorId,
-        accessConfig,
-        message.guild_id,
-        message.channel_id,
-      )
+      (featureEnabled === undefined &&
+        !isChatbotAuthorized(
+          authorId,
+          accessConfig,
+          message.guild_id,
+          message.channel_id,
+        ))
     ) {
       return false;
     }
