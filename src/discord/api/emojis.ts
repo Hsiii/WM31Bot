@@ -80,7 +80,7 @@ function resolveGuild(guilds: SharedEmojiGuild[], value: string) {
     throw new Error(
       matches.length > 1
         ? `More than one shared guild is named ${value}; use its guild ID.`
-        : `Sago is not in a guild named ${value}. Use list_shared_guilds first.`,
+        : `You are not in a guild named ${value}. Use list_shared_guilds first.`,
     );
   }
   return matches[0]!;
@@ -193,7 +193,7 @@ export async function addGuildEmojiFromMedia({
   );
   if (!destination.canCreateExpressions) {
     throw new Error(
-      `Sago needs the Create Expressions permission in ${destination.name}.`,
+      `You need the Create Expressions permission in ${destination.name}.`,
     );
   }
 
@@ -254,7 +254,7 @@ export async function addGuildStickerFromMedia({
   );
   if (!destination.canCreateExpressions) {
     throw new Error(
-      `Sago needs the Create Expressions permission in ${destination.name}.`,
+      `You need the Create Expressions permission in ${destination.name}.`,
     );
   }
 
@@ -336,7 +336,7 @@ export async function copyGuildEmoji({
   }
   if (!destination.canCreateExpressions) {
     throw new Error(
-      `Sago needs the Create Expressions permission in ${destination.name}.`,
+      `You need the Create Expressions permission in ${destination.name}.`,
     );
   }
 

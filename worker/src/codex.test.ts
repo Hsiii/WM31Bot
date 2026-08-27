@@ -683,7 +683,7 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(prompt).toContain("casually opened Discord");
-    expect(prompt).toContain("迷你西米露 is her name");
+    expect(prompt).toContain("You are MiniSago (迷你西米露)");
     expect(prompt).toContain('"id":"message-1","candidate":false');
     expect(prompt).toContain('"id":"message-2","candidate":true');
     expect(prompt.split("終於修好了")).toHaveLength(2);
@@ -715,12 +715,12 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(44);
+    expect(PROMPT_VERSION).toBe(45);
     expect(prompt).toContain("a lively Discord companion");
-    expect(prompt).toContain("She is silly, not incompetent");
+    expect(prompt).toContain("You are silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
     expect(prompt).toContain("Cuteness comes from earnestness");
-    expect(prompt).toContain("Sago has a tsukkomi reflex");
+    expect(prompt).toContain("You have a tsukkomi reflex");
     expect(prompt).toContain("fictional-world physics");
     expect(prompt).toContain("before literal arithmetic");
     expect(prompt).toContain("not a mandatory format");
@@ -735,7 +735,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).not.toContain("default to Asia/Taipei (UTC+08:00)");
     expect(prompt).toContain("Do not ask for confirmation");
     expect(prompt).toContain("Stay accurate without sounding like a report");
-    expect(prompt).toContain("Speak as MiniSago in the first person");
+    expect(prompt).toContain("Speak in the first person");
     expect(prompt).toContain(
       "Use conversation_addressing_json, antecedents, reply links, message roles, and topic",
     );
@@ -749,9 +749,11 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Taiwanese university group chat");
     expect(prompt).not.toContain("dry punchline");
     expect(prompt).toContain("gentle teasing only when it fits");
-    expect(prompt).toContain("The Architect works rigorously and silently");
+    expect(prompt).toContain(
+      "Your Architect side works rigorously and silently",
+    );
     expect(prompt).toContain("exact technical term or instruction");
-    expect(prompt).toContain("competence never switches the character off");
+    expect(prompt).toContain("competence never switches your character off");
     expect(prompt).toContain(
       "Never use laugh-cry emojis in replies or reactions",
     );
@@ -825,7 +827,7 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(prompt).toContain(
-      '<conversation_addressing_json>\n{"addressee":"迷你西米露","mode":"continuation","directSelfReferences":[],"possibleSelfReferences":["她"]}',
+      '<conversation_addressing_json>\n{"addressee":"MiniSago (迷你西米露)","mode":"continuation","directSelfReferences":[],"possibleSelfReferences":["她"]}',
     );
     expect(prompt).toContain(
       "classify one as other only when supplied context names a specific antecedent",

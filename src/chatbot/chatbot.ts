@@ -182,11 +182,11 @@ function supplementalCapabilities({
       category: "development",
       availability: executionRoute === "oracle" ? "available" : "conditional",
       description:
-        "Inspect or change MiniSago's own behavior and implementation through her configured chatbot repository.",
+        "Inspect or change your own behavior and implementation through the configured chatbot repository.",
       condition:
         executionRoute === "oracle"
           ? "This owner request is running in Oracle."
-          : "The owner must explicitly request a change to MiniSago.",
+          : "The owner must explicitly request a change to your behavior or implementation.",
     });
   }
   if (isOwner) {

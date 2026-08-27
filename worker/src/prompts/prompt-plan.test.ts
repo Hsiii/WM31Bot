@@ -87,7 +87,7 @@ describe("prompt plan", () => {
     expect(chinese.developerInstructions).not.toContain("各各=各付各的");
   });
 
-  test("uses the localized name as a direct self-reference", () => {
+  test("uses one bilingual identity for every reply language", () => {
     const chinese = buildPromptPlan(
       {
         ...baseJob,
@@ -107,16 +107,20 @@ describe("prompt plan", () => {
       [],
     );
 
-    expect(chinese.developerInstructions).toContain("You are 迷你西米露");
     expect(chinese.developerInstructions).toContain(
-      "use 迷你西米露 when a name is needed",
+      "You are MiniSago (迷你西米露)",
+    );
+    expect(chinese.developerInstructions).toContain(
+      "use the name matching the reply language when a name is needed",
     );
     expect(chinese.context).toContain(
-      '"addressee":"迷你西米露","mode":"continuation","directSelfReferences":["迷你西米露","妳"]',
+      '"addressee":"MiniSago (迷你西米露)","mode":"continuation","directSelfReferences":["迷你西米露","妳"]',
     );
-    expect(english.developerInstructions).toContain("You are MiniSago");
+    expect(english.developerInstructions).toContain(
+      "You are MiniSago (迷你西米露)",
+    );
     expect(english.context).toContain(
-      '"addressee":"MiniSago","mode":"continuation","directSelfReferences":["Sago","you"]',
+      '"addressee":"MiniSago (迷你西米露)","mode":"continuation","directSelfReferences":["Sago","you"]',
     );
   });
 

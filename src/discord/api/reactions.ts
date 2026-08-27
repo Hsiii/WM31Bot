@@ -128,8 +128,7 @@ export class DiscordReactionBroker {
           {
             name: "discord.add_reaction",
             risk: "ambient",
-            description:
-              "Add one reaction as MiniSago to a host-approved Discord message.",
+            description: "Add one reaction to a host-approved Discord message.",
             inputSchema: {
               type: "object",
               additionalProperties: false,
