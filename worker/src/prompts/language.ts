@@ -90,7 +90,5 @@ export function taiwaneseLanguageReference(job: AnswerJob) {
 
   return `Interpret only the Taiwanese shorthand present in the supplied context:\n${matched
     .map(({ explanation }) => `- ${explanation}`)
-    .join(
-      "\n",
-    )}\nTreat unfamiliar or fast-changing slang as uncertain and search when its meaning materially affects the answer.`;
+    .join("\n")}`;
 }
