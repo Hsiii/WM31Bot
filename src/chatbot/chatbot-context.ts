@@ -3,6 +3,9 @@ import type {
   ChatbotAttachment,
   ChatbotMessage,
 } from "../../contracts/worker-contract";
+import type { DiscordRequest } from "../discord/api/request";
+
+export type { DiscordRequest } from "../discord/api/request";
 import { getDiscordAvatarUrl } from "../discord/social/social-proxy";
 
 type DiscordAttachment = {
@@ -110,16 +113,6 @@ export type DiscordSearchQuery = {
   sortBy?: "relevance" | "timestamp";
   sortOrder?: "asc" | "desc";
 };
-
-export type DiscordRequest = <T>(
-  path: string,
-  options?: {
-    method?: string;
-    body?: unknown;
-    formData?: FormData;
-    authenticated?: boolean;
-  },
-) => Promise<T>;
 
 function authorAliases(message: DiscordMessage) {
   return [

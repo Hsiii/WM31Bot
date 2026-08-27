@@ -1,6 +1,7 @@
 import vocabData from "./toefl-vocab.json";
 import { TARGET_GUILD_ID } from "../config";
-import { discordRequest, readJsonFile, writeJsonFile } from "./job-utils";
+import { createDiscordRequest } from "../api/request";
+import { readJsonFile, writeJsonFile } from "./job-utils";
 
 const DEFAULT_DAILY_TIME = "08:00";
 const DEFAULT_TIMEZONE = "Asia/Taipei";
@@ -236,8 +237,8 @@ async function sendDiscordChannelMessage({
   guildId: string;
   payload: ToeflVocabMessagePayload;
 }) {
+  const discordRequest = createDiscordRequest(botToken);
   const channel = await discordRequest<DiscordChannel>(
-    botToken,
     `/channels/${channelId}`,
   );
 
@@ -247,9 +248,9 @@ async function sendDiscordChannelMessage({
     );
   }
 
-  await discordRequest(botToken, `/channels/${channelId}/messages`, {
+  await discordRequest(`/channels/${channelId}/messages`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 

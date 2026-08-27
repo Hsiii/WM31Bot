@@ -9,9 +9,9 @@ import {
 } from "./social/social-proxy";
 import {
   ChatbotConversationTracker,
-  createDiscordRequest,
   handleChatbotMention,
 } from "../chatbot/chatbot";
+import { createDiscordRequest, type DiscordRequest } from "./api/request";
 import {
   createEphemeralInteractionResponder,
   deferEphemeralInteraction,
@@ -44,7 +44,6 @@ import {
   type VoiceGateway,
 } from "./api/voice";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const MESSAGE_CONTENT_LIMIT = 2_000;
 const SOCIAL_WEBHOOK_NAME = "MiniSago Social Links";
@@ -239,8 +238,10 @@ class InstagramGatewayClient implements VoiceGateway {
     { webhookChannelId: string; threadId?: string }
   >();
   private socialWebhooks = new Map<string, Promise<DiscordWebhook>>();
+  private discordRequest: DiscordRequest;
 
   constructor(private readonly config: InstagramGatewayConfig) {
+    this.discordRequest = createDiscordRequest(config.botToken);
     this.reactionBroker = new DiscordReactionBroker();
     this.ambientReactions = new AmbientReactionController({
       policy: config.ambientReactionPolicy,
@@ -840,40 +841,6 @@ class InstagramGatewayClient implements VoiceGateway {
         },
       },
     });
-  }
-
-  private async discordRequest<T>(
-    path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-    } = {},
-  ) {
-    const headers: Record<string, string> = {
-      Authorization: `Bot ${this.config.botToken}`,
-    };
-
-    if (options.body !== undefined) {
-      headers["Content-Type"] = "application/json";
-    }
-
-    const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-      method: options.method ?? "GET",
-      headers,
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
-
-    if (response.ok) {
-      if (response.status === 204) {
-        return undefined as T;
-      }
-
-      return (await response.json()) as T;
-    }
-
-    const body = await response.text();
-    throw new Error(`${response.status} ${body}`);
   }
 }
 
