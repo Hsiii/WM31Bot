@@ -111,9 +111,8 @@ chatbot environment lists and built-in behavior. After that, the file is the
 source of truth. An owner can ask MiniSago to list, enable, disable, or restore
 inherited availability for a feature in an exact server or channel. Channel
 rules override server rules, and server rules override the feature default.
-The configurable features are chatbot access, ambient reactions, social-link
-replacement, quick-reply nudges, the trip planner, server memory, reminders,
-voice presence, and custom expressions.
+The scoped features are chatbot access, ambient reactions, and the trip
+planner. Always-on capabilities do not appear in this policy.
 
 ## Current deployment-specific defaults
 

@@ -119,13 +119,7 @@ describe("MiniSago MCP server", () => {
         features: {
           chatbot: policy,
           ambient_reactions: policy,
-          social_links: policy,
-          quick_reply_nudge: policy,
           trip_planner: policy,
-          server_memory: policy,
-          reminders: policy,
-          voice: policy,
-          custom_expressions: policy,
         },
       }),
       configureFeatureAvailability: async (input) => {

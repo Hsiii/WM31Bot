@@ -24,11 +24,11 @@ import {
   readBoundedMediaBytes,
 } from "./media-assets";
 import {
-  FEATURE_DEFINITIONS,
+  SCOPED_FEATURE_DEFINITIONS,
   type FeatureAvailabilityMutation,
   type FeatureAvailabilitySnapshot,
-  type FeatureId,
   type FeaturePolicy,
+  type ScopedFeatureId,
 } from "../discord/feature-availability";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
@@ -539,7 +539,7 @@ function createServer(session: ChatbotMcpSession) {
       async () =>
         toolResult({
           status: "complete",
-          descriptions: FEATURE_DEFINITIONS,
+          descriptions: SCOPED_FEATURE_DEFINITIONS,
           policy: session.handlers.listFeatureAvailability!(),
         }),
     );
@@ -551,7 +551,10 @@ function createServer(session: ChatbotMcpSession) {
           "Change one MiniSago feature's availability for an exact Discord guild or channel ID. Use enable or disable to add an override. Use inherit to remove the override and fall back to the guild or feature default. Only call when the owner explicitly asks to change feature coverage.",
         inputSchema: {
           feature: z.enum(
-            Object.keys(FEATURE_DEFINITIONS) as [FeatureId, ...FeatureId[]],
+            Object.keys(SCOPED_FEATURE_DEFINITIONS) as [
+              ScopedFeatureId,
+              ...ScopedFeatureId[],
+            ],
           ),
           scope: z.enum(["guild", "channel"]),
           targetId: z.string().regex(/^\d{17,20}$/u),

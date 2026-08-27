@@ -46,6 +46,11 @@ describe("feature availability", () => {
       snapshot.features.chatbot.rules,
     );
     expect(snapshot.features.trip_planner.defaultEnabled).toBe(false);
+    expect(Object.keys(snapshot.features)).toEqual([
+      "chatbot",
+      "ambient_reactions",
+      "trip_planner",
+    ]);
   });
 
   test("uses channel rules before guild rules and persists changes", async () => {

@@ -5,19 +5,13 @@ import { dirname } from "node:path";
 
 import { TARGET_GUILD_ID } from "./config";
 
-export const FEATURE_DEFINITIONS = {
+export const SCOPED_FEATURE_DEFINITIONS = {
   chatbot: "Answer mentions and /ask requests from non-owner members.",
   ambient_reactions: "Occasionally react to messages without being mentioned.",
-  social_links: "Replace or reply to Instagram and X links.",
-  quick_reply_nudge: "Post the quick-reply rate nudge.",
   trip_planner: "Expose the shared Kyushu itinerary tools.",
-  server_memory: "Read and maintain durable Discord server memory.",
-  reminders: "Create and manage reminders in the current channel.",
-  voice: "Join or leave voice in the current server.",
-  custom_expressions: "List and add server emoji or stickers for the owner.",
 } as const;
 
-export type FeatureId = keyof typeof FEATURE_DEFINITIONS;
+export type ScopedFeatureId = keyof typeof SCOPED_FEATURE_DEFINITIONS;
 export type FeatureScope = "guild" | "channel";
 export type FeatureRule = {
   scope: FeatureScope;
@@ -30,10 +24,10 @@ export type FeaturePolicy = {
 };
 export type FeatureAvailabilitySnapshot = {
   version: 1;
-  features: Record<FeatureId, FeaturePolicy>;
+  features: Record<ScopedFeatureId, FeaturePolicy>;
 };
 export type FeatureAvailabilityMutation = {
-  feature: FeatureId;
+  feature: ScopedFeatureId;
   scope: FeatureScope;
   targetId: string;
   action: "enable" | "disable" | "inherit";
@@ -76,16 +70,10 @@ export function defaultFeatureAvailability(
         defaultEnabled: false,
         rules: ambientEnabled ? [...chatRules] : [],
       },
-      social_links: { defaultEnabled: true, rules: [] },
-      quick_reply_nudge: { defaultEnabled: true, rules: [] },
       trip_planner: {
         defaultEnabled: false,
         rules: enabledRules("guild", [TARGET_GUILD_ID]),
       },
-      server_memory: { defaultEnabled: true, rules: [] },
-      reminders: { defaultEnabled: true, rules: [] },
-      voice: { defaultEnabled: true, rules: [] },
-      custom_expressions: { defaultEnabled: true, rules: [] },
     },
   };
 }
@@ -98,7 +86,9 @@ function assertSnapshot(value: unknown): FeatureAvailabilitySnapshot {
   if (snapshot.version !== 1 || !snapshot.features) {
     throw new Error("Unsupported feature availability format.");
   }
-  for (const feature of Object.keys(FEATURE_DEFINITIONS) as FeatureId[]) {
+  for (const feature of Object.keys(
+    SCOPED_FEATURE_DEFINITIONS,
+  ) as ScopedFeatureId[]) {
     const policy = snapshot.features[feature];
     if (!policy || typeof policy.defaultEnabled !== "boolean") {
       throw new Error(`Feature availability is missing ${feature}.`);
@@ -142,7 +132,7 @@ export class FeatureAvailabilityStore {
   }
 
   isEnabled(
-    feature: FeatureId,
+    feature: ScopedFeatureId,
     context: { guildId?: string; channelId?: string },
   ) {
     const policy = this.snapshot.features[feature];

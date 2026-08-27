@@ -1072,7 +1072,7 @@ export async function handleChatbotMention({
       const mediaRegistry = new ChatbotMediaRegistry();
       mediaRegistry.registerMessages([requestMessage, ...messages]);
       let serverMemory: ChatbotJob["serverMemory"];
-      if (message.guild_id && featureEnabled("server_memory")) {
+      if (message.guild_id) {
         try {
           const snapshot = await guildMemoryStore.load(message.guild_id);
           if (snapshot.entries.length) {
@@ -1341,9 +1341,7 @@ export async function handleChatbotMention({
               : { status: "not_requested" as const },
           };
         },
-        ...(requesterUserId === accessConfig.ownerUserId &&
-        message.guild_id &&
-        featureEnabled("custom_expressions")
+        ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
           ? {
               listSharedGuilds: async () =>
                 (await listSharedEmojiGuilds(discordRequest)).map((guild) => ({
@@ -1386,7 +1384,7 @@ export async function handleChatbotMention({
               }) => sendChannelMessage({ ...input, discordRequest }),
             }
           : {}),
-        ...(message.guild_id && featureEnabled("server_memory")
+        ...(message.guild_id
           ? {
               manageServerMemory: async (
                 input:
@@ -1412,7 +1410,7 @@ export async function handleChatbotMention({
               },
             }
           : {}),
-        ...(reminderScheduler && featureEnabled("reminders")
+        ...(reminderScheduler
           ? {
               createReminder: async (input) => {
                 const reminder = await reminderScheduler.create({
@@ -1449,7 +1447,7 @@ export async function handleChatbotMention({
                 ),
             }
           : {}),
-        ...(message.guild_id && featureEnabled("voice")
+        ...(message.guild_id
           ? {
               joinVoiceChannel: () =>
                 joinMemberVoiceChannel(message.guild_id!, requesterUserId),

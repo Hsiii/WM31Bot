@@ -581,10 +581,6 @@ class InstagramGatewayClient implements VoiceGateway {
   ) {
     const shouldNudgeQuickReply =
       !this.quietChannels.isPaused(message.channel_id) &&
-      this.featureAvailability.isEnabled("quick_reply_nudge", {
-        guildId: message.guild_id,
-        channelId: message.channel_id,
-      }) &&
       this.quickReplyNudges.observe(message);
 
     if (shouldNudgeQuickReply) {
@@ -644,13 +640,7 @@ class InstagramGatewayClient implements VoiceGateway {
       }
     }
 
-    if (
-      !this.featureAvailability.isEnabled("social_links", {
-        guildId: message.guild_id,
-        channelId: message.channel_id,
-      }) ||
-      !this.shouldTransformMessage(message)
-    ) {
+    if (!this.shouldTransformMessage(message)) {
       return;
     }
 
