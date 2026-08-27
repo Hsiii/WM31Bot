@@ -1,8 +1,10 @@
 import { access, readFile } from "node:fs/promises";
+import { basename } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
 import type { ChatAnswerJob } from "../../../contracts/worker-contract";
+import type { MediaClient } from "./media-client";
 import { attachmentLimits, prepareAttachments } from "./attachments";
 
 const answerDefaults = {
@@ -248,6 +250,84 @@ describe("chatbot attachment limits", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test.serial(
+    "downloads request attachments through the host media registry",
+    async () => {
+      const originalFetch = globalThis.fetch;
+      let fetchedDirectly = false;
+      globalThis.fetch = (async () => {
+        fetchedDirectly = true;
+        throw new Error("Discord CDN is unreachable from the worker");
+      }) as unknown as typeof fetch;
+      const reads: string[] = [];
+      const mediaClient: MediaClient = {
+        read: async (mediaId) => {
+          reads.push(mediaId);
+          return {
+            mediaId,
+            filename: "image.png",
+            contentType: "image/webp",
+            bytes: new TextEncoder().encode("webp"),
+          };
+        },
+        write: async () => undefined,
+      };
+
+      try {
+        const prepared = await prepareAttachments(
+          {
+            ...answerDefaults,
+            id: "job-host-media",
+            requesterUserId: "test-user",
+            channelId: "channel-1",
+            requestMessageId: "message-1",
+            request: "make this a sticker",
+            requestMessage: {
+              id: "message-1",
+              author: "Hsi",
+              timestamp: "2026-08-27T13:43:30.535Z",
+              content: "make this a sticker",
+              attachments: [
+                {
+                  id: "attachment-webp",
+                  filename: "image.png",
+                  contentType: "image/webp",
+                  size: 4,
+                  url: "https://cdn.discordapp.com/expired-image.png",
+                },
+              ],
+            },
+            messages: [],
+          },
+          undefined,
+          mediaClient,
+        );
+
+        expect(reads).toEqual(["attachment-webp"]);
+        expect(fetchedDirectly).toBe(false);
+        expect(prepared.imagePaths.map((path) => basename(path))).toEqual([
+          "0-image.webp",
+        ]);
+        expect(prepared.ignored).toEqual([]);
+        const manifest = JSON.parse(
+          await readFile(prepared.mediaManifestPath, "utf8"),
+        );
+        expect(manifest.attachments).toEqual([
+          {
+            id: "attachment-webp",
+            filename: "image.png",
+            contentType: "image/webp",
+            size: 4,
+            storedFilename: "0-image.webp",
+          },
+        ]);
+        await prepared.cleanup();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 
   test.serial(
     "downloads video into the request-local media manifest",

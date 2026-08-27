@@ -16,6 +16,7 @@ import type {
   OracleAnswerJob,
 } from "../../contracts/worker-contract";
 import { prepareAttachments } from "./media/attachments";
+import { httpMediaClient } from "./media/media-client";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 import {
   prepareGeneratedArtifacts,
@@ -606,11 +607,16 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   if (options.signal?.aborted) timeoutController.abort();
   let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
   let developerWorkspace:
-    | Awaited<ReturnType<typeof prepareDeveloperWorkspace>>
-    | undefined;
+    Awaited<ReturnType<typeof prepareDeveloperWorkspace>> | undefined;
 
   try {
-    prepared = await prepareAttachments(job, timeoutController.signal);
+    prepared = await prepareAttachments(
+      job,
+      timeoutController.signal,
+      job.purpose === "answer"
+        ? httpMediaClient(options.mcpUrl, job.mcpAccessToken)
+        : undefined,
+    );
     if (hasDeveloperAccess) {
       options.onProgress?.({
         phase: "preparing",

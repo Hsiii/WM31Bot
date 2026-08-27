@@ -6,7 +6,7 @@ export type RemoteMedia = {
 };
 
 export type MediaClient = {
-  read: (mediaId: string) => Promise<RemoteMedia>;
+  read: (mediaId: string, signal?: AbortSignal) => Promise<RemoteMedia>;
   write: (media: RemoteMedia) => Promise<void>;
 };
 
@@ -21,10 +21,12 @@ export function httpMediaClient(
   const authorization = `Bearer ${token}`;
 
   return {
-    async read(mediaId) {
+    async read(mediaId, signal) {
       const response = await fetcher(endpoint(mediaId), {
         headers: { authorization },
-        signal: AbortSignal.timeout(20_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(20_000)])
+          : AbortSignal.timeout(20_000),
       });
       if (!response.ok)
         throw new Error("Media is unavailable for this request.");
