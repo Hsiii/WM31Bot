@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import {
   budgetResolvedContext,
   handleChatbotMcpRequest,
+  normalizeReminderSchedule,
   registerChatbotMcpSession,
 } from "./mcp";
 
@@ -13,6 +14,39 @@ const servers: Array<ReturnType<typeof Bun.serve>> = [];
 
 afterEach(() => {
   for (const server of servers.splice(0)) server.stop(true);
+});
+
+test("normalizes reminder schedules before storage", () => {
+  expect(
+    normalizeReminderSchedule({
+      content: "  stand up  ",
+      cron: "  0   9  * * * ",
+    }),
+  ).toEqual({
+    content: "stand up",
+    cron: "0 9 * * *",
+    timezone: "Asia/Taipei",
+  });
+  expect(
+    normalizeReminderSchedule({
+      content: "call home",
+      runAt: "2026-07-26T09:00:00+08:00",
+      timezone: "Asia/Taipei",
+    }),
+  ).toEqual({
+    content: "call home",
+    runAt: "2026-07-26T01:00:00.000Z",
+    timezone: "Asia/Taipei",
+  });
+  expect(
+    normalizeReminderSchedule({
+      content: "check the oven",
+      runAt: "2026-07-26T01:05:00Z",
+    }),
+  ).toEqual({
+    content: "check the oven",
+    runAt: "2026-07-26T01:05:00.000Z",
+  });
 });
 
 function startServer() {

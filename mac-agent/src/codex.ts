@@ -38,6 +38,7 @@ export {
 const LOCAL_CHAT_TIMEOUT_MS = 150_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
 const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media-mcp.ts");
+const MAC_FILES_MCP_SERVER_PATH = join(import.meta.dir, "mac-files-mcp.ts");
 export const EXPRESSION_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =
@@ -303,6 +304,34 @@ export function mediaMcpConfig(
   };
 }
 
+export function macFilesMcpConfig(
+  roots: string[],
+  bunPath = process.execPath,
+  serverPath = MAC_FILES_MCP_SERVER_PATH,
+) {
+  return {
+    arguments: [
+      "--config",
+      `mcp_servers.mac_files.command=${JSON.stringify(bunPath)}`,
+      "--config",
+      `mcp_servers.mac_files.args=[${JSON.stringify(serverPath)}]`,
+      "--config",
+      'mcp_servers.mac_files.env_vars=["MINISAGO_MAC_FILE_ROOTS"]',
+      "--config",
+      "mcp_servers.mac_files.required=true",
+      "--config",
+      'mcp_servers.mac_files.default_tools_approval_mode="auto"',
+      "--config",
+      "mcp_servers.mac_files.startup_timeout_sec=10",
+      "--config",
+      "mcp_servers.mac_files.tool_timeout_sec=30",
+    ],
+    environment: {
+      MINISAGO_MAC_FILE_ROOTS: JSON.stringify(roots),
+    },
+  };
+}
+
 function escapeSeatbeltLiteral(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
@@ -457,7 +486,8 @@ export function parseFinalResponse(
       event.type === "item.completed" &&
       event.item?.type === "mcp_tool_call" &&
       (event.item.server === "minisago" ||
-        event.item.server === "minisago_media") &&
+        event.item.server === "minisago_media" ||
+        event.item.server === "mac_files") &&
       event.item.tool
     ) {
       const result =
@@ -488,7 +518,9 @@ export function parseFinalResponse(
         name:
           event.item.server === "minisago_media"
             ? `media.${event.item.tool}`.slice(0, 100)
-            : event.item.tool.slice(0, 100),
+            : event.item.server === "mac_files"
+              ? `mac.${event.item.tool}`.slice(0, 100)
+              : event.item.tool.slice(0, 100),
         arguments: sanitizedToolArguments(event.item.arguments),
         ...(typeof resultCount === "number" ? { resultCount } : {}),
         ...(event.item.status
@@ -607,6 +639,9 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
           job.mcpAccessToken,
         )
       : undefined;
+    const macFilesMcp = hasMacFileAccess
+      ? macFilesMcpConfig(options.macFileRoots)
+      : undefined;
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -703,6 +738,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
     }
 
     if (mediaMcp) codexArguments.push(...mediaMcp.arguments);
+    if (macFilesMcp) codexArguments.push(...macFilesMcp.arguments);
 
     if (hasDeveloperAccess && job.developerTask && options.appServer) {
       const content = await options.appServer.run({
@@ -789,6 +825,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
             ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
             : {}),
           ...mediaMcp?.environment,
+          ...macFilesMcp?.environment,
           ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
         },
       ),
@@ -816,7 +853,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       stdout,
       hasDeveloperAccess,
       options.onMcpToolCall,
-      hasDeveloperAccess || hasMacFileAccess,
+      hasDeveloperAccess,
     );
     if (job.purpose !== "answer" || hasDeveloperAccess) {
       return { content, files: [] };

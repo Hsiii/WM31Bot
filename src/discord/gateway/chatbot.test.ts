@@ -617,8 +617,13 @@ describe("Discord chatbot", () => {
       parseChatbotAnswerDecision('{"reply":"可以啊","reaction":null}'),
     ).toEqual({ reply: "可以啊" });
     expect(parseChatbotAnswerDecision("舊版純文字回答")).toEqual({
-      reply: "舊版純文字回答",
+      reply: null,
     });
+    expect(
+      parseChatbotAnswerDecision(
+        JSON.stringify({ reply: "x".repeat(1_901), reaction: null }),
+      ),
+    ).toEqual({ reply: null });
   });
 
   test("binds a proposed mention reaction to the current message", async () => {

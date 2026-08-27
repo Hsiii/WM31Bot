@@ -32,6 +32,7 @@ import {
   SERVER_MEMORY_MCP_APPROVAL_CONFIG,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
+  macFilesMcpConfig,
   mediaMcpConfig,
   minisagoMcpApprovalMode,
   outputSchemaForJob,
@@ -235,6 +236,37 @@ describe("Codex chatbot runner", () => {
     });
   });
 
+  test("configures typed Mac file search with allowlisted roots", () => {
+    expect(
+      macFilesMcpConfig(
+        ["/Users/hsi/Documents", "/Users/hsi/Downloads"],
+        "/usr/local/bin/bun",
+        "/app/mac-agent/src/mac-files-mcp.ts",
+      ),
+    ).toEqual({
+      arguments: [
+        "--config",
+        'mcp_servers.mac_files.command="/usr/local/bin/bun"',
+        "--config",
+        'mcp_servers.mac_files.args=["/app/mac-agent/src/mac-files-mcp.ts"]',
+        "--config",
+        'mcp_servers.mac_files.env_vars=["MINISAGO_MAC_FILE_ROOTS"]',
+        "--config",
+        "mcp_servers.mac_files.required=true",
+        "--config",
+        'mcp_servers.mac_files.default_tools_approval_mode="auto"',
+        "--config",
+        "mcp_servers.mac_files.startup_timeout_sec=10",
+        "--config",
+        "mcp_servers.mac_files.tool_timeout_sec=30",
+      ],
+      environment: {
+        MINISAGO_MAC_FILE_ROOTS:
+          '["/Users/hsi/Documents","/Users/hsi/Downloads"]',
+      },
+    });
+  });
+
   test("gives developer tools their read-only sandbox dependencies", () => {
     expect(
       developerFilesystemPermissions(
@@ -378,8 +410,8 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("nearby context is insufficient");
     expect(prompt).toContain("always call describe_capabilities");
     expect(prompt).toContain("catalog as authoritative");
-    expect(prompt).toContain("use only the structured reaction field");
-    expect(prompt).toContain("host validates it");
+    expect(prompt).not.toContain("use only the structured reaction field");
+    expect(prompt).not.toContain("host validates it");
     expect(prompt).toContain("<available_reactions_json>");
     expect(prompt).toContain("sago:emoji-1");
     expect(outputSchemaForJob(answerJob)).toBe(ARTIFACT_ANSWER_OUTPUT_SCHEMA);
@@ -417,10 +449,8 @@ describe("Codex chatbot runner", () => {
       false,
     );
     expect(prompt).toContain("explicitly routed to Hsi's Mac");
-    expect(prompt).toContain(
-      "Use find directly with one or more allowed roots",
-    );
-    expect(prompt).toContain("do not use pipes");
+    expect(prompt).toContain("Use the mac_files.search_files tool");
+    expect(prompt).toContain("Do not run commands or inspect file contents");
     expect(prompt).toContain(JSON.stringify(roots));
     expect(outputSchemaForJob(macJob)).toBe(MAC_FILE_ANSWER_OUTPUT_SCHEMA);
     expect(MAC_FILE_ANSWER_OUTPUT_SCHEMA.properties.files.maxItems).toBe(1);
@@ -684,7 +714,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(42);
+    expect(PROMPT_VERSION).toBe(43);
     expect(prompt).toContain("a lively Discord companion");
     expect(prompt).toContain("She is silly, not incompetent");
     expect(prompt).toContain("not merely to please whoever spoke");
@@ -700,8 +730,8 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Let the moment choose the shape");
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain('"timestamp":"2026-07-20T10:02:00.000Z"');
-    expect(prompt).toContain("use the reminder tools");
-    expect(prompt).toContain("default to Asia/Taipei (UTC+08:00)");
+    expect(prompt).toContain("Use the reminder tools");
+    expect(prompt).not.toContain("default to Asia/Taipei (UTC+08:00)");
     expect(prompt).toContain("Do not ask for confirmation");
     expect(prompt).toContain("Stay accurate without sounding like a report");
     expect(prompt).toContain("Speak as MiniSago in the first person");
@@ -829,7 +859,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("get_previous_trace");
     expect(prompt).toContain("never private reasoning");
     expect(prompt).not.toContain("validated_identity_resolution");
-    expect(prompt).toContain("暈 or 暈船 means catching feelings");
+    expect(prompt).not.toContain("暈 or 暈船 means catching feelings");
   });
 
   test("injects server memory as bounded untrusted context", () => {
