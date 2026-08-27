@@ -517,7 +517,7 @@ describe("MiniSago MCP server", () => {
       capabilities: expect.arrayContaining([
         expect.objectContaining({
           id: "server_memory",
-          description: expect.stringContaining("when a member teaches Sago"),
+          description: expect.stringContaining("when a member teaches you"),
         }),
       ]),
     });

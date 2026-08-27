@@ -41,7 +41,7 @@ function resolveExact<T extends { id: string; name: string }>(
     throw new Error(
       matches.length > 1
         ? `More than one ${kind} is named ${query}; use the channel ID.`
-        : `Sago could not find a ${kind} named ${query}.`,
+        : `You could not find a ${kind} named ${query}.`,
     );
   }
   return matches[0]!;

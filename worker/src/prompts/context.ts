@@ -11,7 +11,6 @@ import {
   type ContextOmission,
   truncateContextText,
 } from "../../../contracts/context-budget";
-import { conversationDisplayName } from "./language";
 
 function block(name: string, value: unknown) {
   const content = typeof value === "string" ? value : JSON.stringify(value);
@@ -119,7 +118,7 @@ export function requestContext(
   if (job.addressingMode) {
     sections.push(
       block("conversation_addressing_json", {
-        addressee: job.developerTask ? "Codex" : conversationDisplayName(job),
+        addressee: job.developerTask ? "Codex" : "MiniSago (迷你西米露)",
         mode: job.addressingMode,
         ...addressingReferences(request),
       }),
