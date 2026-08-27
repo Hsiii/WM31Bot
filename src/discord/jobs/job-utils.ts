@@ -1,8 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
-
 export function decodeEntities(value: string) {
   return value.replace(
     /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
@@ -45,29 +43,4 @@ export async function writeJsonFile(path: string, value: unknown) {
   const temporaryPath = `${path}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
   await rename(temporaryPath, path);
-}
-
-export async function discordRequest<T>(
-  botToken: string,
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
-  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Discord returned ${response.status}: ${await response.text()}`,
-    );
-  }
-
-  return response.status === 204
-    ? (undefined as T)
-    : ((await response.json()) as T);
 }

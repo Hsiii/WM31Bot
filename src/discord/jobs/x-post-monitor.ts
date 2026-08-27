@@ -1,10 +1,6 @@
 import { TARGET_GUILD_ID } from "../config";
-import {
-  decodeEntities,
-  discordRequest,
-  readJsonFile,
-  writeJsonFile,
-} from "./job-utils";
+import { createDiscordRequest } from "../api/request";
+import { decodeEntities, readJsonFile, writeJsonFile } from "./job-utils";
 
 const DEFAULT_HANDLE = "thsottiaux";
 const DEFAULT_CHANNEL_ID = "1527893157168283668";
@@ -233,8 +229,8 @@ async function fetchLatestXPosts(feedUrl: string) {
 }
 
 async function sendXPost(config: XPostMonitorConfig, post: XPost) {
+  const discordRequest = createDiscordRequest(config.botToken);
   const channel = await discordRequest<DiscordChannel>(
-    config.botToken,
     `/channels/${config.channelId}`,
   );
 
@@ -244,14 +240,10 @@ async function sendXPost(config: XPostMonitorConfig, post: XPost) {
     );
   }
 
-  await discordRequest(
-    config.botToken,
-    `/channels/${config.channelId}/messages`,
-    {
-      method: "POST",
-      body: JSON.stringify(buildXPostMessage(post, config.handle)),
-    },
-  );
+  await discordRequest(`/channels/${config.channelId}/messages`, {
+    method: "POST",
+    body: buildXPostMessage(post, config.handle),
+  });
 }
 
 async function sendXPostAlertsIfNeeded(

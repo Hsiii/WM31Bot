@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { discordRequest, readJsonFile, writeJsonFile } from "./job-utils";
+import { createDiscordRequest } from "../api/request";
+import { readJsonFile, writeJsonFile } from "./job-utils";
 
 const TARGET_REPOSITORY = "sago-cream/health-check-system";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
@@ -222,20 +223,20 @@ async function openReviewThread(
   config: WebhookConfig,
   details: NonNullable<ReturnType<typeof getPullRequestDetails>>,
 ) {
+  const discordRequest = createDiscordRequest(config.botToken);
   const state = await readState(config.stateFile);
   let record = state.threads[details.key];
 
   if (!record) {
     const thread = await discordRequest<DiscordThread>(
-      config.botToken,
       `/channels/${config.channelId}/threads`,
       {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           name: formatThreadName(details.number, details.title),
           auto_archive_duration: 1440,
           type: PUBLIC_THREAD_TYPE,
-        }),
+        },
       },
     );
 
@@ -267,18 +268,16 @@ async function openReviewThread(
 
   for (const userId of participantIds) {
     await discordRequest(
-      config.botToken,
       `/channels/${record.threadId}/thread-members/${userId}`,
       { method: "PUT" },
     );
   }
 
   const reviewMessage = await discordRequest<DiscordMessage>(
-    config.botToken,
     `/channels/${record.threadId}/messages`,
     {
       method: "POST",
-      body: JSON.stringify(reviewRequest.message),
+      body: reviewRequest.message,
     },
   );
 
@@ -287,7 +286,6 @@ async function openReviewThread(
   }
 
   await discordRequest(
-    config.botToken,
     `/channels/${record.threadId}/pins/${reviewMessage.id}`,
     { method: "PUT" },
   );
@@ -301,6 +299,7 @@ async function notifyAuthorOfApproval(
   config: WebhookConfig,
   details: NonNullable<ReturnType<typeof getPullRequestDetails>>,
 ) {
+  const discordRequest = createDiscordRequest(config.botToken);
   const state = await readState(config.stateFile);
   const record = state.threads[details.key];
 
@@ -321,7 +320,6 @@ async function notifyAuthorOfApproval(
   }
 
   const channel = await discordRequest<DiscordChannel>(
-    config.botToken,
     `/channels/${record.threadId}`,
   );
 
@@ -330,7 +328,6 @@ async function notifyAuthorOfApproval(
   }
 
   const emojis = await discordRequest<DiscordEmoji[]>(
-    config.botToken,
     `/guilds/${channel.guild_id}/emojis`,
   );
   const approvedEmoji = emojis?.find(
@@ -344,20 +341,16 @@ async function notifyAuthorOfApproval(
   }
 
   const emoji = `<${approvedEmoji.animated ? "a" : ""}:${APPROVED_EMOJI_NAME}:${approvedEmoji.id}>`;
-  await discordRequest(
-    config.botToken,
-    `/channels/${record.threadId}/messages`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        content: `<@${authorDiscordId}> ${emoji}`,
-        allowed_mentions: {
-          parse: [],
-          users: [authorDiscordId],
-        },
-      }),
+  await discordRequest(`/channels/${record.threadId}/messages`, {
+    method: "POST",
+    body: {
+      content: `<@${authorDiscordId}> ${emoji}`,
+      allowed_mentions: {
+        parse: [],
+        users: [authorDiscordId],
+      },
     },
-  );
+  });
 
   record.approvalNotificationSent = true;
   await writeJsonFile(config.stateFile, state);
@@ -368,6 +361,7 @@ async function archiveReviewThread(
   config: WebhookConfig,
   details: NonNullable<ReturnType<typeof getPullRequestDetails>>,
 ) {
+  const discordRequest = createDiscordRequest(config.botToken);
   const state = await readState(config.stateFile);
   const record = state.threads[details.key];
 
@@ -381,28 +375,24 @@ async function archiveReviewThread(
       : undefined;
 
   if (!record.mergeNotificationSent && mergerDiscordId) {
-    await discordRequest(
-      config.botToken,
-      `/channels/${record.threadId}/messages`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          content: `Merged by <@${mergerDiscordId}>, closing.`,
-          allowed_mentions: {
-            parse: [],
-            users: [mergerDiscordId],
-          },
-        }),
+    await discordRequest(`/channels/${record.threadId}/messages`, {
+      method: "POST",
+      body: {
+        content: `Merged by <@${mergerDiscordId}>, closing.`,
+        allowed_mentions: {
+          parse: [],
+          users: [mergerDiscordId],
+        },
       },
-    );
+    });
 
     record.mergeNotificationSent = true;
     await writeJsonFile(config.stateFile, state);
   }
 
-  await discordRequest(config.botToken, `/channels/${record.threadId}`, {
+  await discordRequest(`/channels/${record.threadId}`, {
     method: "PATCH",
-    body: JSON.stringify({ archived: true }),
+    body: { archived: true },
   });
 
   record.archived = true;

@@ -23,7 +23,7 @@ import {
   configureChatbotReminderScheduler,
   type Reminder,
 } from "./discord/jobs/reminders";
-import { createDiscordRequest } from "./chatbot/chatbot";
+import { createDiscordRequest } from "./discord/api/request";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });
