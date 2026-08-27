@@ -20,6 +20,11 @@ export type PromptCaseSource =
       kind: "assigned-regression";
       regression: "bounded-action-followup";
       variant: "recoverable" | "blocked";
+    }
+  | {
+      kind: "assigned-regression";
+      regression: "lost-retry-intent";
+      variant: "history-recoverable";
     };
 
 export type PromptCaseExpectation = {
@@ -301,6 +306,52 @@ export const PROMPT_CASES: PromptCase[] = [
         /已(?:經)?傳/u,
         /附上/u,
         /(?:attached|sent) (?:it|the)/iu,
+      ],
+    },
+  },
+  {
+    id: "recover-retry-intent",
+    source: {
+      kind: "assigned-regression",
+      regression: "lost-retry-intent",
+      variant: "history-recoverable",
+    },
+    job: answerJob("recover-retry-intent", "try again", {
+      addressingMode: "continuation",
+      attachments: [
+        {
+          id: "retry-photo",
+          filename: "photo.png",
+          contentType: "image/png",
+          size: 1024,
+          url: "https://cdn.discordapp.com/attachments/eval/photo.png",
+        },
+      ],
+      messages: [
+        message("failure-question", "Requester", "howwww"),
+        message(
+          "failed-answer",
+          "迷你西米露",
+          "我這次沒完成 稍後再試一次",
+          "assistant",
+        ),
+      ],
+    }),
+    mockContext: {
+      history: [
+        {
+          author: "Requester",
+          content: "把圖片背景移除再傳給我",
+        },
+      ],
+    },
+    mediaId: "media-background-removed.png",
+    expectation: {
+      requiredTools: ["resolve_context", "run_python"],
+      artifact: "media-background-removed.png",
+      forbiddenReplyPatterns: [
+        /要我.*(?:做什麼|怎麼處理)/u,
+        /what (?:should|do) you want/iu,
       ],
     },
   },

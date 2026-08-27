@@ -144,4 +144,43 @@ describe("prompt plan", () => {
     expect(plan.taskInstruction).not.toContain("sago-cream/mini-sago");
     expect(plan.context).toContain("sago-cream/mini-sago");
   });
+
+  test("recovers the original action before handling a retry attachment", () => {
+    const plan = buildPromptPlan(
+      {
+        ...baseJob,
+        addressingMode: "continuation",
+        request: "try again",
+        requestMessage: {
+          id: "request",
+          author: "Member",
+          timestamp: "2026-08-27T00:00:00.000Z",
+          content: "try again",
+          attachments: [
+            {
+              id: "retry-image",
+              filename: "image.png",
+              contentType: "image/png",
+              size: 1_024,
+              url: "https://cdn.discordapp.com/attachments/test/image.png",
+            },
+          ],
+        },
+      },
+      [],
+      [],
+    );
+
+    expect(plan.developerInstructions).toContain(
+      'Treat retry language such as "try again" as a continuation',
+    );
+    expect(plan.developerInstructions).toContain(
+      "call resolve_context for more history before asking",
+    );
+    expect(plan.developerInstructions).toContain(
+      "does not by itself specify the intended operation",
+    );
+    expect(plan.context).toContain('"mediaId":"retry-image"');
+    expect(plan.versions.policy).toBe(7);
+  });
 });

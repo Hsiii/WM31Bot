@@ -97,4 +97,25 @@ describe("prompt evaluation cases", () => {
       ),
     ).toBe(true);
   });
+
+  test("requires a retry to recover lost intent before transforming media", () => {
+    const retry = PROMPT_CASES.find(({ id }) => id === "recover-retry-intent")!;
+
+    const failures = evaluatePromptCase(retry, {
+      output: { ...validOutput, reply: "你要我怎麼處理這張圖" },
+      tools: [],
+      exitCode: 0,
+    });
+
+    expect(failures).toContain("Missing tool call: resolve_context");
+    expect(failures).toContain("Missing tool call: run_python");
+    expect(failures).toContain(
+      "Missing artifact: media-background-removed.png",
+    );
+    expect(
+      failures.some((failure) =>
+        failure.startsWith("Reply matched forbidden claim"),
+      ),
+    ).toBe(true);
+  });
 });
