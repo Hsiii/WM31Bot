@@ -30,6 +30,11 @@ import {
   type FeaturePolicy,
   type ScopedFeatureId,
 } from "../discord/feature-availability";
+import {
+  MANAGED_SERVICE_DEFINITIONS,
+  type ManagedServiceId,
+  type ManagedServiceListing,
+} from "../discord/service-subscriptions";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
@@ -213,6 +218,12 @@ export type ChatbotMcpSessionHandlers = {
   configureFeatureAvailability?: (
     input: FeatureAvailabilityMutation,
   ) => Promise<FeaturePolicy>;
+  listManagedServices?: () => ManagedServiceListing;
+  configureServiceSubscription?: (input: {
+    service: ManagedServiceId;
+    action: "subscribe" | "unsubscribe";
+    channelId: string;
+  }) => Promise<ManagedServiceListing>;
   resolveContext: (input: {
     historyCount: number;
     includePreviousTrace: boolean;
@@ -417,6 +428,16 @@ function availableCapabilities(
       tools: ["list_feature_availability", "configure_feature_availability"],
     });
   }
+  if (handlers.listManagedServices && handlers.configureServiceSubscription) {
+    capabilities.push({
+      id: "managed_services",
+      category: "system",
+      availability: "available",
+      description:
+        "List background posting services and subscribe or unsubscribe exact Discord destination channels without a deployment.",
+      tools: ["list_managed_services", "configure_service_subscription"],
+    });
+  }
   if (handlers.manageServerMemory) {
     capabilities.push({
       id: "server_memory",
@@ -581,6 +602,65 @@ function createServer(session: ChatbotMcpSession) {
               error instanceof Error
                 ? error.message
                 : "Could not update feature availability.",
+          });
+        }
+      },
+    );
+  }
+  if (
+    session.handlers.listManagedServices &&
+    session.handlers.configureServiceSubscription
+  ) {
+    server.registerTool(
+      "list_managed_services",
+      {
+        description:
+          "List every managed background posting service and its current Discord destinations. Return channelMention values verbatim in the answer so Discord renders clickable channel links.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () =>
+        toolResult({
+          status: "complete",
+          ...session.handlers.listManagedServices!(),
+        }),
+    );
+
+    server.registerTool(
+      "configure_service_subscription",
+      {
+        description:
+          "Subscribe or unsubscribe one exact Discord channel for an existing background posting service. Call only when the owner explicitly asks to change a service destination. List services first when the intended service is unclear.",
+        inputSchema: {
+          service: z.enum(
+            Object.keys(MANAGED_SERVICE_DEFINITIONS) as [
+              ManagedServiceId,
+              ...ManagedServiceId[],
+            ],
+          ),
+          action: z.enum(["subscribe", "unsubscribe"]),
+          channelId: z.string().regex(/^\d{17,20}$/u),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            ...(await session.handlers.configureServiceSubscription!(input)),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update the service subscription.",
           });
         }
       },

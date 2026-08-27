@@ -169,6 +169,69 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
+  test("lists and changes background service destinations", async () => {
+    const configured: unknown[] = [];
+    const listing = {
+      services: [
+        {
+          id: "gamer_forum" as const,
+          name: "Gamer forum reposts",
+          destinations: [
+            {
+              guildId: "1282936453134815275",
+              channelId: "1518127531968958558",
+              channelMention: "<#1518127531968958558>",
+              jumpUrl:
+                "https://discord.com/channels/1282936453134815275/1518127531968958558",
+            },
+          ],
+        },
+      ],
+    };
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      listManagedServices: () => listing,
+      configureServiceSubscription: async (input) => {
+        configured.push(input);
+        return listing;
+      },
+    });
+    const client = await connect(session.token);
+
+    const listed = await client.callTool({
+      name: "list_managed_services",
+      arguments: {},
+    });
+    expect(listed.structuredContent).toMatchObject({
+      status: "complete",
+      services: [
+        {
+          id: "gamer_forum",
+          destinations: [{ channelMention: "<#1518127531968958558>" }],
+        },
+      ],
+    });
+
+    await client.callTool({
+      name: "configure_service_subscription",
+      arguments: {
+        service: "gamer_forum",
+        action: "subscribe",
+        channelId: "1517766866964316201",
+      },
+    });
+    expect(configured).toEqual([
+      {
+        service: "gamer_forum",
+        action: "subscribe",
+        channelId: "1517766866964316201",
+      },
+    ]);
+
+    await client.close();
+    session.revoke();
+  });
+
   test("budgets resolved history and search with explicit omissions", () => {
     const messages = Array.from({ length: 30 }, (_, index) => ({
       id: String(index),

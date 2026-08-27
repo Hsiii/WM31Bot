@@ -1,12 +1,14 @@
-import { TARGET_GUILD_ID } from "../config";
 import { createDiscordRequest } from "../api/request";
+import {
+  deliverToServiceDestinations,
+  getServiceSubscriptionStore,
+} from "../service-subscriptions";
 import { decodeEntities, readJsonFile, writeJsonFile } from "./job-utils";
 import { Cron } from "croner";
 
 const DEFAULT_FORUM_URL =
   "https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&to=112";
 const DEFAULT_READER_BASE_URL = "https://r.jina.ai/";
-const DEFAULT_CHANNEL_ID = "1518127531968958558";
 const DEFAULT_STATE_FILE = ".data/gamer-forum-state.json";
 const DEFAULT_CHECK_TIMES = "08:30,20:30";
 const DEFAULT_TIMEZONE = "Asia/Taipei";
@@ -29,8 +31,6 @@ export type GamerForumPost = {
 
 type GamerForumMonitorConfig = {
   botToken: string;
-  channelId: string;
-  guildId: string;
   watchUrl: string;
   readerBaseUrl: string;
   stateFile: string;
@@ -80,8 +80,6 @@ function getGamerForumMonitorConfig(): GamerForumMonitorConfig | null {
 
   return {
     botToken,
-    channelId: process.env.GAMER_FORUM_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
-    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     watchUrl: process.env.GAMER_FORUM_URL?.trim() || DEFAULT_FORUM_URL,
     readerBaseUrl:
       process.env.GAMER_FORUM_READER_BASE_URL?.trim() ||
@@ -508,6 +506,10 @@ async function sendGamerForumAlertsIfNeeded(
   config: GamerForumMonitorConfig,
   now = new Date(),
 ) {
+  const destinations =
+    getServiceSubscriptionStore().destinations("gamer_forum");
+  if (destinations.length === 0) return;
+
   const posts = await fetchLatestGamerForumPosts(
     config.watchUrl,
     config.readerBaseUrl,
@@ -536,14 +538,26 @@ async function sendGamerForumAlertsIfNeeded(
     .sort((a, b) => comparePostIds(a.id, b.id));
 
   for (const post of newPosts) {
-    await sendDiscordChannelMessage({
-      botToken: config.botToken,
-      channelId: config.channelId,
-      guildId: config.guildId,
-      payload: buildGamerForumPostMessagePayload(post),
-    });
+    const payload = buildGamerForumPostMessagePayload(post);
+    const delivery = await deliverToServiceDestinations(
+      destinations,
+      ({ channelId, guildId }) =>
+        sendDiscordChannelMessage({
+          botToken: config.botToken,
+          channelId,
+          guildId,
+          payload,
+        }),
+    );
+    if (delivery.failedChannelIds.length) {
+      console.warn(
+        `Gamer forum post ${post.id} failed for channels ${delivery.failedChannelIds.join(", ")}.`,
+      );
+    }
     await writeJsonFile(config.stateFile, toState(post, now));
-    console.log(`Sent Gamer forum post ${post.id} to Discord.`);
+    console.log(
+      `Sent Gamer forum post ${post.id} to ${delivery.delivered} Discord channel(s).`,
+    );
   }
 
   if (newPosts.length === 0) {

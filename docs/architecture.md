@@ -100,6 +100,12 @@ requesters, and capabilities that need a routed worker or explicit request are
 marked conditional. Discord identity and destinations remain bound by the host
 wherever possible.
 
+An independent persisted subscription list controls the destination channels
+for Gamer Forum, X repost, and TOEFL background services. Owner-only MCP tools
+list those destinations with Discord channel mentions and add or remove a
+channel. Scheduled jobs read the current subscriptions before delivery, so a
+change does not require a process restart.
+
 Linux answer jobs also receive a worker-local stdio MCP server for media in the
 active request. Attachments, resolved member avatars, and generated outputs all
 use the same opaque `mediaId` interface, so one tool's output can be passed

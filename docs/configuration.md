@@ -28,6 +28,7 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | `MINISAGO_REMINDER_STATE_FILE`         | No        | Persistent reminder state                               |
 | `MINISAGO_GUILD_MEMORY_DIRECTORY`      | No        | Per-server Markdown memory and local Git history        |
 | `MINISAGO_FEATURE_AVAILABILITY_FILE`   | No        | Persistent guild and channel feature policy             |
+| `MINISAGO_SERVICE_SUBSCRIPTIONS_FILE`  | No        | Persistent background-service destinations              |
 | `MINISAGO_TRIP_WORKSPACE_URL`          | No        | Kyushu workspace API; defaults to the shared planner    |
 | `MINISAGO_TRIP_WORKSPACE_TOKEN`        | No        | Dedicated token enabling guild-bound itinerary edits    |
 | `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticate the fixed Mac worker profile               |
@@ -97,6 +98,7 @@ Production state must live under `/app/state` on the persistent
 - `MINISAGO_REMINDER_STATE_FILE`
 - `MINISAGO_GUILD_MEMORY_DIRECTORY`
 - `MINISAGO_FEATURE_AVAILABILITY_FILE`
+- `MINISAGO_SERVICE_SUBSCRIPTIONS_FILE`
 
 Do not place these files on the container's ephemeral filesystem.
 
@@ -114,6 +116,14 @@ rules override server rules, and server rules override the feature default.
 The scoped features are chatbot access, ambient reactions, and the trip
 planner. Always-on capabilities do not appear in this policy.
 
+Background-service subscriptions default to
+`.data/service-subscriptions.json`. The initial destination list comes from the
+existing Gamer Forum, X repost, and TOEFL settings. After the owner changes a
+subscription, the file becomes the source of truth. MiniSago can list the
+services and their clickable Discord channel mentions, then subscribe or
+unsubscribe an exact channel without a deployment. Running jobs read the list
+on every scheduled check, so changes apply without restarting the service.
+
 ## Current deployment-specific defaults
 
 The repository still contains these Hsi-specific defaults:
@@ -121,6 +131,6 @@ The repository still contains these Hsi-specific defaults:
 - configured-guild fallback `1282936453134815275`; and
 - PR review repository and reviewer mapping for `sago-cream/health-check-system`.
 
-Feature coverage no longer needs source changes. Scheduled feed destinations
-remain job configuration because each feed also needs source and checkpoint
-settings. The PR review mapping remains deployment-specific code.
+Feature coverage and scheduled feed destinations no longer need source changes.
+Feed sources, schedules, and checkpoint settings remain deployment
+configuration. The PR review mapping remains deployment-specific code.

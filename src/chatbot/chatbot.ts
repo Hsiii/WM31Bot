@@ -77,6 +77,11 @@ import type {
   FeatureAvailabilityMutation,
   FeatureAvailabilityStore,
 } from "../discord/feature-availability";
+import {
+  formatManagedServices,
+  getServiceSubscriptionStore,
+  type ManagedServiceId,
+} from "../discord/service-subscriptions";
 
 export {
   canMemberSearchChannel,
@@ -101,6 +106,7 @@ const TYPING_REFRESH_MS = 8_000;
 const ACTIVE_CONVERSATION_TTL_MS = 90_000;
 const DEVELOPER_TASK_TTL_MS = 3 * 24 * 60 * 60_000;
 const guildMemoryStore = getGuildMemoryStore();
+const serviceSubscriptionStore = getServiceSubscriptionStore();
 
 export function chatbotFailureReply(kind: ChatbotFailureKind) {
   if (kind === "unavailable") {
@@ -1371,6 +1377,41 @@ export async function handleChatbotMention({
                     : `/guilds/${input.targetId}`,
                 );
                 return featureAvailability.configure(input);
+              },
+            }
+          : {}),
+        ...(requesterUserId === accessConfig.ownerUserId
+          ? {
+              listManagedServices: () =>
+                formatManagedServices(serviceSubscriptionStore.list()),
+              configureServiceSubscription: async (input: {
+                service: ManagedServiceId;
+                action: "subscribe" | "unsubscribe";
+                channelId: string;
+              }) => {
+                if (input.action === "unsubscribe") {
+                  await serviceSubscriptionStore.configure({
+                    service: input.service,
+                    action: "unsubscribe",
+                    channelId: input.channelId,
+                  });
+                  return formatManagedServices(serviceSubscriptionStore.list());
+                }
+                const channel = await discordRequest<{ guild_id?: string }>(
+                  `/channels/${input.channelId}`,
+                );
+                if (!channel.guild_id) {
+                  throw new Error(
+                    "Service destinations must be Discord server channels.",
+                  );
+                }
+                await serviceSubscriptionStore.configure({
+                  service: input.service,
+                  action: "subscribe",
+                  channelId: input.channelId,
+                  guildId: channel.guild_id,
+                });
+                return formatManagedServices(serviceSubscriptionStore.list());
               },
             }
           : {}),
