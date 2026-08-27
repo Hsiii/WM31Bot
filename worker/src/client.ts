@@ -14,7 +14,7 @@ import {
   PROMPT_VERSION,
   runCodexJob,
 } from "./codex";
-import { SessionMonitor } from "./session-monitor";
+import { SessionMonitor } from "./mac/session-monitor";
 import { ChatbotTraceStore } from "./trace-store";
 import { readCodexUsage } from "./codex-usage";
 import { CodexAppServerManager } from "./codex-app-server";

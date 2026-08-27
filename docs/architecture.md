@@ -131,7 +131,7 @@ and output schemas continue to enforce capabilities outside the prompt.
 
 Initial messages, each message, extracted attachment text, and resolved MCP
 context have deterministic character budgets in
-`src/chatbot/context-policy.ts`. Selection keeps the newest messages, truncates
+`contracts/context-budget.ts`. Selection keeps the newest messages, truncates
 oversized items, and emits `context_omissions_json` metadata rather than hiding
 loss. Taiwanese slang reference material is loaded only when Chinese appears in
 the active context; identity, trust, and output policy always remain loaded.
@@ -148,7 +148,7 @@ reply and reaction fields and does not post the classification to Discord.
 Policy, task, and context formats have independent versions. Traces record
 those versions and layer sizes, but never private reasoning. Prompt-injection
 and budget cases are covered by structural evaluations in
-`mac-agent/src/prompts/prompt-plan.test.ts`.
+`worker/src/prompts/prompt-plan.test.ts`.
 
 Worker jobs keep Codex's own memories off. The hosted service instead owns a
 small curated memory file for each Discord guild. Current-guild entries are

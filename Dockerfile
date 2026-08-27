@@ -20,6 +20,7 @@ RUN apk add --no-cache git
 RUN bun install --frozen-lockfile --production
 
 COPY --from=builder --chown=bun:bun /app/src ./src
+COPY --from=builder --chown=bun:bun /app/contracts ./contracts
 COPY --from=builder --chown=bun:bun /app/tsconfig.json ./tsconfig.json
 RUN mkdir -p /app/state && chown -R bun:bun /app/state
 

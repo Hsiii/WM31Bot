@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "minisago-mac-agent",
+      "name": "minisago-worker",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.29.0",
         "pdfjs-dist": "6.1.200",

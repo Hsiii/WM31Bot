@@ -33,7 +33,7 @@ Before committing changes, run:
 
 ```bash
 bun run build
-bun run --cwd mac-agent build
+bun run --cwd worker build
 bun test
 bun run format:check
 ```

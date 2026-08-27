@@ -6,7 +6,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import {
   pythonSandboxRequestSchema,
   pythonSandboxResponseSchema,
-} from "./python";
+} from "./media/python";
 
 const PORT = 8080;
 const MAX_BODY_BYTES = 56 * 1024 * 1024;
@@ -257,7 +257,7 @@ async function execute(
         Entrypoint: ["/usr/bin/python3"],
         Cmd: [
           "-I",
-          "/app/mac-agent/src/python-runtime.py",
+          "/app/worker/src/media/python-runtime.py",
           "/workspace/request.json",
         ],
         User: "65534:65534",

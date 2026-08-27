@@ -18,6 +18,6 @@ jobs:
         with:
           bun-version: 1.3.9
       - run: bun install --frozen-lockfile
-      - run: bun install --cwd mac-agent --frozen-lockfile
+      - run: bun install --cwd worker --frozen-lockfile
       - run: bun run build
-      - run: bun run --cwd mac-agent build
+      - run: bun run --cwd worker build

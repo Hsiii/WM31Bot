@@ -15,12 +15,12 @@ import type {
   MacAnswerJob,
   OracleAnswerJob,
 } from "../../contracts/worker-contract";
-import { prepareAttachments } from "./attachments";
+import { prepareAttachments } from "./media/attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 import {
   prepareGeneratedArtifacts,
   prepareOutgoingFiles,
-} from "./outgoing-files";
+} from "./media/outgoing-files";
 import { buildPromptPlan, outputSchemaForJob } from "./prompts";
 import type { CodexAppServerManager } from "./codex-app-server";
 
@@ -37,8 +37,12 @@ export {
 
 const LOCAL_CHAT_TIMEOUT_MS = 150_000;
 const LOCAL_DEV_TIMEOUT_MS = 14 * 60_000;
-const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media-mcp.ts");
-const MAC_FILES_MCP_SERVER_PATH = join(import.meta.dir, "mac-files-mcp.ts");
+const MEDIA_MCP_SERVER_PATH = join(import.meta.dir, "media", "media-mcp.ts");
+const MAC_FILES_MCP_SERVER_PATH = join(
+  import.meta.dir,
+  "mac",
+  "mac-files-mcp.ts",
+);
 export const EXPRESSION_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"';
 export const CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG =

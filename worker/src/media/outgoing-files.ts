@@ -1,7 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 
-import type { ChatbotOutgoingFile } from "../../contracts/worker-contract";
+import type { ChatbotOutgoingFile } from "../../../contracts/worker-contract";
 
 const MAX_OUTGOING_FILE_BYTES = 8 * 1024 * 1024;
 const artifactIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$/u;

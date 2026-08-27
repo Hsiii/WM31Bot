@@ -17,7 +17,7 @@ const action = process.argv[2];
 const supportedActions = new Set(["install", "status", "uninstall"]);
 
 if (!supportedActions.has(action)) {
-  console.error("Usage: bun scripts/mac-agent.mjs <install|status|uninstall>");
+  console.error("Usage: bun scripts/worker.mjs <install|status|uninstall>");
   process.exit(1);
 }
 
@@ -28,7 +28,7 @@ if (process.platform !== "darwin") {
 
 const label = "dev.hsichen.minisago-mac-agent";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const macAgentRoot = join(repositoryRoot, "mac-agent");
+const workerRoot = join(repositoryRoot, "worker");
 const userHome = homedir();
 const applicationSupport = join(
   userHome,
@@ -145,10 +145,10 @@ async function install() {
   await ensureAuthLink();
 
   run(Bun.which("bun") || process.execPath, ["install", "--frozen-lockfile"], {
-    cwd: macAgentRoot,
+    cwd: workerRoot,
   });
   run("/usr/bin/swiftc", [
-    join(macAgentRoot, "session-monitor.swift"),
+    join(workerRoot, "src", "mac", "session-monitor.swift"),
     "-o",
     sessionMonitor,
     "-framework",
@@ -240,7 +240,7 @@ async function install() {
   <array>
     <string>${escapeXml(bunPath)}</string>
     <string>--env-file=${escapeXml(environmentFile)}</string>
-    <string>${escapeXml(join(macAgentRoot, "src", "index.ts"))}</string>
+    <string>${escapeXml(join(workerRoot, "src", "index.ts"))}</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${escapeXml(repositoryRoot)}</string>

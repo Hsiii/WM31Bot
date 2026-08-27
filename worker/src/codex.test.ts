@@ -208,14 +208,14 @@ describe("Codex chatbot runner", () => {
         "https://sago.example/api/chatbot/mcp",
         "token-1",
         "/usr/local/bin/bun",
-        "/app/mac-agent/src/media-mcp.ts",
+        "/app/worker/src/media/media-mcp.ts",
       ),
     ).toEqual({
       arguments: [
         "--config",
         'mcp_servers.minisago_media.command="/usr/local/bin/bun"',
         "--config",
-        'mcp_servers.minisago_media.args=["/app/mac-agent/src/media-mcp.ts"]',
+        'mcp_servers.minisago_media.args=["/app/worker/src/media/media-mcp.ts"]',
         "--config",
         'mcp_servers.minisago_media.env_vars=["MINISAGO_MEDIA_MANIFEST","MINISAGO_SANDBOX_URL","MINISAGO_MCP_URL","MINISAGO_MCP_TOKEN"]',
         "--config",
@@ -241,14 +241,14 @@ describe("Codex chatbot runner", () => {
       macFilesMcpConfig(
         ["/Users/hsi/Documents", "/Users/hsi/Downloads"],
         "/usr/local/bin/bun",
-        "/app/mac-agent/src/mac-files-mcp.ts",
+        "/app/worker/src/mac/mac-files-mcp.ts",
       ),
     ).toEqual({
       arguments: [
         "--config",
         'mcp_servers.mac_files.command="/usr/local/bin/bun"',
         "--config",
-        'mcp_servers.mac_files.args=["/app/mac-agent/src/mac-files-mcp.ts"]',
+        'mcp_servers.mac_files.args=["/app/worker/src/mac/mac-files-mcp.ts"]',
         "--config",
         'mcp_servers.mac_files.env_vars=["MINISAGO_MAC_FILE_ROOTS"]',
         "--config",

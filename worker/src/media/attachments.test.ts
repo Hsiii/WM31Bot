@@ -2,7 +2,7 @@ import { access, readFile } from "node:fs/promises";
 
 import { describe, expect, test } from "bun:test";
 
-import type { ChatAnswerJob } from "../../contracts/worker-contract";
+import type { ChatAnswerJob } from "../../../contracts/worker-contract";
 import { attachmentLimits, prepareAttachments } from "./attachments";
 
 const answerDefaults = {
