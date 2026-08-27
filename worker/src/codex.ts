@@ -5,6 +5,7 @@ import {
   canUseChatbotCapability,
   type ChatbotAccessConfig,
 } from "../../src/chatbot/access";
+import { enforceFirstPersonAnswer } from "../../contracts/answer-contract";
 import type {
   AnswerJob,
   ChatAnswerJob,
@@ -24,6 +25,12 @@ import {
 } from "./media/outgoing-files";
 import { buildPromptPlan, outputSchemaForJob } from "./prompts";
 import type { CodexAppServerManager } from "./codex-app-server";
+import {
+  IDENTITY_REPAIR_INSTRUCTIONS,
+  IDENTITY_REPAIR_OUTPUT_SCHEMA,
+  identityRepairContext,
+  mergeIdentityRepair,
+} from "./identity-repair";
 
 export {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
@@ -593,6 +600,90 @@ export async function checkCodexAuthentication({
   return (await process.exited) === 0;
 }
 
+async function repairAnswerIdentity(
+  content: string,
+  directory: string,
+  profile: ReturnType<typeof codexProfileForJob>,
+  options: CodexRunOptions,
+  signal: AbortSignal,
+) {
+  const schemaPath = join(directory, "identity-repair-schema.json");
+  await Bun.write(schemaPath, JSON.stringify(IDENTITY_REPAIR_OUTPUT_SCHEMA));
+  const codexArguments = [
+    options.codexPath,
+    "exec",
+    "--json",
+    "--skip-git-repo-check",
+    "--ignore-user-config",
+    "--strict-config",
+    "--model",
+    profile.model,
+    "--cd",
+    directory,
+    "--config",
+    'model_reasoning_effort="low"',
+    "--config",
+    'model_verbosity="low"',
+    "--config",
+    'approval_policy="never"',
+    "--config",
+    "features.hooks=false",
+    "--config",
+    "features.memories=false",
+    "--config",
+    "allow_login_shell=false",
+    "--config",
+    "project_doc_max_bytes=0",
+    "--config",
+    'default_permissions="minisago-chatbot"',
+    "--config",
+    'permissions.minisago-chatbot.filesystem={":minimal"="read",":workspace_roots"={"."="read"}}',
+    "--config",
+    "permissions.minisago-chatbot.network.enabled=false",
+    "--config",
+    `developer_instructions=${JSON.stringify(IDENTITY_REPAIR_INSTRUCTIONS)}`,
+    "--output-schema",
+    schemaPath,
+    "--ephemeral",
+    "Repair <candidate_reply_json>.",
+  ];
+  const command = usesOuterSeatbelt(false, false)
+    ? [
+        "/usr/bin/sandbox-exec",
+        "-p",
+        buildSeatbeltProfile(options.codexPath),
+        ...codexArguments,
+      ]
+    : codexArguments;
+  const child = Bun.spawn(command, {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: codexEnvironment(options.codexHome, options.codexPath),
+  });
+  const stop = () => child.kill();
+  signal.addEventListener("abort", stop, { once: true });
+  child.stdin.write(identityRepairContext(content));
+  child.stdin.end();
+
+  try {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      consumeCodexOutput(child.stdout),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (signal.aborted) {
+      throw new Error("Codex request was cancelled or timed out.");
+    }
+    if (exitCode !== 0) {
+      throw new Error(codexFailureMessage(stdout, stderr, exitCode));
+    }
+    return mergeIdentityRepair(content, parseFinalResponse(stdout));
+  } finally {
+    signal.removeEventListener("abort", stop);
+  }
+}
+
 export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   assertChatbotJobAllowed(job, options.chatbotAccess);
   const profile = codexProfileForJob(job, options.chatbotAccess);
@@ -609,7 +700,8 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   if (options.signal?.aborted) timeoutController.abort();
   let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
   let developerWorkspace:
-    Awaited<ReturnType<typeof prepareDeveloperWorkspace>> | undefined;
+    | Awaited<ReturnType<typeof prepareDeveloperWorkspace>>
+    | undefined;
 
   try {
     prepared = await prepareAttachments(
@@ -872,9 +964,25 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
     if (job.purpose !== "answer" || hasDeveloperAccess) {
       return { content, files: [] };
     }
+    let safeContent = enforceFirstPersonAnswer(content, false);
+    if (!safeContent) {
+      safeContent = enforceFirstPersonAnswer(
+        await repairAnswerIdentity(
+          content,
+          prepared.directory,
+          profile,
+          options,
+          timeoutController.signal,
+        ),
+        false,
+      );
+    }
+    if (!safeContent) {
+      throw new Error("Codex identity repair did not use first person.");
+    }
     return await (hasMacFileAccess
-      ? prepareOutgoingFiles(content, options.macFileRoots)
-      : prepareGeneratedArtifacts(content, prepared.outputsDirectory));
+      ? prepareOutgoingFiles(safeContent, options.macFileRoots)
+      : prepareGeneratedArtifacts(safeContent, prepared.outputsDirectory));
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", abort);

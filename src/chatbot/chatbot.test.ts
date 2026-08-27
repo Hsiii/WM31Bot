@@ -665,9 +665,18 @@ describe("Discord chatbot", () => {
     ).toEqual({ reply: null });
     expect(
       parseChatbotAnswerDecision(
+        JSON.stringify({
+          reply:
+            "<self-introduction>MiniSago</self-introduction> here, reporting in.",
+          reaction: null,
+        }),
+      ),
+    ).toEqual({ reply: "MiniSago here, reporting in." });
+    expect(
+      parseChatbotAnswerDecision(
         JSON.stringify({ reply: "I'm MiniSago.", reaction: null }),
       ),
-    ).toEqual({ reply: "I'm MiniSago." });
+    ).toEqual({ reply: null });
   });
 
   test("binds a proposed mention reaction to the current message", async () => {

@@ -7,10 +7,14 @@ export type ChatbotAnswerDecision = {
 };
 
 const SELF_NAME = /\b(?:MiniSago|Sago)\b|迷你西米露/u;
-const FIRST_PERSON_NAMING =
-  /\b(?:I am|I['’]m|my name(?: is|['’]s)|call me)\s+(?:MiniSago|Sago)\b|我(?:是|叫)\s*(?:MiniSago|Sago|迷你西米露)/giu;
+const SELF_INTRODUCTION =
+  /<self-introduction>(MiniSago|Sago|迷你西米露)<\/self-introduction>/gu;
+const SELF_INTRODUCTION_MARKER = /<\/?self-introduction>/u;
 
-export function enforceFirstPersonIdentity(reply: string) {
+export function enforceFirstPersonIdentity(
+  reply: string,
+  stripIntroduction = true,
+) {
   const normalized = reply
     .replace(
       /\b(?:MiniSago|Sago)[\u2019']s\b/gu,
@@ -20,8 +24,30 @@ export function enforceFirstPersonIdentity(reply: string) {
           : "my",
     )
     .replace(/迷你西米露的/gu, "我的");
-  const unnestedSelfNames = normalized.replace(FIRST_PERSON_NAMING, "");
-  return SELF_NAME.test(unnestedSelfNames) ? null : normalized;
+  const unmarked = normalized.replace(SELF_INTRODUCTION, "");
+  if (SELF_INTRODUCTION_MARKER.test(unmarked) || SELF_NAME.test(unmarked)) {
+    return null;
+  }
+  return stripIntroduction
+    ? normalized.replace(SELF_INTRODUCTION, "$1")
+    : normalized;
+}
+
+export function enforceFirstPersonAnswer(
+  content: string,
+  stripIntroduction = true,
+) {
+  try {
+    const value = JSON.parse(content) as Record<string, unknown>;
+    if (typeof value.reply !== "string") return content;
+    const reply = enforceFirstPersonIdentity(
+      value.reply.trim(),
+      stripIntroduction,
+    );
+    return reply === null ? null : JSON.stringify({ ...value, reply });
+  } catch {
+    return null;
+  }
 }
 
 export function parseChatbotAnswerDecision(

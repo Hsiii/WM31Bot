@@ -220,6 +220,6 @@ describe("prompt plan", () => {
       "does not by itself specify the intended operation",
     );
     expect(plan.context).toContain('"mediaId":"retry-image"');
-    expect(plan.versions.policy).toBe(7);
+    expect(plan.versions.policy).toBe(8);
   });
 });
