@@ -159,6 +159,21 @@ export function answerContext(
         omissionReserve,
     );
 
+  if (job.capabilities?.length) {
+    const capabilities = budgetJsonItems(
+      "available_capabilities",
+      job.capabilities,
+      Math.min(
+        CHATBOT_CONTEXT_BUDGETS.capabilitiesCharacters,
+        remainingCharacters(),
+      ),
+    );
+    if (capabilities.items.length) {
+      sections.push(block("available_capabilities_json", capabilities.items));
+    }
+    if (capabilities.omission) omissions.push(capabilities.omission);
+  }
+
   if (job.availableTools?.length) {
     const tools = budgetJsonItems(
       "available_reactions",

@@ -57,6 +57,24 @@ export type ChatbotToolCapability = {
   metadata?: Record<string, unknown>;
 };
 
+export type ChatbotCapability = {
+  id: string;
+  category:
+    | "conversation"
+    | "context"
+    | "discord"
+    | "reminders"
+    | "attachments"
+    | "development"
+    | "memory"
+    | "travel"
+    | "system";
+  availability: "available" | "conditional";
+  description: string;
+  tools?: string[];
+  condition?: string;
+};
+
 export type ChatbotMemberResult = {
   query: string;
   names: string[];
@@ -179,6 +197,7 @@ type AnswerJobBase = ChatbotJobBase &
   NonRoutingJob & {
     purpose: "answer";
     mcpAccessToken: string;
+    capabilities?: ChatbotCapability[];
     availableTools?: ChatbotToolCapability[];
     addressingMode?: ChatbotAddressingMode;
     serverMemory?: ChatbotServerMemory;
@@ -276,6 +295,28 @@ function isToolCapability(value: unknown): value is ChatbotToolCapability {
   );
 }
 
+function isCapability(value: unknown): value is ChatbotCapability {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    [
+      "conversation",
+      "context",
+      "discord",
+      "reminders",
+      "attachments",
+      "development",
+      "memory",
+      "travel",
+      "system",
+    ].includes(String(value.category)) &&
+    ["available", "conditional"].includes(String(value.availability)) &&
+    typeof value.description === "string" &&
+    (value.tools === undefined || isStringArray(value.tools)) &&
+    (value.condition === undefined || typeof value.condition === "string")
+  );
+}
+
 function isServerMemory(value: unknown): value is ChatbotServerMemory {
   if (!isRecord(value) || typeof value.revision !== "number") return false;
   return (
@@ -320,6 +361,7 @@ const ANSWER_ONLY_FIELDS = [
   "executionRoute",
   "repository",
   "mcpAccessToken",
+  "capabilities",
   "addressingMode",
   "serverMemory",
   "developerTask",
@@ -380,6 +422,9 @@ export function parseChatbotJob(value: unknown): ChatbotJob | null {
     typeof value.mcpAccessToken !== "string" ||
     value.mcpAccessToken.length === 0 ||
     !["chat", "mac", "oracle"].includes(String(value.executionRoute)) ||
+    (value.capabilities !== undefined &&
+      (!Array.isArray(value.capabilities) ||
+        !value.capabilities.every(isCapability))) ||
     (value.availableTools !== undefined &&
       (!Array.isArray(value.availableTools) ||
         !value.availableTools.every(isToolCapability))) ||

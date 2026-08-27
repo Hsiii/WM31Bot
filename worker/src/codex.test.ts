@@ -393,6 +393,14 @@ describe("Codex chatbot runner", () => {
     const answerJob: ChatAnswerJob = {
       ...job,
       purpose: "answer",
+      capabilities: [
+        {
+          id: "conversation",
+          category: "conversation",
+          availability: "available",
+          description: "Answer from the supplied Discord conversation.",
+        },
+      ],
       availableTools: [
         {
           name: "discord.add_reaction",
@@ -407,8 +415,9 @@ describe("Codex chatbot runner", () => {
 
     expect(prompt).toContain("MiniSago MCP");
     expect(prompt).toContain("nearby context is insufficient");
-    expect(prompt).toContain("always call describe_capabilities");
-    expect(prompt).toContain("catalog as authoritative");
+    expect(prompt).toContain("host-derived and authoritative");
+    expect(prompt).toContain("<available_capabilities_json>");
+    expect(prompt).toContain('"id":"conversation"');
     expect(prompt).not.toContain("use only the structured reaction field");
     expect(prompt).not.toContain("host validates it");
     expect(prompt).toContain("<available_reactions_json>");
@@ -623,7 +632,7 @@ describe("Codex chatbot runner", () => {
 
     expect(prompt).toContain("Use MiniSago MCP");
     expect(prompt).toContain("nearby context is insufficient");
-    expect(prompt).toContain("get_previous_trace");
+    expect(prompt).toContain("previous trace through resolve_context");
     expect(prompt).toContain("Direct self-identification is useful evidence");
     expect(prompt).not.toContain("identity_resolution");
     expect(prompt).toContain("我在哪裡分享新 app 的");
@@ -796,7 +805,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("When asked to identify someone");
     expect(prompt).toContain("one third-party statement");
     expect(prompt).toContain("member lookups are profile data");
-    expect(prompt).toContain("get_previous_trace");
+    expect(prompt).toContain("previous trace through resolve_context");
     expect(prompt).toContain("never private reasoning");
     expect(prompt).not.toContain("validated_identity_resolution");
     expect(prompt).not.toContain("暈 or 暈船 means catching feelings");

@@ -60,9 +60,6 @@ function startServer() {
 
 function handlers() {
   return {
-    getPreviousTrace: async () => ({
-      status: "not_found" as const,
-    }),
     resolveContext: async ({ historyCount }: { historyCount: number }) => ({
       history: {
         status: "complete" as const,
@@ -160,11 +157,7 @@ describe("MiniSago MCP server", () => {
     const client = await connect(session.token);
     const tools = await client.listTools();
 
-    expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "describe_capabilities",
-      "get_previous_trace",
-      "resolve_context",
-    ]);
+    expect(tools.tools.map((tool) => tool.name)).toEqual(["resolve_context"]);
 
     const result = await client.callTool({
       name: "resolve_context",
@@ -276,17 +269,12 @@ describe("MiniSago MCP server", () => {
   test("hides guild tools when no guild-scoped handlers exist", async () => {
     const baseHandlers = handlers();
     const session = registerChatbotMcpSession({
-      getPreviousTrace: baseHandlers.getPreviousTrace,
       resolveContext: baseHandlers.resolveContext,
     });
     const client = await connect(session.token);
     const tools = await client.listTools();
 
-    expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "describe_capabilities",
-      "get_previous_trace",
-      "resolve_context",
-    ]);
+    expect(tools.tools.map((tool) => tool.name)).toEqual(["resolve_context"]);
 
     await client.close();
     session.revoke();
@@ -328,7 +316,7 @@ describe("MiniSago MCP server", () => {
     });
     expect(
       tools.tools.find((tool) => tool.name === "read_trip_plan")?.description,
-    ).toContain("Required source of truth");
+    ).toContain("all complete variants");
     const read = await client.callTool({
       name: "read_trip_plan",
       arguments: { date: "2026-11-01" },
@@ -359,10 +347,10 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("describes only request-scoped and conditional capabilities", async () => {
+  test("returns the request capability catalog with the session", () => {
     const session = registerChatbotMcpSession({
       ...handlers(),
-      describeCapabilities: () => [
+      supplementalCapabilities: [
         {
           id: "repository_work",
           category: "development",
@@ -378,47 +366,24 @@ describe("MiniSago MCP server", () => {
         jumpUrl: "https://discord.com/channels/guild-1/channel-1/message-1",
       }),
     });
-    const client = await connect(session.token);
-    const tool = (await client.listTools()).tools.find(
-      ({ name }) => name === "describe_capabilities",
-    );
 
-    expect(tool?.annotations).toMatchObject({
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-    });
-    const result = await client.callTool({
-      name: "describe_capabilities",
-      arguments: {},
-    });
-    expect(result.structuredContent).toMatchObject({
-      status: "complete",
-      scope: "current_request",
-      capabilities: [
-        {
-          id: "repository_work",
-          availability: "conditional",
-        },
-        {
-          id: "capability_discovery",
-          tools: ["describe_capabilities"],
-        },
-        {
-          id: "discord_context",
-          tools: ["resolve_context", "get_previous_trace"],
-        },
-        {
-          id: "channel_messaging",
-          tools: ["send_channel_message"],
-        },
-      ],
-    });
-    expect(JSON.stringify(result.structuredContent)).not.toContain(
+    expect(session.capabilities).toMatchObject([
+      {
+        id: "repository_work",
+        availability: "conditional",
+      },
+      {
+        id: "discord_context",
+        tools: ["resolve_context"],
+      },
+      {
+        id: "channel_messaging",
+        tools: ["send_channel_message"],
+      },
+    ]);
+    expect(JSON.stringify(session.capabilities)).not.toContain(
       "custom_expressions",
     );
-
-    await client.close();
     session.revoke();
   });
 
@@ -482,10 +447,7 @@ describe("MiniSago MCP server", () => {
     );
 
     expect(tool?.inputSchema).not.toHaveProperty("properties.guildId");
-    expect(tool?.description).toContain("Save proactively");
-    expect(tool?.description).toContain(
-      "member explicitly teaches or corrects",
-    );
+    expect(tool?.description).toContain("host binds the guild");
     expect(tool?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,
@@ -509,18 +471,14 @@ describe("MiniSago MCP server", () => {
     });
     expect(mutations).toEqual([{ action: "add", content: "允通常是允成" }]);
 
-    const capabilities = await client.callTool({
-      name: "describe_capabilities",
-      arguments: {},
-    });
-    expect(capabilities.structuredContent).toMatchObject({
-      capabilities: expect.arrayContaining([
+    expect(session.capabilities).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           id: "server_memory",
           description: expect.stringContaining("when a member teaches you"),
         }),
       ]),
-    });
+    );
 
     await client.close();
     session.revoke();

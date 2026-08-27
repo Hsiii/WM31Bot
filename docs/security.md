@@ -123,5 +123,6 @@ errors, and timings. They never contain MCP tokens, signed URL parameters,
 tool-result message bodies, or downloaded attachment bodies.
 
 Traces are owner-readable, expire after 14 days, and are pruned oldest-first
-above 250 MB. The `get_previous_trace` tool exposes bounded operational metadata
-from the same channel, never private chain-of-thought.
+above 250 MB. `resolve_context` can expose bounded operational metadata from the
+same channel when `includePreviousTrace` is requested. It never returns private
+chain-of-thought.
