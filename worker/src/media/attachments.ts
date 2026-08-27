@@ -8,6 +8,7 @@ import type {
   ChatbotAttachment,
   CodexJob,
 } from "../../../contracts/worker-contract";
+import type { MediaClient } from "./media-client";
 
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -262,14 +263,35 @@ async function extractText(
   return truncate(new TextDecoder().decode(bytes), maximum);
 }
 
-function safeFilename(index: number, filename: string) {
-  const name = basename(filename).replace(/[^a-zA-Z0-9._-]/g, "_");
+function contentTypeExtension(contentType?: string) {
+  switch (contentType?.toLocaleLowerCase()) {
+    case "image/gif":
+      return ".gif";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    default:
+      return undefined;
+  }
+}
+
+function safeFilename(index: number, filename: string, contentType?: string) {
+  const original = basename(filename).replace(/[^a-zA-Z0-9._-]/g, "_");
+  const expectedExtension = contentTypeExtension(contentType);
+  const originalExtension = extname(original);
+  const name = expectedExtension
+    ? `${originalExtension ? original.slice(0, -originalExtension.length) : original}${expectedExtension}`
+    : original;
   return `${index}-${name || "attachment"}`;
 }
 
 export async function prepareAttachments(
   job: CodexJob,
   signal?: AbortSignal,
+  mediaClient?: MediaClient,
 ): Promise<PreparedAttachments> {
   const directory = await mkdtemp(join(tmpdir(), "minisago-chatbot-"));
   const outputsDirectory = join(directory, "outputs");
@@ -306,22 +328,28 @@ export async function prepareAttachments(
       }
 
       try {
-        const bytes = await download(attachment.url, signal);
+        const remote = mediaClient
+          ? await mediaClient.read(attachment.id, signal)
+          : undefined;
+        const bytes = remote?.bytes ?? (await download(attachment.url, signal));
         if (downloadedBytes + bytes.byteLength > MAX_TOTAL_ATTACHMENT_BYTES) {
           ignored.push("這次的附件太多了 總共縮到 40 MB 以下再給我");
           continue;
         }
         downloadedBytes += bytes.byteLength;
-        const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
+        const resolvedContentType =
+          remote?.contentType ?? attachment.contentType;
+        const contentType = resolvedContentType?.toLocaleLowerCase() ?? "";
         const extension = extname(attachment.filename).toLocaleLowerCase();
-        const path = join(directory, safeFilename(index, attachment.filename));
+        const path = join(
+          directory,
+          safeFilename(index, attachment.filename, resolvedContentType),
+        );
         await Bun.write(path, bytes);
         mediaAttachments.push({
           id: attachment.id,
           filename: attachment.filename,
-          ...(attachment.contentType
-            ? { contentType: attachment.contentType }
-            : {}),
+          ...(resolvedContentType ? { contentType: resolvedContentType } : {}),
           size: bytes.byteLength,
           storedFilename: basename(path),
         });
