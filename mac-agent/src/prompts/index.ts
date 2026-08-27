@@ -24,7 +24,6 @@ import {
 
 export {
   ARTIFACT_ANSWER_OUTPUT_SCHEMA,
-  ANSWER_INSTRUCTIONS,
   ANSWER_OUTPUT_SCHEMA,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   PROMPT_VERSION,
@@ -33,9 +32,9 @@ export { EXECUTION_ROUTE_OUTPUT_SCHEMA } from "./execution-route";
 export { SOCIAL_ACTION_OUTPUT_SCHEMA } from "./social-action";
 
 export const PROMPT_PLAN_VERSIONS = {
-  policy: 2,
+  policy: 3,
   task: 2,
-  context: 5,
+  context: 6,
 } as const;
 
 export type PromptPlan = {

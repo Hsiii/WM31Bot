@@ -11,6 +11,7 @@ import {
   type ContextOmission,
   truncateContextText,
 } from "../../../src/chatbot/context-policy";
+import { conversationDisplayName } from "./language";
 
 function block(name: string, value: unknown) {
   const content = typeof value === "string" ? value : JSON.stringify(value);
@@ -25,7 +26,7 @@ function addressingReferences(request: string) {
   return {
     directSelfReferences: uniqueMatches(
       request,
-      /你|妳|您|MiniSago|Sago|\byou(?:r|rs|rself)?\b/giu,
+      /你|妳|您|迷你西米露|MiniSago|Sago|\byou(?:r|rs|rself)?\b/giu,
     ),
     possibleSelfReferences: uniqueMatches(
       request,
@@ -118,7 +119,7 @@ export function requestContext(
   if (job.addressingMode) {
     sections.push(
       block("conversation_addressing_json", {
-        addressee: job.developerTask ? "Codex" : "MiniSago",
+        addressee: job.developerTask ? "Codex" : conversationDisplayName(job),
         mode: job.addressingMode,
         ...addressingReferences(request),
       }),
