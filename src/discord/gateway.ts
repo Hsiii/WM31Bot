@@ -43,6 +43,7 @@ import {
   type LeaveVoiceChannelResult,
   type VoiceGateway,
 } from "./api/voice";
+import { getFeatureAvailabilityStore } from "./feature-availability";
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const MESSAGE_CONTENT_LIMIT = 2_000;
@@ -140,7 +141,6 @@ type DiscordCreatedMessage = {
 type InstagramGatewayConfig = {
   botToken: string;
   chatbotAccess: ChatbotAccessConfig;
-  ambientReactionsEnabled: boolean;
   ambientReactionPolicy: AmbientReactionPolicy;
 };
 
@@ -155,9 +155,6 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
   return {
     botToken,
     chatbotAccess: getChatbotAccessConfig(),
-    ambientReactionsEnabled:
-      process.env.MINISAGO_AMBIENT_REACTIONS_ENABLED?.trim().toLowerCase() ===
-      "true",
     ambientReactionPolicy: getAmbientReactionPolicy(),
   };
 }
@@ -239,6 +236,7 @@ class InstagramGatewayClient implements VoiceGateway {
   >();
   private socialWebhooks = new Map<string, Promise<DiscordWebhook>>();
   private discordRequest: DiscordRequest;
+  private featureAvailability = getFeatureAvailabilityStore();
 
   constructor(private readonly config: InstagramGatewayConfig) {
     this.discordRequest = createDiscordRequest(config.botToken);
@@ -428,6 +426,7 @@ class InstagramGatewayClient implements VoiceGateway {
         silent: true,
         respond,
       },
+      featureAvailability: this.featureAvailability,
     })
       .then(async (handled) => {
         if (!handled) {
@@ -582,6 +581,10 @@ class InstagramGatewayClient implements VoiceGateway {
   ) {
     const shouldNudgeQuickReply =
       !this.quietChannels.isPaused(message.channel_id) &&
+      this.featureAvailability.isEnabled("quick_reply_nudge", {
+        guildId: message.guild_id,
+        channelId: message.channel_id,
+      }) &&
       this.quickReplyNudges.observe(message);
 
     if (shouldNudgeQuickReply) {
@@ -610,6 +613,7 @@ class InstagramGatewayClient implements VoiceGateway {
           conversationTracker: this.conversations,
           quietTracker: this.quietChannels,
           receivedSequence,
+          featureAvailability: this.featureAvailability,
         });
 
         if (handled) {
@@ -624,17 +628,29 @@ class InstagramGatewayClient implements VoiceGateway {
         return;
       }
 
-      if (this.config.ambientReactionsEnabled) {
+      if (
+        this.featureAvailability.isEnabled("ambient_reactions", {
+          guildId: message.guild_id,
+          channelId: message.channel_id,
+        })
+      ) {
         this.ambientReactions.observe({
           message,
           botUserId: this.botUserId,
           discordRequest: createDiscordRequest(this.config.botToken),
           accessConfig: this.config.chatbotAccess,
+          featureEnabled: true,
         });
       }
     }
 
-    if (!this.shouldTransformMessage(message)) {
+    if (
+      !this.featureAvailability.isEnabled("social_links", {
+        guildId: message.guild_id,
+        channelId: message.channel_id,
+      }) ||
+      !this.shouldTransformMessage(message)
+    ) {
       return;
     }
 

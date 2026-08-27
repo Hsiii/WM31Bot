@@ -73,6 +73,10 @@ import {
   isChannelQuietRequest,
   isChannelWakeRequest,
 } from "../discord/channel-quiet";
+import type {
+  FeatureAvailabilityMutation,
+  FeatureAvailabilityStore,
+} from "../discord/feature-availability";
 
 export {
   canMemberSearchChannel,
@@ -380,11 +384,14 @@ export function isChatbotAuthorized(
   accessConfig: ChatbotAccessConfig,
   guildId?: string,
   channelId?: string,
+  featureAvailability?: FeatureAvailabilityStore,
 ) {
   return (
     userId === accessConfig.ownerUserId ||
-    (guildId !== undefined && accessConfig.guildIds.has(guildId)) ||
-    (channelId !== undefined && accessConfig.channelIds.has(channelId))
+    (featureAvailability
+      ? featureAvailability.isEnabled("chatbot", { guildId, channelId })
+      : (guildId !== undefined && accessConfig.guildIds.has(guildId)) ||
+        (channelId !== undefined && accessConfig.channelIds.has(channelId)))
   );
 }
 
@@ -928,6 +935,7 @@ export async function handleChatbotMention({
   quietTracker,
   receivedSequence,
   invocation,
+  featureAvailability,
 }: {
   message: ChatbotMention;
   botUserId: string;
@@ -938,6 +946,7 @@ export async function handleChatbotMention({
   quietTracker?: ChannelQuietTracker;
   receivedSequence?: number;
   invocation?: ChatbotInvocation;
+  featureAvailability?: FeatureAvailabilityStore;
 }) {
   const requesterUserId = message.author?.id;
   const respond = (
@@ -980,6 +989,7 @@ export async function handleChatbotMention({
       accessConfig,
       message.guild_id,
       message.channel_id,
+      featureAvailability,
     )
   ) {
     if (!message.guild_id) {
@@ -1026,6 +1036,17 @@ export async function handleChatbotMention({
   let reactionCapabilities: DiscordReactionCapabilities | undefined;
   try {
     const execute = async () => {
+      const featureEnabled = (
+        feature: Parameters<FeatureAvailabilityStore["isEnabled"]>[0],
+      ) =>
+        featureAvailability
+          ? featureAvailability.isEnabled(feature, {
+              guildId: message.guild_id,
+              channelId: message.channel_id,
+            })
+          : feature === "trip_planner"
+            ? tripPlannerAvailableForGuild(message.guild_id)
+            : true;
       const requestMessage = toChatbotMessage(message, botUserId);
       let messages = invocation?.recentContext
         ? await getRecentHumanMessages({
@@ -1051,7 +1072,7 @@ export async function handleChatbotMention({
       const mediaRegistry = new ChatbotMediaRegistry();
       mediaRegistry.registerMessages([requestMessage, ...messages]);
       let serverMemory: ChatbotJob["serverMemory"];
-      if (message.guild_id) {
+      if (message.guild_id && featureEnabled("server_memory")) {
         try {
           const snapshot = await guildMemoryStore.load(message.guild_id);
           if (snapshot.entries.length) {
@@ -1220,7 +1241,7 @@ export async function handleChatbotMention({
           }
         : undefined;
       const reminderScheduler = getChatbotReminderScheduler();
-      const tripPlanner = tripPlannerAvailableForGuild(message.guild_id)
+      const tripPlanner = featureEnabled("trip_planner")
         ? createTripPlannerClient(process.env, `minisago-${message.id}`)
         : undefined;
       const requestCapabilities = supplementalCapabilities({
@@ -1320,7 +1341,9 @@ export async function handleChatbotMention({
               : { status: "not_requested" as const },
           };
         },
-        ...(requesterUserId === accessConfig.ownerUserId && message.guild_id
+        ...(requesterUserId === accessConfig.ownerUserId &&
+        message.guild_id &&
+        featureEnabled("custom_expressions")
           ? {
               listSharedGuilds: async () =>
                 (await listSharedEmojiGuilds(discordRequest)).map((guild) => ({
@@ -1338,6 +1361,21 @@ export async function handleChatbotMention({
                 }),
             }
           : {}),
+        ...(requesterUserId === accessConfig.ownerUserId && featureAvailability
+          ? {
+              listFeatureAvailability: () => featureAvailability.list(),
+              configureFeatureAvailability: async (
+                input: FeatureAvailabilityMutation,
+              ) => {
+                await discordRequest(
+                  input.scope === "channel"
+                    ? `/channels/${input.targetId}`
+                    : `/guilds/${input.targetId}`,
+                );
+                return featureAvailability.configure(input);
+              },
+            }
+          : {}),
         ...(requesterUserId === accessConfig.ownerUserId
           ? {
               sendChannelMessage: (input: {
@@ -1348,7 +1386,7 @@ export async function handleChatbotMention({
               }) => sendChannelMessage({ ...input, discordRequest }),
             }
           : {}),
-        ...(message.guild_id
+        ...(message.guild_id && featureEnabled("server_memory")
           ? {
               manageServerMemory: async (
                 input:
@@ -1374,7 +1412,7 @@ export async function handleChatbotMention({
               },
             }
           : {}),
-        ...(reminderScheduler
+        ...(reminderScheduler && featureEnabled("reminders")
           ? {
               createReminder: async (input) => {
                 const reminder = await reminderScheduler.create({
@@ -1411,7 +1449,7 @@ export async function handleChatbotMention({
                 ),
             }
           : {}),
-        ...(message.guild_id
+        ...(message.guild_id && featureEnabled("voice")
           ? {
               joinVoiceChannel: () =>
                 joinMemberVoiceChannel(message.guild_id!, requesterUserId),

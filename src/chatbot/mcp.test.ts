@@ -106,6 +106,75 @@ async function connect(token: string) {
 }
 
 describe("MiniSago MCP server", () => {
+  test("lets the owner inspect and change persisted feature coverage", async () => {
+    const configured: unknown[] = [];
+    const policy = {
+      defaultEnabled: false,
+      rules: [],
+    };
+    const session = registerChatbotMcpSession({
+      ...handlers(),
+      listFeatureAvailability: () => ({
+        version: 1 as const,
+        features: {
+          chatbot: policy,
+          ambient_reactions: policy,
+          social_links: policy,
+          quick_reply_nudge: policy,
+          trip_planner: policy,
+          server_memory: policy,
+          reminders: policy,
+          voice: policy,
+          custom_expressions: policy,
+        },
+      }),
+      configureFeatureAvailability: async (input) => {
+        configured.push(input);
+        return {
+          defaultEnabled: false,
+          rules: [
+            {
+              scope: input.scope,
+              targetId: input.targetId,
+              enabled: input.action === "enable",
+            },
+          ],
+        };
+      },
+    });
+    const client = await connect(session.token);
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "configure_feature_availability",
+    );
+    const result = await client.callTool({
+      name: "configure_feature_availability",
+      arguments: {
+        feature: "trip_planner",
+        scope: "channel",
+        targetId: "1517766866964316201",
+        action: "enable",
+      },
+    });
+
+    expect(configured).toEqual([
+      {
+        feature: "trip_planner",
+        scope: "channel",
+        targetId: "1517766866964316201",
+        action: "enable",
+      },
+    ]);
+    expect(result.structuredContent).toMatchObject({
+      status: "complete",
+      feature: "trip_planner",
+    });
+
+    await client.close();
+    session.revoke();
+  });
+
   test("budgets resolved history and search with explicit omissions", () => {
     const messages = Array.from({ length: 30 }, (_, index) => ({
       id: String(index),

@@ -27,6 +27,7 @@ live in [Discord setup](discord-setup.md) and [Workers](workers.md).
 | `MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR` | No        | Hourly ambient model-call ceiling; defaults to 4        |
 | `MINISAGO_REMINDER_STATE_FILE`         | No        | Persistent reminder state                               |
 | `MINISAGO_GUILD_MEMORY_DIRECTORY`      | No        | Per-server Markdown memory and local Git history        |
+| `MINISAGO_FEATURE_AVAILABILITY_FILE`   | No        | Persistent guild and channel feature policy             |
 | `MINISAGO_TRIP_WORKSPACE_URL`          | No        | Kyushu workspace API; defaults to the shared planner    |
 | `MINISAGO_TRIP_WORKSPACE_TOKEN`        | No        | Dedicated token enabling guild-bound itinerary edits    |
 | `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticate the fixed Mac worker profile               |
@@ -95,6 +96,7 @@ Production state must live under `/app/state` on the persistent
 - `X_POST_STATE_FILE`
 - `MINISAGO_REMINDER_STATE_FILE`
 - `MINISAGO_GUILD_MEMORY_DIRECTORY`
+- `MINISAGO_FEATURE_AVAILABILITY_FILE`
 
 Do not place these files on the container's ephemeral filesystem.
 
@@ -103,13 +105,23 @@ directory is an independent local-only Git repository with no configured
 remote. Its files and Git history must never be committed to the application
 repository. Each guild file is capped at 4,000 characters.
 
+Feature availability defaults to `.data/feature-availability.json`. On the
+first change, MiniSago writes a complete policy initialized from the existing
+chatbot environment lists and built-in behavior. After that, the file is the
+source of truth. An owner can ask MiniSago to list, enable, disable, or restore
+inherited availability for a feature in an exact server or channel. Channel
+rules override server rules, and server rules override the feature default.
+The configurable features are chatbot access, ambient reactions, social-link
+replacement, quick-reply nudges, the trip planner, server memory, reminders,
+voice presence, and custom expressions.
+
 ## Current deployment-specific defaults
 
-The repository still contains these Hsi-specific boundaries:
+The repository still contains these Hsi-specific defaults:
 
 - configured-guild fallback `1282936453134815275`; and
 - PR review repository and reviewer mapping for `sago-cream/health-check-system`.
 
-A general self-host must change these source-level defaults or disable the
-corresponding features. Installing the bot in another guild does not expose
-WM31 controls or scheduled feeds there.
+Feature coverage no longer needs source changes. Scheduled feed destinations
+remain job configuration because each feed also needs source and checkpoint
+settings. The PR review mapping remains deployment-specific code.

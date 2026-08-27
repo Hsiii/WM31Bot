@@ -23,6 +23,13 @@ import {
   chatbotMediaLimits,
   readBoundedMediaBytes,
 } from "./media-assets";
+import {
+  FEATURE_DEFINITIONS,
+  type FeatureAvailabilityMutation,
+  type FeatureAvailabilitySnapshot,
+  type FeatureId,
+  type FeaturePolicy,
+} from "../discord/feature-availability";
 
 const MCP_SESSION_TTL_MS = 16 * 60_000;
 const MAX_MCP_SESSIONS = 100;
@@ -202,6 +209,10 @@ export type ChatbotGuildExpressionInput = {
 export type ChatbotMcpSessionHandlers = {
   mediaRegistry?: ChatbotMediaRegistry;
   supplementalCapabilities?: ChatbotCapability[];
+  listFeatureAvailability?: () => FeatureAvailabilitySnapshot;
+  configureFeatureAvailability?: (
+    input: FeatureAvailabilityMutation,
+  ) => Promise<FeaturePolicy>;
   resolveContext: (input: {
     historyCount: number;
     includePreviousTrace: boolean;
@@ -393,6 +404,19 @@ function availableCapabilities(
       tools: ["get_codex_usage"],
     });
   }
+  if (
+    handlers.listFeatureAvailability &&
+    handlers.configureFeatureAvailability
+  ) {
+    capabilities.push({
+      id: "feature_availability",
+      category: "system",
+      availability: "available",
+      description:
+        "List, enable, disable, or restore inherited feature availability for a Discord server or channel without a deployment.",
+      tools: ["list_feature_availability", "configure_feature_availability"],
+    });
+  }
   if (handlers.manageServerMemory) {
     capabilities.push({
       id: "server_memory",
@@ -500,6 +524,65 @@ function createServer(session: ChatbotMcpSession) {
     openWorldHint: false,
   } as const;
 
+  if (
+    session.handlers.listFeatureAvailability &&
+    session.handlers.configureFeatureAvailability
+  ) {
+    server.registerTool(
+      "list_feature_availability",
+      {
+        description:
+          "List the server-side availability policy for every configurable MiniSago feature. Channel rules override guild rules, which override each feature's default. Use before changing coverage or when the owner asks where a feature is enabled.",
+        inputSchema: {},
+        annotations: readAnnotations,
+      },
+      async () =>
+        toolResult({
+          status: "complete",
+          descriptions: FEATURE_DEFINITIONS,
+          policy: session.handlers.listFeatureAvailability!(),
+        }),
+    );
+
+    server.registerTool(
+      "configure_feature_availability",
+      {
+        description:
+          "Change one MiniSago feature's availability for an exact Discord guild or channel ID. Use enable or disable to add an override. Use inherit to remove the override and fall back to the guild or feature default. Only call when the owner explicitly asks to change feature coverage.",
+        inputSchema: {
+          feature: z.enum(
+            Object.keys(FEATURE_DEFINITIONS) as [FeatureId, ...FeatureId[]],
+          ),
+          scope: z.enum(["guild", "channel"]),
+          targetId: z.string().regex(/^\d{17,20}$/u),
+          action: z.enum(["enable", "disable", "inherit"]),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            feature: input.feature,
+            policy: await session.handlers.configureFeatureAvailability!(input),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update feature availability.",
+          });
+        }
+      },
+    );
+  }
   if (session.handlers.pauseChannelActivity) {
     server.registerTool(
       "pause_channel_activity",
