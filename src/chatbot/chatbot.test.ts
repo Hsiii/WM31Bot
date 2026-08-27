@@ -4,6 +4,7 @@ import type { ServerWebSocket } from "bun";
 import type { ChatbotAccessConfig } from "./access";
 import { macAgentBridge, type MacAgentSocketData } from "./bridge";
 import { CHATBOT_PROTOCOL_VERSION } from "../../contracts/worker-contract";
+import { enforceFirstPersonIdentity } from "../../contracts/answer-contract";
 import { ChatbotMediaRegistry } from "./media-assets";
 import { ChannelQuietTracker } from "../discord/channel-quiet";
 import {
@@ -666,8 +667,10 @@ describe("Discord chatbot", () => {
     expect(
       parseChatbotAnswerDecision(
         JSON.stringify({
-          reply:
+          reply: enforceFirstPersonIdentity(
             "<self-introduction>MiniSago</self-introduction> here, reporting in.",
+            false,
+          ),
           reaction: null,
         }),
       ),

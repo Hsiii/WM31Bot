@@ -33,23 +33,6 @@ export function enforceFirstPersonIdentity(
     : normalized;
 }
 
-export function enforceFirstPersonAnswer(
-  content: string,
-  stripIntroduction = true,
-) {
-  try {
-    const value = JSON.parse(content) as Record<string, unknown>;
-    if (typeof value.reply !== "string") return content;
-    const reply = enforceFirstPersonIdentity(
-      value.reply.trim(),
-      stripIntroduction,
-    );
-    return reply === null ? null : JSON.stringify({ ...value, reply });
-  } catch {
-    return null;
-  }
-}
-
 export function parseChatbotAnswerDecision(
   content: string,
 ): ChatbotAnswerDecision {
