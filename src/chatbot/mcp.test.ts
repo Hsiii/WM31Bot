@@ -486,6 +486,7 @@ describe("MiniSago MCP server", () => {
 
   test("exposes the owner-bound guild expression tool", async () => {
     const additions: unknown[] = [];
+    const renames: unknown[] = [];
     const session = registerChatbotMcpSession({
       ...handlers(),
       listSharedGuilds: async () => [
@@ -493,6 +494,7 @@ describe("MiniSago MCP server", () => {
           id: "987654321098765432",
           name: "Target",
           canCreateExpressions: true,
+          canManageExpressions: true,
           current: true,
         },
       ],
@@ -501,6 +503,7 @@ describe("MiniSago MCP server", () => {
           id: "123456789012345678",
           name: guild,
           canCreateExpressions: false,
+          canManageExpressions: false,
         },
         emojis: [
           {
@@ -522,11 +525,28 @@ describe("MiniSago MCP server", () => {
             id: "123456789012345678",
             name: "Source",
             canCreateExpressions: false,
+            canManageExpressions: false,
           },
           guild: {
             id: "987654321098765432",
             name: "Target",
             canCreateExpressions: true,
+            canManageExpressions: true,
+          },
+        };
+      },
+      renameGuildEmoji: async (input) => {
+        renames.push(input);
+        return {
+          kind: "emoji",
+          id: "234567890123456789",
+          name: input.name,
+          animated: false,
+          guild: {
+            id: "987654321098765432",
+            name: input.guild ?? "Target",
+            canCreateExpressions: true,
+            canManageExpressions: true,
           },
         };
       },
@@ -540,6 +560,9 @@ describe("MiniSago MCP server", () => {
     expect(tools.tools.map((tool) => tool.name)).toContain("list_guild_emojis");
     expect(tools.tools.map((tool) => tool.name)).toContain(
       "add_guild_expression",
+    );
+    expect(tools.tools.map((tool) => tool.name)).toContain(
+      "rename_guild_emoji",
     );
 
     const inventory = await client.callTool({
@@ -600,6 +623,26 @@ describe("MiniSago MCP server", () => {
       name: "from_sticker",
       tags: "🎉",
     });
+
+    const rename = await client.callTool({
+      name: "rename_guild_emoji",
+      arguments: {
+        emoji: "fan_avatar",
+        name: "FrierenSleep",
+        guild: "Target",
+      },
+    });
+    expect(rename.structuredContent).toMatchObject({
+      status: "complete",
+      emoji: { name: "FrierenSleep", guild: { name: "Target" } },
+    });
+    expect(renames).toEqual([
+      {
+        emoji: "fan_avatar",
+        name: "FrierenSleep",
+        guild: "Target",
+      },
+    ]);
 
     await client.close();
     session.revoke();

@@ -10,6 +10,7 @@ import { CHATBOT_CONTEXT_LIMITS } from "./context-limits";
 import { ChatbotMediaRegistry } from "./media-assets";
 import {
   registerChatbotMcpSession,
+  type ChatbotGuildEmojiRenameInput,
   type ChatbotGuildExpressionInput,
   type ChatbotMcpSessionSnapshot,
 } from "./mcp";
@@ -45,6 +46,7 @@ import {
   copyGuildEmoji,
   listGuildEmojis,
   listSharedEmojiGuilds,
+  renameGuildEmoji,
   type ExpressionFetch,
 } from "../discord/api/emojis";
 import { getChatbotReminderScheduler } from "../discord/jobs/reminders";
@@ -1334,6 +1336,13 @@ export async function handleChatbotMention({
                   input,
                   guildId: message.guild_id!,
                   mediaRegistry,
+                  discordRequest,
+                }),
+              renameGuildEmoji: (input: ChatbotGuildEmojiRenameInput) =>
+                renameGuildEmoji({
+                  guild: input.guild ?? message.guild_id!,
+                  emoji: input.emoji,
+                  name: input.name,
                   discordRequest,
                 }),
             }

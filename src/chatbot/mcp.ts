@@ -199,6 +199,12 @@ export type ChatbotGuildExpressionInput = {
   tags?: string;
 };
 
+export type ChatbotGuildEmojiRenameInput = {
+  emoji: string;
+  name: string;
+  guild?: string;
+};
+
 export type ChatbotMcpSessionHandlers = {
   mediaRegistry?: ChatbotMediaRegistry;
   supplementalCapabilities?: ChatbotCapability[];
@@ -213,6 +219,7 @@ export type ChatbotMcpSessionHandlers = {
       id: string;
       name: string;
       canCreateExpressions: boolean;
+      canManageExpressions: boolean;
       current: boolean;
     }>
   >;
@@ -221,6 +228,7 @@ export type ChatbotMcpSessionHandlers = {
       id: string;
       name: string;
       canCreateExpressions: boolean;
+      canManageExpressions: boolean;
     };
     emojis: Array<{
       id: string;
@@ -241,11 +249,25 @@ export type ChatbotMcpSessionHandlers = {
       id: string;
       name: string;
       canCreateExpressions: boolean;
+      canManageExpressions: boolean;
     };
     guild: {
       id: string;
       name: string;
       canCreateExpressions: boolean;
+      canManageExpressions: boolean;
+    };
+  }>;
+  renameGuildEmoji?: (input: ChatbotGuildEmojiRenameInput) => Promise<{
+    kind: "emoji";
+    id: string;
+    name: string;
+    animated: boolean;
+    guild: {
+      id: string;
+      name: string;
+      canCreateExpressions: boolean;
+      canManageExpressions: boolean;
     };
   }>;
   createReminder?: (input: {
@@ -449,18 +471,20 @@ function availableCapabilities(
   if (
     handlers.listSharedGuilds &&
     handlers.listGuildEmojis &&
-    handlers.addGuildExpression
+    handlers.addGuildExpression &&
+    handlers.renameGuildEmoji
   ) {
     capabilities.push({
       id: "custom_expressions",
       category: "discord",
       availability: "available",
       description:
-        "List shared servers and custom emojis, then add an emoji or sticker from any request media reference, or copy an existing custom emoji, when the owner asks.",
+        "List shared servers and custom emojis, then add, copy, or rename an expression when the owner asks.",
       tools: [
         "list_shared_guilds",
         "list_guild_emojis",
         "add_guild_expression",
+        "rename_guild_emoji",
       ],
     });
   }
@@ -849,13 +873,14 @@ function createServer(session: ChatbotMcpSession) {
   if (
     session.handlers.listSharedGuilds &&
     session.handlers.listGuildEmojis &&
-    session.handlers.addGuildExpression
+    session.handlers.addGuildExpression &&
+    session.handlers.renameGuildEmoji
   ) {
     server.registerTool(
       "list_shared_guilds",
       {
         description:
-          "List every Discord guild you are currently in. Use this to resolve exact source and destination guilds when adding an emoji outside the current server. current marks the guild where the request was sent; canCreateExpressions reports whether you can add an emoji there.",
+          "List every Discord guild you are currently in. Use this to resolve exact source and destination guilds when managing an expression outside the current server. current marks the guild where the request was sent; permission fields report whether you can create or manage expressions there.",
         inputSchema: {},
         annotations: readAnnotations,
       },
@@ -934,6 +959,41 @@ function createServer(session: ChatbotMcpSession) {
               error instanceof Error
                 ? error.message
                 : "Could not add Discord expression.",
+          });
+        }
+      },
+    );
+
+    server.registerTool(
+      "rename_guild_emoji",
+      {
+        description:
+          "Rename one custom emoji in a Discord server. Identify the emoji by exact name, ID, or custom emoji value. guild defaults to the current server. Only call this when the requester clearly asks to rename the emoji.",
+        inputSchema: {
+          emoji: z.string().trim().min(1).max(100),
+          name: z.string().trim().min(2).max(32),
+          guild: z.string().trim().min(1).max(100).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async (input) => {
+        try {
+          return toolResult({
+            status: "complete",
+            emoji: await session.handlers.renameGuildEmoji!(input),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not rename Discord emoji.",
           });
         }
       },
