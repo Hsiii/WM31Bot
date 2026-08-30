@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import {
   budgetResolvedContext,
   handleChatbotMcpRequest,
+  normalizeReminderEdit,
   normalizeReminderSchedule,
   registerChatbotMcpSession,
 } from "./mcp";
@@ -47,6 +48,26 @@ test("normalizes reminder schedules before storage", () => {
     content: "check the oven",
     runAt: "2026-07-26T01:05:00.000Z",
   });
+});
+
+test("normalizes reminder edits before storage", () => {
+  expect(
+    normalizeReminderEdit({
+      reminderId: "123e4567-e89b-12d3-a456-426614174000",
+      content: "  buy tickets  ",
+      cron: "  0   9  * * * ",
+    }),
+  ).toEqual({
+    reminderId: "123e4567-e89b-12d3-a456-426614174000",
+    content: "buy tickets",
+    cron: "0 9 * * *",
+    timezone: "Asia/Taipei",
+  });
+  expect(() =>
+    normalizeReminderEdit({
+      reminderId: "123e4567-e89b-12d3-a456-426614174000",
+    }),
+  ).toThrow("Provide content, runAt, or cron");
 });
 
 function startServer() {
@@ -869,8 +890,9 @@ describe("MiniSago MCP server", () => {
     session.revoke();
   });
 
-  test("creates, lists, and cancels bearer-bound reminders", async () => {
+  test("creates, lists, edits, and cancels channel reminders", async () => {
     const created: unknown[] = [];
+    const edited: unknown[] = [];
     const cancelled: string[] = [];
     const session = registerChatbotMcpSession({
       ...handlers(),
@@ -891,6 +913,16 @@ describe("MiniSago MCP server", () => {
           nextRunAt: "2026-07-26T01:00:00.000Z",
         },
       ],
+      editReminder: async (input) => {
+        edited.push(input);
+        return {
+          id: input.reminderId,
+          content: input.content ?? "stand up",
+          nextRunAt: input.runAt ?? "2026-07-26T01:00:00.000Z",
+          ...(input.cron ? { cron: input.cron } : {}),
+          ...(input.timezone ? { timezone: input.timezone } : {}),
+        };
+      },
       cancelReminder: async (reminderId) => {
         cancelled.push(reminderId);
         return true;
@@ -899,7 +931,20 @@ describe("MiniSago MCP server", () => {
     const client = await connect(session.token);
     const tools = await client.listTools();
 
-    expect(tools.tools.map((tool) => tool.name)).toContain("create_reminder");
+    expect(tools.tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        "create_reminder",
+        "list_reminders",
+        "edit_reminder",
+        "cancel_reminder",
+      ]),
+    );
+    expect(
+      tools.tools.find((tool) => tool.name === "create_reminder")?.description,
+    ).toContain("edit_reminder");
+    expect(
+      tools.tools.find((tool) => tool.name === "create_reminder")?.description,
+    ).toContain("cancel_reminder");
     const invalid = await client.callTool({
       name: "create_reminder",
       arguments: {
@@ -951,6 +996,29 @@ describe("MiniSago MCP server", () => {
       status: "complete",
       reminders: [{ content: "stand up" }],
     });
+
+    const editResult = await client.callTool({
+      name: "edit_reminder",
+      arguments: {
+        reminderId: "123e4567-e89b-12d3-a456-426614174000",
+        runAt: "2026-07-27T09:00:00+09:00",
+        timezone: "Asia/Tokyo",
+      },
+    });
+    expect(editResult.structuredContent).toMatchObject({
+      status: "complete",
+      reminder: {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        nextRunAt: "2026-07-27T00:00:00.000Z",
+      },
+    });
+    expect(edited).toEqual([
+      {
+        reminderId: "123e4567-e89b-12d3-a456-426614174000",
+        runAt: "2026-07-27T00:00:00.000Z",
+        timezone: "Asia/Tokyo",
+      },
+    ]);
 
     await client.callTool({
       name: "cancel_reminder",

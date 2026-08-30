@@ -1477,24 +1477,33 @@ export async function handleChatbotMention({
                 };
               },
               listReminders: async () =>
-                (
-                  await reminderScheduler.list(
-                    requesterUserId,
-                    message.channel_id,
-                  )
-                ).map((reminder) => ({
+                (await reminderScheduler.list(message.channel_id)).map(
+                  (reminder) => ({
+                    id: reminder.id,
+                    content: reminder.content,
+                    nextRunAt: reminder.nextRunAt,
+                    ...(reminder.cron ? { cron: reminder.cron } : {}),
+                    ...(reminder.timezone
+                      ? { timezone: reminder.timezone }
+                      : {}),
+                  }),
+                ),
+              editReminder: async (input) => {
+                const reminder = await reminderScheduler.edit({
+                  ...input,
+                  channelId: message.channel_id,
+                });
+                if (!reminder) return undefined;
+                return {
                   id: reminder.id,
                   content: reminder.content,
                   nextRunAt: reminder.nextRunAt,
                   ...(reminder.cron ? { cron: reminder.cron } : {}),
                   ...(reminder.timezone ? { timezone: reminder.timezone } : {}),
-                })),
+                };
+              },
               cancelReminder: (reminderId: string) =>
-                reminderScheduler.cancel(
-                  requesterUserId,
-                  message.channel_id,
-                  reminderId,
-                ),
+                reminderScheduler.cancel(message.channel_id, reminderId),
             }
           : {}),
         ...(message.guild_id

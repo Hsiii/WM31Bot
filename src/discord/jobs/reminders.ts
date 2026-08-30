@@ -45,6 +45,15 @@ type CreateReminderInput = {
   timezone?: string;
 };
 
+type EditReminderInput = {
+  channelId: string;
+  reminderId: string;
+  content?: string;
+  runAt?: string;
+  cron?: string;
+  timezone?: string;
+};
+
 function cronNextRun(pattern: string, timezone: string, from: Date) {
   const cron = new Cron(pattern, {
     mode: "5-part",
@@ -181,26 +190,101 @@ export class ReminderScheduler {
     });
   }
 
-  async list(requesterUserId: string, channelId: string) {
+  async list(channelId: string) {
     await this.start();
     return this.reminders
-      .filter(
-        (reminder) =>
-          reminder.requesterUserId === requesterUserId &&
-          reminder.channelId === channelId,
-      )
+      .filter((reminder) => reminder.channelId === channelId)
       .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt))
       .map((reminder) => ({ ...reminder }));
   }
 
-  async cancel(requesterUserId: string, channelId: string, reminderId: string) {
+  async edit(input: EditReminderInput) {
     await this.start();
     return this.runExclusive(async () => {
       const index = this.reminders.findIndex(
         (reminder) =>
-          reminder.id === reminderId &&
-          reminder.requesterUserId === requesterUserId &&
-          reminder.channelId === channelId,
+          reminder.id === input.reminderId &&
+          reminder.channelId === input.channelId,
+      );
+      if (index < 0) return undefined;
+
+      const current = this.reminders[index]!;
+      const content = input.content?.trim();
+      if (input.content !== undefined && (!content || content.length > 1_500)) {
+        throw new Error("Reminder content must be 1–1500 characters.");
+      }
+      if (!content && !input.runAt && !input.cron) {
+        throw new Error("Provide content, runAt, or cron to edit.");
+      }
+      if (input.runAt && input.cron) {
+        throw new Error("Provide at most one of runAt or cron.");
+      }
+
+      const now = this.now();
+      const timezone = input.timezone?.trim();
+      let schedule: Pick<Reminder, "nextRunAt"> &
+        Partial<Pick<Reminder, "cron" | "timezone">>;
+      if (input.cron) {
+        const cronTimezone = timezone || LEGACY_DEFAULT_TIMEZONE;
+        ensureTimezone(cronTimezone);
+        schedule = {
+          nextRunAt: cronNextRun(
+            input.cron.trim(),
+            cronTimezone,
+            now,
+          ).toISOString(),
+          cron: input.cron.trim(),
+          timezone: cronTimezone,
+        };
+      } else if (input.runAt) {
+        if (timezone) ensureTimezone(timezone);
+        const nextRun = new Date(input.runAt);
+        if (!Number.isFinite(nextRun.getTime())) {
+          throw new Error(
+            "runAt must be an ISO 8601 timestamp with an offset.",
+          );
+        }
+        if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(input.runAt)) {
+          throw new Error("runAt must include Z or a UTC offset.");
+        }
+        if (nextRun.getTime() <= now.getTime()) {
+          throw new Error("runAt must be in the future.");
+        }
+        schedule = {
+          nextRunAt: nextRun.toISOString(),
+          ...(timezone ? { timezone } : {}),
+        };
+      } else {
+        schedule = {
+          nextRunAt: current.nextRunAt,
+          ...(current.cron ? { cron: current.cron } : {}),
+          ...(current.timezone ? { timezone: current.timezone } : {}),
+        };
+      }
+
+      const reminder: Reminder = {
+        id: current.id,
+        requesterUserId: current.requesterUserId,
+        channelId: current.channelId,
+        createdAt: current.createdAt,
+        content: content ?? current.content,
+        ...schedule,
+      };
+      const reminders = [...this.reminders];
+      reminders[index] = reminder;
+      await this.write(reminders);
+      this.reminders = reminders;
+      this.failedAttempts.delete(reminder.id);
+      return { ...reminder };
+    });
+  }
+
+  async cancel(channelId: string, reminderId: string) {
+    await this.start();
+    return this.runExclusive(async () => {
+      const index = this.reminders.findIndex(
+        (reminder) =>
+          reminder.id === reminderId && reminder.channelId === channelId,
       );
       if (index < 0) return false;
       this.reminders.splice(index, 1);
