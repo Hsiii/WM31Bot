@@ -299,7 +299,8 @@ export const PROMPT_CASES: PromptCase[] = [
           id: "reminders",
           category: "reminders",
           availability: "available",
-          description: "Create, list, and cancel reminders.",
+          description:
+            "Create, list, edit, and cancel reminders in this channel.",
         },
       ],
     },

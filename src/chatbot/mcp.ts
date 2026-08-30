@@ -74,6 +74,45 @@ export function normalizeReminderSchedule(input: {
   };
 }
 
+export function normalizeReminderEdit(input: {
+  reminderId: string;
+  content?: string;
+  runAt?: string;
+  cron?: string;
+  timezone?: string;
+}) {
+  const content = input.content?.trim();
+  const runAt = input.runAt?.trim();
+  const cron = input.cron?.trim().replace(/\s+/gu, " ");
+  const timezone = input.timezone?.trim();
+  if (!content && !runAt && !cron) {
+    throw new Error("Provide content, runAt, or cron to edit.");
+  }
+  if (runAt && cron) {
+    throw new Error("Provide at most one of runAt or cron.");
+  }
+  if (runAt) {
+    if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(runAt)) {
+      throw new Error("runAt must include Z or a UTC offset.");
+    }
+    const parsed = new Date(runAt);
+    if (!Number.isFinite(parsed.getTime())) {
+      throw new Error("runAt must be a valid ISO 8601 timestamp.");
+    }
+    return {
+      reminderId: input.reminderId,
+      ...(content ? { content } : {}),
+      runAt: parsed.toISOString(),
+      ...(timezone ? { timezone } : {}),
+    };
+  }
+  return {
+    reminderId: input.reminderId,
+    ...(content ? { content } : {}),
+    ...(cron ? { cron, timezone: timezone || DEFAULT_REMINDER_TIMEZONE } : {}),
+  };
+}
+
 const searchHas = z.enum([
   "image",
   "sound",
@@ -313,6 +352,22 @@ export type ChatbotMcpSessionHandlers = {
       timezone?: string;
     }>
   >;
+  editReminder?: (input: {
+    reminderId: string;
+    content?: string;
+    runAt?: string;
+    cron?: string;
+    timezone?: string;
+  }) => Promise<
+    | {
+        id: string;
+        content: string;
+        nextRunAt: string;
+        cron?: string;
+        timezone?: string;
+      }
+    | undefined
+  >;
   cancelReminder?: (reminderId: string) => Promise<boolean>;
   pauseChannelActivity?: (durationMinutes?: number) => {
     pausedUntil: string;
@@ -536,6 +591,7 @@ function availableCapabilities(
   if (
     handlers.createReminder &&
     handlers.listReminders &&
+    handlers.editReminder &&
     handlers.cancelReminder
   ) {
     capabilities.push({
@@ -543,8 +599,13 @@ function availableCapabilities(
       category: "reminders",
       availability: "available",
       description:
-        "Create one-time or recurring reminders and list or cancel reminders bound to this requester and channel.",
-      tools: ["create_reminder", "list_reminders", "cancel_reminder"],
+        "Create, list, edit, or cancel one-time and recurring reminders in this channel. Anyone in the channel may edit or cancel a reminder.",
+      tools: [
+        "create_reminder",
+        "list_reminders",
+        "edit_reminder",
+        "cancel_reminder",
+      ],
     });
   }
 
@@ -1169,13 +1230,14 @@ function createServer(session: ChatbotMcpSession) {
   if (
     session.handlers.createReminder &&
     session.handlers.listReminders &&
+    session.handlers.editReminder &&
     session.handlers.cancelReminder
   ) {
     server.registerTool(
       "create_reminder",
       {
         description:
-          "Create a reminder in the current Discord channel for the current requester. Provide either an ISO 8601 runAt with an offset or a five-field cron. The host canonicalizes timestamps and whitespace. Recurring schedules default to Asia/Taipei. A one-time schedule has a timezone only when one was needed to resolve it.",
+          "Create a reminder in the current Discord channel for the current requester. Provide either an ISO 8601 runAt with an offset or a five-field cron. The host canonicalizes timestamps and whitespace. Recurring schedules default to Asia/Taipei. Use edit_reminder to change an existing reminder and cancel_reminder to remove one.",
         inputSchema: {
           content: z.string().trim().min(1).max(1_500),
           runAt: z.string().trim().max(50).optional(),
@@ -1213,7 +1275,7 @@ function createServer(session: ChatbotMcpSession) {
       "list_reminders",
       {
         description:
-          "List the current requester's reminders in the current Discord channel.",
+          "List every reminder in the current Discord channel. Use this first when an edit or cancellation request does not include a reminder ID.",
         inputSchema: {},
         annotations: readAnnotations,
       },
@@ -1230,10 +1292,50 @@ function createServer(session: ChatbotMcpSession) {
     );
 
     server.registerTool(
+      "edit_reminder",
+      {
+        description:
+          "Edit a reminder in the current Discord channel. Anyone in the channel may edit it. Provide content, a replacement runAt, or a replacement cron. Omitted content and schedule fields stay unchanged. Use list_reminders first when the reminder ID is not already known.",
+        inputSchema: {
+          reminderId: z.string().uuid(),
+          content: z.string().trim().min(1).max(1_500).optional(),
+          runAt: z.string().trim().max(50).optional(),
+          cron: z.string().trim().max(100).optional(),
+          timezone: z.string().trim().max(100).optional(),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        try {
+          const reminder = await session.handlers.editReminder!(
+            normalizeReminderEdit(input),
+          );
+          return toolResult({
+            status: reminder ? "complete" : "not_found",
+            ...(reminder ? { reminder } : {}),
+          });
+        } catch (error) {
+          return toolResult({
+            status: "invalid",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not edit reminder.",
+          });
+        }
+      },
+    );
+
+    server.registerTool(
       "cancel_reminder",
       {
         description:
-          "Cancel one reminder belonging to the current requester in the current Discord channel. Use list_reminders first when the reminder ID is not already known.",
+          "Cancel and remove one reminder in the current Discord channel. Anyone in the channel may cancel it. Use list_reminders first when the reminder ID is not already known.",
         inputSchema: {
           reminderId: z.string().uuid(),
         },

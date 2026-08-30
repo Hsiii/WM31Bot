@@ -36,7 +36,7 @@ afterEach(async () => {
 });
 
 describe("Reminder scheduler", () => {
-  test("creates, persists, scopes, and cancels one-time reminders", async () => {
+  test("lets anyone in a channel list, edit, and cancel reminders", async () => {
     const test = await setup(new Date("2026-07-25T10:00:00.000Z"));
     const reminder = await test.scheduler.create({
       requesterUserId: "user-1",
@@ -51,14 +51,32 @@ describe("Reminder scheduler", () => {
       content: "drink water",
       nextRunAt: "2026-07-25T10:30:00.000Z",
     });
-    expect(await test.scheduler.list("user-2", "channel-1")).toEqual([]);
-    expect(await test.scheduler.list("user-1", "channel-2")).toEqual([]);
+    expect(await test.scheduler.list("channel-1")).toHaveLength(1);
+    expect(await test.scheduler.list("channel-2")).toEqual([]);
+
+    const edited = await test.scheduler.edit({
+      channelId: "channel-1",
+      reminderId: reminder.id,
+      content: "buy tickets",
+      runAt: "2026-07-26T09:00:00+09:00",
+      timezone: "Asia/Tokyo",
+    });
+    expect(edited).toMatchObject({
+      id: reminder.id,
+      requesterUserId: "user-1",
+      content: "buy tickets",
+      nextRunAt: "2026-07-26T00:00:00.000Z",
+      timezone: "Asia/Tokyo",
+    });
     expect(
-      await test.scheduler.cancel("user-2", "channel-1", reminder.id),
-    ).toBe(false);
-    expect(
-      await test.scheduler.cancel("user-1", "channel-1", reminder.id),
-    ).toBe(true);
+      await test.scheduler.edit({
+        channelId: "channel-2",
+        reminderId: reminder.id,
+        content: "not allowed from another channel",
+      }),
+    ).toBeUndefined();
+    expect(await test.scheduler.cancel("channel-2", reminder.id)).toBe(false);
+    expect(await test.scheduler.cancel("channel-1", reminder.id)).toBe(true);
     expect(
       JSON.parse(await readFile(test.stateFile, "utf8")).reminders,
     ).toEqual([]);
@@ -84,7 +102,7 @@ describe("Reminder scheduler", () => {
     await test.scheduler.tick();
 
     expect(posted).toHaveLength(1);
-    expect(await test.scheduler.list("user-1", "channel-1")).toEqual([]);
+    expect(await test.scheduler.list("channel-1")).toEqual([]);
   });
 
   test("does not retain a reminder when persistence fails", async () => {
@@ -108,7 +126,7 @@ describe("Reminder scheduler", () => {
         runAt: "2026-07-25T10:01:00Z",
       }),
     ).rejects.toThrow();
-    expect(await scheduler.list("user-1", "channel-1")).toEqual([]);
+    expect(await scheduler.list("channel-1")).toEqual([]);
   });
 
   test("advances recurring cron reminders in their timezone", async () => {
@@ -132,9 +150,9 @@ describe("Reminder scheduler", () => {
     await test.scheduler.tick();
 
     expect(posted).toHaveLength(1);
-    expect(
-      (await test.scheduler.list("user-1", "channel-1"))[0]?.nextRunAt,
-    ).toBe("2026-07-26T01:00:00.000Z");
+    expect((await test.scheduler.list("channel-1"))[0]?.nextRunAt).toBe(
+      "2026-07-26T01:00:00.000Z",
+    );
   });
 
   test("rejects ambiguous, past, offset-less, and invalid cron schedules", async () => {
