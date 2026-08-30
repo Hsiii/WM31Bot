@@ -17,6 +17,7 @@ import {
   handleGithubWebhookRequest,
   isGithubWebhookConfigured,
 } from "./discord/jobs/github-pr-webhook";
+import { handleMediaAccessNotificationRequest } from "./discord/jobs/media-access-notifications";
 import { startToeflVocabScheduler } from "./discord/jobs/toefl-vocab";
 import { startXPostMonitor } from "./discord/jobs/x-post-monitor";
 import {
@@ -77,6 +78,13 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
 
   if (request.method === "POST" && pathname === "/api/github/webhook") {
     return handleGithubWebhookRequest(request);
+  }
+
+  if (
+    request.method === "POST" &&
+    pathname === "/api/internal/media-access-request"
+  ) {
+    return handleMediaAccessNotificationRequest(request);
   }
 
   return new Response("找不到此頁面", { status: 404 });
