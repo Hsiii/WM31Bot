@@ -122,7 +122,7 @@ export function chatbotFailureReply(kind: ChatbotFailureKind) {
   return "我這次沒完成 稍後再試一次";
 }
 
-function supplementalCapabilities({
+export function supplementalCapabilities({
   isOwner,
   hasAttachments,
   hasReactions,
@@ -183,11 +183,11 @@ function supplementalCapabilities({
       category: "development",
       availability: executionRoute === "oracle" ? "available" : "conditional",
       description:
-        "Inspect repositories visible to the dedicated GitHub account and handle debugging, tests, builds, code changes, commits, feature-branch pushes, issue work, and draft pull requests.",
+        "Inspect repositories visible to the dedicated GitHub account and handle debugging, tests, builds, code changes, commits, feature-branch pushes, issue work, draft pull requests, and ordinary pull-request merges when explicitly requested.",
       condition:
         executionRoute === "oracle"
           ? "This owner request is running in Oracle."
-          : "The owner must make a request that identifies an accessible repository.",
+          : "The owner must make a request that identifies an accessible repository; merging requires an explicit current request.",
     });
   }
   if (isOwner && chatbotRepository) {
@@ -196,11 +196,11 @@ function supplementalCapabilities({
       category: "development",
       availability: executionRoute === "oracle" ? "available" : "conditional",
       description:
-        "Inspect or change your own behavior and implementation through the configured chatbot repository.",
+        "Inspect or change your own behavior and implementation through the configured chatbot repository, and deploy it from main when explicitly requested.",
       condition:
         executionRoute === "oracle"
           ? "This owner request is running in Oracle."
-          : "The owner must explicitly request a change to your behavior or implementation.",
+          : "The owner must explicitly request a change to your behavior or implementation, or deployment of the configured chatbot repository.",
     });
   }
   if (isOwner) {
