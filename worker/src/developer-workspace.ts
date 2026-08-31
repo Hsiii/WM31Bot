@@ -63,7 +63,12 @@ case "$command:$subcommand" in
     done
     [ "$draft" = true ] || deny
     ;;
-  pr:merge|pr:ready|pr:review|pr:comment|repo:create|repo:delete|repo:archive|repo:edit|repo:fork|release:*|workflow:run|run:rerun|run:cancel|run:delete|secret:*|variable:*)
+  pr:merge)
+    for argument in "$@"; do
+      [ "$argument" != "--admin" ] || deny
+    done
+    ;;
+  pr:ready|pr:review|pr:comment|repo:create|repo:delete|repo:archive|repo:edit|repo:fork|release:*|workflow:run|run:rerun|run:cancel|run:delete|secret:*|variable:*)
     deny
     ;;
   auth:status|repo:view|repo:clone|repo:list|pr:view|pr:list|pr:checks|pr:diff|pr:status|issue:view|issue:list|issue:status|run:view|run:list|run:watch|workflow:view|workflow:list|release:view|release:list|release:download|search:*|status:*|help:*|version:*)

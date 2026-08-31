@@ -134,7 +134,7 @@ describe("developer workspace", () => {
     await resumed.cleanup();
   });
 
-  test("allows bounded issue and draft PR mutations", async () => {
+  test("allows bounded issue, draft PR, and merge mutations", async () => {
     const workspace = await prepareDeveloperWorkspace(
       job(),
       await options(),
@@ -161,7 +161,14 @@ describe("developer workspace", () => {
     expect(await new Response(allowed.stdout).text()).toContain(
       "issue comment 12",
     );
-    const denied = Bun.spawn([gh, "pr", "merge", "12"], {
+    const merge = Bun.spawn([gh, "pr", "merge", "12"], {
+      env: environment,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await merge.exited).toBe(0);
+    expect(await new Response(merge.stdout).text()).toContain("pr merge 12");
+    const denied = Bun.spawn([gh, "pr", "merge", "12", "--admin"], {
       env: environment,
       stdout: "ignore",
       stderr: "ignore",

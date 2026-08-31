@@ -106,7 +106,9 @@ repository work without a second inferred authorization scope:
 
 - issue operations are allowed;
 - the prepared feature branch may be pushed and used to open a draft PR;
-- merge, ready, review, protected-branch, and force-push operations are denied.
+- an explicit owner request may merge a pull request without administrative
+  bypass; and
+- ready, review, protected-branch, and force-push operations are denied.
 
 GitHub rulesets must independently block direct and force pushes to protected
 branches. The credential should have repository contents, issues, and pull
