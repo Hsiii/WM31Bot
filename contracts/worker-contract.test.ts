@@ -18,6 +18,15 @@ describe("chatbot job protocol", () => {
         ...common,
         purpose: "execution_route",
         availableRepositories: ["sago-cream/mini-sago"],
+        capabilities: [
+          {
+            id: "feature_availability",
+            category: "system",
+            availability: "available",
+            description: "Change feature coverage with a host-bound tool.",
+            tools: ["configure_feature_availability"],
+          },
+        ],
       })?.purpose,
     ).toBe("execution_route");
     expect(
@@ -66,6 +75,14 @@ describe("chatbot job protocol", () => {
         ...common,
         purpose: "answer",
         executionRoute: "chat",
+      }),
+    ).toBeNull();
+    expect(
+      parseChatbotJob({
+        ...common,
+        purpose: "execution_route",
+        availableRepositories: [],
+        capabilities: [{ id: "feature_availability", category: "unknown" }],
       }),
     ).toBeNull();
     expect(

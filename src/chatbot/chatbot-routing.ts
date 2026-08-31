@@ -3,6 +3,12 @@ import type {
   ChatbotTraceContext,
 } from "../../contracts/worker-contract";
 
+export function executionRouteOrChat(
+  route: ChatbotExecutionRoute | "unclear",
+): ChatbotExecutionRoute {
+  return route === "unclear" ? "chat" : route;
+}
+
 export function parsePreviousTraceLookup(content: string): {
   status: "complete" | "not_found" | "unavailable";
   trace?: ChatbotTraceContext;
@@ -98,9 +104,6 @@ export function missingDeveloperRepositoryResponse(
   repository?: string,
   availableRepositories: string[] = [],
 ) {
-  if (route === "unclear") {
-    return "我不確定你要我聊天 用 Mac 還是進 repo 做事 你指一下我就接著跑";
-  }
   if (route !== "oracle" || repository) return undefined;
   const choices =
     availableRepositories.length > 0

@@ -56,12 +56,13 @@ routing, evidence retrieval, and answering unless its required profile changes.
 1. The Gateway receives a human message and determines whether it is a mention,
    reply continuation, owner direct message, or timed follow-up.
 2. The hosted service authorizes the requester and gathers nearby messages.
-3. It reserves a compatible worker. Owner requests first run a bounded router
-   that selects `chat`, `mac`, `oracle`, or `unclear`, plus a repository for
-   Oracle work. An unclear decision asks the owner instead of silently falling
-   back to chat.
-4. The service registers a short-lived, bearer-bound MCP session and dispatches
-   one answer job.
+3. It reserves a compatible worker and registers a short-lived, bearer-bound
+   MCP session. Owner requests first run a bounded router with the session's
+   filtered capability catalog. The router keeps host-tool actions and uncertain
+   requests in `chat`, selects `mac` for explicit Mac resources, or selects
+   `oracle` with one repository for development work.
+4. The service routes the reserved workflow when needed and dispatches one
+   answer job with the executable MCP session.
 5. Codex receives the request, nearby context, and supported answer attachments.
    It may call `resolve_context` for more history, accessible guild search,
    member aliases, or the previous observable trace.

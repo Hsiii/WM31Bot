@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 32;
+export const CHATBOT_PROTOCOL_VERSION = 33;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -173,6 +173,7 @@ export type ExecutionRouteJob = ChatbotJobBase &
     purpose: "execution_route";
     availableRepositories: string[];
     chatbotRepository?: string;
+    capabilities?: ChatbotCapability[];
     availableTools?: never;
     socialActionCandidateMessageIds?: never;
   };
@@ -372,6 +373,10 @@ const ROUTING_ONLY_FIELDS = [
   "chatbotRepository",
 ] as const;
 
+const EXECUTION_ROUTE_FORBIDDEN_FIELDS = ANSWER_ONLY_FIELDS.filter(
+  (field) => field !== "capabilities",
+);
+
 export function parseChatbotJob(value: unknown): ChatbotJob | null {
   if (!isRecord(value) || !hasCommonJobFields(value)) return null;
 
@@ -380,8 +385,11 @@ export function parseChatbotJob(value: unknown): ChatbotJob | null {
       !isStringArray(value.availableRepositories) ||
       (value.chatbotRepository !== undefined &&
         typeof value.chatbotRepository !== "string") ||
+      (value.capabilities !== undefined &&
+        (!Array.isArray(value.capabilities) ||
+          !value.capabilities.every(isCapability))) ||
       !hasOnlyAbsent(value, [
-        ...ANSWER_ONLY_FIELDS,
+        ...EXECUTION_ROUTE_FORBIDDEN_FIELDS,
         "availableTools",
         "socialActionCandidateMessageIds",
       ])

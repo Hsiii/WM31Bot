@@ -7,6 +7,7 @@ import { CHATBOT_PROTOCOL_VERSION } from "../../contracts/worker-contract";
 import { enforceFirstPersonIdentity } from "../../contracts/answer-contract";
 import { ChatbotMediaRegistry } from "./media-assets";
 import { ChannelQuietTracker } from "../discord/channel-quiet";
+import type { FeatureAvailabilityStore } from "../discord/feature-availability";
 import {
   addGuildExpressionForRequest,
   ChatbotConversationTracker,
@@ -16,6 +17,7 @@ import {
   extractChatbotRequest,
   extractMentionRequest,
   executeChatbotAnswerDecision,
+  executionRouteOrChat,
   developerThreadName,
   formatDiscordAnswer,
   formatDiscordAnswers,
@@ -95,6 +97,19 @@ describe("Discord chatbot", () => {
       body: unknown;
     }> = [];
     let codingMessageCount = 0;
+    const featurePolicy = { defaultEnabled: false, rules: [] };
+    const featureAvailability = {
+      isEnabled: () => false,
+      list: () => ({
+        version: 1 as const,
+        features: {
+          chatbot: featurePolicy,
+          ambient_reactions: featurePolicy,
+          trip_planner: featurePolicy,
+        },
+      }),
+      configure: async () => featurePolicy,
+    } as unknown as FeatureAvailabilityStore;
 
     try {
       macAgentBridge.open(socket);
@@ -126,6 +141,7 @@ describe("Discord chatbot", () => {
         },
         botUserId: BOT_ID,
         accessConfig: ACCESS_CONFIG,
+        featureAvailability,
         discordRequest: async (path, options) => {
           discordCalls.push({
             path,
@@ -164,6 +180,21 @@ describe("Discord chatbot", () => {
             reason: "code change",
           }),
         }),
+      );
+      expect(routeJob.job.capabilities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "channel_messaging",
+            tools: ["send_channel_message"],
+          }),
+          expect.objectContaining({
+            id: "feature_availability",
+            tools: [
+              "list_feature_availability",
+              "configure_feature_availability",
+            ],
+          }),
+        ]),
       );
       const traceJob = await waitFor(() =>
         sent
@@ -1504,6 +1535,7 @@ describe("Discord chatbot", () => {
     expect(parseExecutionRoute("not json", repositories)).toEqual({
       route: "unclear",
     });
+    expect(executionRouteOrChat("unclear")).toBe("chat");
   });
 
   test("asks for a repository instead of dispatching an invalid dev job", () => {
@@ -1522,6 +1554,7 @@ describe("Discord chatbot", () => {
       missingDeveloperRepositoryResponse("oracle", "sago-cream/mini-sago"),
     ).toBeUndefined();
     expect(missingDeveloperRepositoryResponse("chat")).toBeUndefined();
+    expect(missingDeveloperRepositoryResponse("unclear")).toBeUndefined();
   });
 
   test("looks up Discord member aliases without classifying the request", async () => {
