@@ -315,7 +315,6 @@ describe("Codex chatbot runner", () => {
       "chat",
       "mac",
       "oracle",
-      "unclear",
     ]);
     expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
     expect(
@@ -364,6 +363,15 @@ describe("Codex chatbot runner", () => {
         ],
         availableRepositories: ["sago-cream/mini-sago", "Kiwi/backend"],
         chatbotRepository: "sago-cream/mini-sago",
+        capabilities: [
+          {
+            id: "feature_availability",
+            category: "system",
+            availability: "available",
+            description: "Change Discord feature coverage.",
+            tools: ["configure_feature_availability"],
+          },
+        ],
       }),
       [],
       [],
@@ -373,6 +381,7 @@ describe("Codex chatbot runner", () => {
       'available_repositories_json\n["sago-cream/mini-sago","Kiwi/backend"]',
     );
     expect(prompt).toContain('chatbot_repository_json\n"sago-cream/mini-sago"');
+    expect(prompt).toContain("configure_feature_availability");
     expect(prompt).toContain("把不要用 😂 的限制加進你的 prompt 裡");
     expect(prompt).toContain("filesystem sandbox 啟動失敗");
   });

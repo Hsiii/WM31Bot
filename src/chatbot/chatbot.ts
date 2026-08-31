@@ -66,6 +66,7 @@ import {
   type DiscordSearchQuery,
 } from "./chatbot-context";
 import {
+  executionRouteOrChat,
   missingDeveloperRepositoryResponse,
   parseExecutionRoute,
   parsePreviousTraceLookup,
@@ -97,6 +98,7 @@ export {
 } from "./chatbot-context";
 export type { DiscordRequest, DiscordSearchQuery } from "./chatbot-context";
 export {
+  executionRouteOrChat,
   missingDeveloperRepositoryResponse,
   parseExecutionRoute,
   parsePreviousTraceLookup,
@@ -1099,85 +1101,10 @@ export async function handleChatbotMention({
       let executionRoute: ChatbotExecutionRoute = "chat";
       let selectedRepository: string | undefined;
       let developerThreadTitle: string | undefined;
-
-      if (
-        requesterUserId === accessConfig.ownerUserId &&
-        !invocation?.chatOnly &&
-        !isChannelQuietRequest(request)
-      ) {
-        const routeJob: ChatbotJob = {
-          id: randomUUID(),
-          requesterUserId,
-          purpose: "execution_route",
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          request,
-          requestMessage,
-          messages,
-          availableRepositories: workflow.availableRepositories,
-          ...(workflow.chatbotRepository
-            ? { chatbotRepository: workflow.chatbotRepository }
-            : {}),
-        };
-        const routeDispatch = workflow.dispatch(routeJob);
-        let route = parseExecutionRoute("", workflow.availableRepositories);
-        if (routeDispatch.status === "accepted") {
-          const routeResult = await routeDispatch.result;
-          route = parseExecutionRoute(
-            routeResult.ok ? routeResult.content : "",
-            workflow.availableRepositories,
-          );
-        }
-        executionRoute = route.route === "unclear" ? "chat" : route.route;
-        selectedRepository = route.repository;
-        developerThreadTitle = route.threadTitle;
-
-        const missingRepository = missingDeveloperRepositoryResponse(
-          route.route,
-          selectedRepository,
-          workflow.availableRepositories,
-        );
-        if (missingRepository) {
-          return { ok: true as const, content: missingRepository };
-        }
-        const workerRoute = workflow.route(
-          [
-            executionRoute === "oracle" ? "dev" : "chat",
-            ...(executionRoute === "mac" ? (["mac"] as const) : []),
-          ],
-          selectedRepository,
-        );
-        if (workerRoute.status !== "accepted") {
-          return {
-            ok: false as const,
-            error:
-              workerRoute.status === "busy"
-                ? "The compatible worker is busy."
-                : "No compatible worker is online.",
-            failureKind: "unavailable" as const,
-          };
-        }
-      }
       let previousTrace: {
         status: "complete" | "not_found" | "unavailable";
         trace?: ChatbotTraceContext;
       } = { status: "unavailable" };
-      const traceDispatch = workflow.dispatch({
-        id: randomUUID(),
-        requesterUserId,
-        purpose: "trace_lookup",
-        channelId: message.channel_id,
-        requestMessageId: message.id,
-        request,
-        requestMessage,
-        messages: [],
-      });
-      if (traceDispatch.status === "accepted") {
-        const traceResult = await traceDispatch.result;
-        previousTrace = traceResult.ok
-          ? parsePreviousTraceLookup(traceResult.content)
-          : { status: "unavailable" };
-      }
 
       if (message.guild_id && reactionBroker) {
         try {
@@ -1252,19 +1179,8 @@ export async function handleChatbotMention({
       const tripPlanner = featureEnabled("trip_planner")
         ? createTripPlannerClient(process.env, `minisago-${message.id}`)
         : undefined;
-      const requestCapabilities = supplementalCapabilities({
-        isOwner: requesterUserId === accessConfig.ownerUserId,
-        hasAttachments:
-          requestMessage.attachments.length > 0 ||
-          Boolean(requestMessage.referencedMessage?.attachments.length),
-        hasReactions: Boolean(reactionCapabilities?.tools.length),
-        availableRepositories: workflow.availableRepositories,
-        chatbotRepository: workflow.chatbotRepository,
-        executionRoute,
-      });
 
       mcpSession = registerChatbotMcpSession({
-        supplementalCapabilities: requestCapabilities,
         mediaRegistry,
         getCodexUsage: () => workflow.getCodexUsage(),
         ...(quietTracker
@@ -1514,6 +1430,94 @@ export async function handleChatbotMention({
             }
           : {}),
       });
+
+      if (
+        requesterUserId === accessConfig.ownerUserId &&
+        !invocation?.chatOnly &&
+        !isChannelQuietRequest(request)
+      ) {
+        const routeJob: ChatbotJob = {
+          id: randomUUID(),
+          requesterUserId,
+          purpose: "execution_route",
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages,
+          capabilities: mcpSession.capabilities,
+          availableRepositories: workflow.availableRepositories,
+          ...(workflow.chatbotRepository
+            ? { chatbotRepository: workflow.chatbotRepository }
+            : {}),
+        };
+        const routeDispatch = workflow.dispatch(routeJob);
+        let route = parseExecutionRoute("", workflow.availableRepositories);
+        if (routeDispatch.status === "accepted") {
+          const routeResult = await routeDispatch.result;
+          route = parseExecutionRoute(
+            routeResult.ok ? routeResult.content : "",
+            workflow.availableRepositories,
+          );
+        }
+        executionRoute = executionRouteOrChat(route.route);
+        selectedRepository = route.repository;
+        developerThreadTitle = route.threadTitle;
+
+        const missingRepository = missingDeveloperRepositoryResponse(
+          route.route,
+          selectedRepository,
+          workflow.availableRepositories,
+        );
+        if (missingRepository) {
+          return { ok: true as const, content: missingRepository };
+        }
+        const workerRoute = workflow.route(
+          [
+            executionRoute === "oracle" ? "dev" : "chat",
+            ...(executionRoute === "mac" ? (["mac"] as const) : []),
+          ],
+          selectedRepository,
+        );
+        if (workerRoute.status !== "accepted") {
+          return {
+            ok: false as const,
+            error:
+              workerRoute.status === "busy"
+                ? "The compatible worker is busy."
+                : "No compatible worker is online.",
+            failureKind: "unavailable" as const,
+          };
+        }
+      }
+
+      const traceDispatch = workflow.dispatch({
+        id: randomUUID(),
+        requesterUserId,
+        purpose: "trace_lookup",
+        channelId: message.channel_id,
+        requestMessageId: message.id,
+        request,
+        requestMessage,
+        messages: [],
+      });
+      if (traceDispatch.status === "accepted") {
+        const traceResult = await traceDispatch.result;
+        previousTrace = traceResult.ok
+          ? parsePreviousTraceLookup(traceResult.content)
+          : { status: "unavailable" };
+      }
+
+      const requestCapabilities = supplementalCapabilities({
+        isOwner: requesterUserId === accessConfig.ownerUserId,
+        hasAttachments:
+          requestMessage.attachments.length > 0 ||
+          Boolean(requestMessage.referencedMessage?.attachments.length),
+        hasReactions: Boolean(reactionCapabilities?.tools.length),
+        availableRepositories: workflow.availableRepositories,
+        chatbotRepository: workflow.chatbotRepository,
+        executionRoute,
+      });
       if (executionRoute === "oracle") mcpSession.extend(DEVELOPER_TASK_TTL_MS);
       const answerBase = {
         id: randomUUID(),
@@ -1526,7 +1530,7 @@ export async function handleChatbotMention({
         requestMessage,
         messages,
         mcpAccessToken: mcpSession.token,
-        capabilities: mcpSession.capabilities,
+        capabilities: [...requestCapabilities, ...mcpSession.capabilities],
         ...(reactionCapabilities?.tools.length
           ? { availableTools: reactionCapabilities.tools }
           : {}),
