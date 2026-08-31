@@ -100,8 +100,10 @@ export const CHATBOT_MODEL_VERBOSITY = "medium";
 
 type CodexRunOptions = {
   appServer?: CodexAppServerManager;
+  chatbotRepository?: string;
   codexHome: string;
   codexPath: string;
+  deploySocketPath?: string;
   githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
@@ -771,6 +773,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       });
       developerWorkspace = await prepareDeveloperWorkspace(job, {
         ...options,
+        deploySocketRepository: options.chatbotRepository,
         signal: timeoutController.signal,
       });
     }

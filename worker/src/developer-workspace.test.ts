@@ -95,6 +95,46 @@ describe("developer workspace", () => {
     expect(commands[1]!.command.at(-1)).toBe("minisago/job-123");
   });
 
+  test("exposes only the configured deployment socket to coding jobs", async () => {
+    const workspace = await prepareDeveloperWorkspace(
+      job(),
+      {
+        ...(await options()),
+        deploySocketPath: "/run/sago-cloud/minisago-deploy.sock",
+        deploySocketRepository: "sago-cream/mini-sago",
+      },
+      async () => undefined,
+    );
+
+    expect(workspace.environment.MINISAGO_DEPLOY_SOCKET).toBe(
+      "/run/sago-cloud/minisago-deploy.sock",
+    );
+    expect(workspace.environment.MINISAGO_DISCORD_CHANNEL_ID).toBe("channel-1");
+    expect(workspace.sandboxWritePaths).toEqual([
+      join(workspace.directory, ".git"),
+      "/run/sago-cloud/minisago-deploy.sock",
+    ]);
+  });
+
+  test("hides the deployment socket from other repositories", async () => {
+    const workspaceOptions = await options();
+    workspaceOptions.githubRepositories.push("sago-cream/other");
+    const workspace = await prepareDeveloperWorkspace(
+      { ...job(), repository: "sago-cream/other" },
+      {
+        ...workspaceOptions,
+        deploySocketPath: "/run/sago-cloud/minisago-deploy.sock",
+        deploySocketRepository: "sago-cream/mini-sago",
+      },
+      async () => undefined,
+    );
+
+    expect(workspace.environment.MINISAGO_DEPLOY_SOCKET).toBeUndefined();
+    expect(workspace.sandboxWritePaths).toEqual([
+      join(workspace.directory, ".git"),
+    ]);
+  });
+
   test("preserves and reuses a coding task workspace", async () => {
     const workspaceOptions = await options();
     const commands: string[][] = [];

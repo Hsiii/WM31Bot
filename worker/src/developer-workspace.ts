@@ -7,6 +7,8 @@ type DeveloperWorkspaceOptions = {
   githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
+  deploySocketPath?: string;
+  deploySocketRepository?: string;
   signal?: AbortSignal;
 };
 
@@ -163,6 +165,12 @@ export async function prepareDeveloperWorkspace(
   runCommand: RunCommand = run,
 ): Promise<DeveloperWorkspace> {
   const repository = selectedRepository(job, options.githubRepositories);
+  const deploySocketPath =
+    options.deploySocketPath &&
+    options.deploySocketRepository?.toLocaleLowerCase("en-US") ===
+      repository.toLocaleLowerCase("en-US")
+      ? options.deploySocketPath
+      : undefined;
   const workspaceId = job.developerTask?.id ?? job.id;
   const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(workspaceId));
   const directory = join(jobRoot, ...repository.split("/"));
@@ -232,13 +240,22 @@ export async function prepareDeveloperWorkspace(
     MINISAGO_REAL_GH: Bun.which("gh") || "/usr/bin/gh",
     MINISAGO_REAL_GIT: Bun.which("git") || "/usr/bin/git",
     PATH: `${binDirectory}:${process.env.PATH || "/usr/bin:/bin"}`,
+    ...(deploySocketPath
+      ? {
+          MINISAGO_DEPLOY_SOCKET: deploySocketPath,
+          MINISAGO_DISCORD_CHANNEL_ID: job.channelId,
+        }
+      : {}),
   };
 
   return {
     directory,
     environment,
     sandboxReadPaths: [binDirectory, resolve(options.githubConfigDir)],
-    sandboxWritePaths: [resolve(directory, ".git")],
+    sandboxWritePaths: [
+      resolve(directory, ".git"),
+      ...(deploySocketPath ? [deploySocketPath] : []),
+    ],
     cleanup: job.developerTask
       ? () => {
           preserveThenRemove(jobRoot);

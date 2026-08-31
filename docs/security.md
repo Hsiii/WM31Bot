@@ -117,6 +117,15 @@ administration, secrets, environments, deployments, organization, or unrelated
 repository access. Credential and ruleset setup is tracked in
 [issue #12](https://github.com/sago-cream/mini-sago/issues/12).
 
+The production Oracle worker exposes one Unix socket only to jobs for the
+configured MiniSago repository. It accepts a full MiniSago commit SHA plus the
+worker-injected originating Discord thread ID. The host verifies the fixed
+request shape and deploys the matching immutable core and worker image tags.
+Codex receives no Docker socket, SSH credential, command argument, host path,
+or general deployment target through this channel. The bot reads the terminal
+status from a read-only mount and checkpoints its Discord notification in the
+existing persistent state volume.
+
 ## Retention and privacy
 
 Metadata-only worker logs exclude prompts, Discord messages, answers, links,

@@ -68,6 +68,13 @@ connects through the local `sago-cloud` SSH alias over Tailscale and retries
 connection timeouts three times. Use `SAGO_CLOUD_HOST` only for a replacement
 host.
 
+On the Sago Cloud Oracle worker, `MINISAGO_DEPLOY_SOCKET` replaces SSH with the
+bounded host socket. The script submits the exact `origin/main` commit and
+returns after the host accepts it, before the deployment replaces the bot and
+worker containers. The host pins both images to that immutable commit tag.
+The restarted bot reads the host status file and posts the terminal result to
+the originating Discord development thread once.
+
 The VM pulls published images rather than cloning this repository. Production
 secrets live under `/srv/sago-cloud/secrets`. Only the core container joins
 `sago_cloud_edge` under the `bot-core` alias. The following remain in external
