@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -29,6 +29,12 @@ describe("service subscriptions", () => {
       "423456789012345678",
     );
     expect(snapshot.services.x_posts_thsottiaux).toHaveLength(1);
+    expect(snapshot.services.threads_search).toEqual([
+      {
+        guildId: "1514899496797212683",
+        channelId: "1543897041350950982",
+      },
+    ]);
   });
 
   test("persists subscription changes", async () => {
@@ -60,6 +66,23 @@ describe("service subscriptions", () => {
       guildId: "523456789012345678",
       channelId: "623456789012345678",
     });
+  });
+
+  test("adds new managed services to an existing subscription file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "minisago-services-"));
+    const filePath = join(directory, "subscriptions.json");
+    const legacy = defaultServiceSubscriptions({});
+    delete (legacy.services as Partial<typeof legacy.services>).threads_search;
+    await writeFile(filePath, JSON.stringify(legacy));
+
+    const store = new ServiceSubscriptionStore(filePath, {});
+
+    expect(store.destinations("threads_search")).toEqual([
+      {
+        guildId: "1514899496797212683",
+        channelId: "1543897041350950982",
+      },
+    ]);
   });
 
   test("formats destinations as clickable Discord channels", () => {
