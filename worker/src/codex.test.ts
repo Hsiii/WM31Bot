@@ -278,6 +278,7 @@ describe("Codex chatbot runner", () => {
   test("gives developer tools their read-only sandbox dependencies", () => {
     expect(
       developerFilesystemPermissions(
+        "/home/bun/.codex",
         [
           "/workspace/worktrees/job-1/bin",
           "/home/bun/.config/gh",
@@ -287,12 +288,17 @@ describe("Codex chatbot runner", () => {
         "linux",
       ),
     ).toBe(
-      '{":minimal"="read","/proc"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read","/workspace/worktrees/job-1/sago-cream/mini-sago/.git"="write",":workspace_roots"={"."="write"}}',
+      '{":minimal"="read","/proc"="read","/home/bun/.codex/skills"="read","/workspace/worktrees/job-1/bin"="read","/home/bun/.config/gh"="read","/workspace/worktrees/job-1/sago-cream/mini-sago/.git"="write",":workspace_roots"={"."="write"}}',
     );
     expect(
-      developerFilesystemPermissions(["/Library/MiniSago"], [], "darwin"),
+      developerFilesystemPermissions(
+        "/Users/hsi/Library/Application Support/MiniSago/codex-home",
+        ["/Library/MiniSago"],
+        [],
+        "darwin",
+      ),
     ).toBe(
-      '{":minimal"="read","/Library/MiniSago"="read",":workspace_roots"={"."="write"}}',
+      '{":minimal"="read","/Users/hsi/Library/Application Support/MiniSago/codex-home/skills"="read","/Library/MiniSago"="read",":workspace_roots"={"."="write"}}',
     );
   });
 
