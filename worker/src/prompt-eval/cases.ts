@@ -25,6 +25,11 @@ export type PromptCaseSource =
       kind: "assigned-regression";
       regression: "lost-retry-intent";
       variant: "history-recoverable";
+    }
+  | {
+      kind: "assigned-regression";
+      regression: "guild-member-identification";
+      variant: "context-search";
     };
 
 export type PromptCaseExpectation = {
@@ -134,6 +139,26 @@ export const PROMPT_CASES: PromptCase[] = [
         { author: "Member A", content: "你們是室友嗎" },
         { author: "Member B", content: "先別亂猜啦" },
       ],
+    },
+    expectation: { requiredTools: ["resolve_context"] },
+  },
+  {
+    id: "guild-member-identification",
+    source: {
+      kind: "assigned-regression",
+      regression: "guild-member-identification",
+      variant: "context-search",
+    },
+    job: answerJob("guild-member-identification", "林小葦是誰"),
+    mockContext: {
+      members: [
+        {
+          query: "林小葦",
+          names: ["林小葦", "Member A"],
+          id: "111111111111111111",
+        },
+      ],
+      history: [{ author: "Member A", content: "我是資訊系二年級的林小葦" }],
     },
     expectation: { requiredTools: ["resolve_context"] },
   },

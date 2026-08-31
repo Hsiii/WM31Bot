@@ -113,6 +113,8 @@ async function runCase(
       "--config",
       "features.memories=false",
       "--config",
+      "features.shell_tool=false",
+      "--config",
       "project_doc_max_bytes=0",
       "--config",
       `developer_instructions=${JSON.stringify(plan.developerInstructions)}`,

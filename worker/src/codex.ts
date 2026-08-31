@@ -71,6 +71,7 @@ export const CHANNEL_QUIET_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.pause_channel_activity.approval_mode="approve"';
 export const TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.edit_trip_plan.approval_mode="approve"';
+export const CHAT_LOCAL_TOOLS_CONFIG = "features.shell_tool=false";
 
 export function minisagoMcpApprovalMode(
   job: AnswerJob,
@@ -824,6 +825,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       "features.hooks=false",
       "--config",
       "features.memories=false",
+      ...(hasDeveloperAccess ? [] : ["--config", CHAT_LOCAL_TOOLS_CONFIG]),
       "--config",
       "allow_login_shell=false",
       "--config",
