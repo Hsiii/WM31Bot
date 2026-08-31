@@ -196,10 +196,18 @@ export class FeatureAvailabilityStore {
 
 let sharedStore: FeatureAvailabilityStore | undefined;
 
-export function getFeatureAvailabilityStore() {
-  sharedStore ??= new FeatureAvailabilityStore(
-    process.env.MINISAGO_FEATURE_AVAILABILITY_FILE?.trim() ||
-      ".data/feature-availability.json",
+export function featureAvailabilityFile(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  return (
+    environment.MINISAGO_FEATURE_AVAILABILITY_FILE?.trim() ||
+    (environment.NODE_ENV === "production"
+      ? "/app/state/feature-availability.json"
+      : ".data/feature-availability.json")
   );
+}
+
+export function getFeatureAvailabilityStore() {
+  sharedStore ??= new FeatureAvailabilityStore(featureAvailabilityFile());
   return sharedStore;
 }
