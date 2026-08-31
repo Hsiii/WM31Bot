@@ -17,6 +17,7 @@ import {
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
+  CHAT_LOCAL_TOOLS_CONFIG,
   CHATBOT_MODEL_VERBOSITY,
   CHANNEL_QUIET_MCP_APPROVAL_CONFIG,
   CHANNEL_MESSAGE_MCP_APPROVAL_CONFIG,
@@ -193,6 +194,10 @@ describe("Codex chatbot runner", () => {
         ACCESS_CONFIG,
       ),
     ).toBe("approve");
+  });
+
+  test("removes the local shell from chat runs", () => {
+    expect(CHAT_LOCAL_TOOLS_CONFIG).toBe("features.shell_tool=false");
   });
 
   test("injects the request-local media server only into Linux chat answers", () => {

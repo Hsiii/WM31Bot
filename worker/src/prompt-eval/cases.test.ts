@@ -118,4 +118,18 @@ describe("prompt evaluation cases", () => {
       ),
     ).toBe(true);
   });
+
+  test("requires guild member identification to search server context", () => {
+    const identification = PROMPT_CASES.find(
+      ({ id }) => id === "guild-member-identification",
+    )!;
+
+    expect(
+      evaluatePromptCase(identification, {
+        output: validOutput,
+        tools: [],
+        exitCode: 0,
+      }),
+    ).toContain("Missing tool call: resolve_context");
+  });
 });
