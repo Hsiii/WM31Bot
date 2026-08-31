@@ -62,25 +62,28 @@ not repost the existing search backlog.
 
 ## Workers
 
-| Name                             | Required | Purpose                                                 |
-| -------------------------------- | -------- | ------------------------------------------------------- |
-| `MINISAGO_BRIDGE_URL`            | No       | Hosted WebSocket URL; plain `ws://` is local-only       |
-| `MINISAGO_MCP_URL`               | No       | MCP endpoint; derived from the bridge origin by default |
-| `MINISAGO_MAC_BRIDGE_SECRET`     | Yes      | Profile secret matching the hosted service              |
-| `MINISAGO_MAC_FILE_ROOTS`        | No       | Colon-separated roots for owner Mac file requests       |
-| `MINISAGO_CODEX_PATH`            | No       | Codex executable                                        |
-| `MINISAGO_CODEX_HOME`            | No       | Isolated Codex state                                    |
-| `MINISAGO_SESSION_MONITOR_PATH`  | Mac      | Compiled macOS lock monitor                             |
-| `MINISAGO_TRACE_DATABASE_PATH`   | No       | Local response-trace database                           |
-| `MINISAGO_WORKSPACE_ROOT`        | Dev      | Parent of disposable repository worktrees               |
-| `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Capacity advertised to the bridge, from 1 to 16         |
-| `MINISAGO_SANDBOX_URL`           | Linux    | Internal request-local computation broker URL           |
-| `MINISAGO_HEADLESS`              | Linux    | Keep a worker connected without a session monitor       |
-| `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                  |
-| `MINISAGO_CHATBOT_REPOSITORY`    | No       | Repository that owns chatbot behavior                   |
-| `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner ID as the hosted service                     |
-| `MINISAGO_GITHUB_CONFIG_DIR`     | Dev      | Dedicated GitHub CLI state                              |
-| `MINISAGO_GITHUB_WORKTREE_ROOT`  | No       | Disposable per-job checkout root                        |
+| Name                                      | Required | Purpose                                                 |
+| ----------------------------------------- | -------- | ------------------------------------------------------- |
+| `MINISAGO_BRIDGE_URL`                     | No       | Hosted WebSocket URL; plain `ws://` is local-only       |
+| `MINISAGO_MCP_URL`                        | No       | MCP endpoint; derived from the bridge origin by default |
+| `MINISAGO_MAC_BRIDGE_SECRET`              | Yes      | Profile secret matching the hosted service              |
+| `MINISAGO_MAC_FILE_ROOTS`                 | No       | Colon-separated roots for owner Mac file requests       |
+| `MINISAGO_CODEX_PATH`                     | No       | Codex executable                                        |
+| `MINISAGO_CODEX_HOME`                     | No       | Isolated Codex state                                    |
+| `MINISAGO_DEPLOY_SOCKET`                  | No       | Bounded host deployment socket exposed to Oracle        |
+| `MINISAGO_DEPLOY_STATUS_FILE`             | Core     | Read-only detached deployment status                    |
+| `MINISAGO_DEPLOY_NOTIFICATION_STATE_FILE` | Core     | Delivery checkpoint for deployment results              |
+| `MINISAGO_SESSION_MONITOR_PATH`           | Mac      | Compiled macOS lock monitor                             |
+| `MINISAGO_TRACE_DATABASE_PATH`            | No       | Local response-trace database                           |
+| `MINISAGO_WORKSPACE_ROOT`                 | Dev      | Parent of disposable repository worktrees               |
+| `MINISAGO_MAX_CONCURRENT_JOBS`            | No       | Capacity advertised to the bridge, from 1 to 16         |
+| `MINISAGO_SANDBOX_URL`                    | Linux    | Internal request-local computation broker URL           |
+| `MINISAGO_HEADLESS`                       | Linux    | Keep a worker connected without a session monitor       |
+| `MINISAGO_WORKER_ID`                      | No       | Stable worker identity                                  |
+| `MINISAGO_CHATBOT_REPOSITORY`             | No       | Repository that owns chatbot behavior                   |
+| `MINISAGO_CHATBOT_OWNER_USER_ID`          | Yes      | Same owner ID as the hosted service                     |
+| `MINISAGO_GITHUB_CONFIG_DIR`              | Dev      | Dedicated GitHub CLI state                              |
+| `MINISAGO_GITHUB_WORKTREE_ROOT`           | No       | Disposable per-job checkout root                        |
 
 Worker URLs must use TLS outside local or container-local hosts. Bridge secrets
 must contain at least 32 bytes. The owner ID is validated as a Discord snowflake

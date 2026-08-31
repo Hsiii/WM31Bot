@@ -1,5 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 
+import { requestMinisagoDeployment } from "./deploy-socket";
+
 const repository = "sago-cream/mini-sago";
 const workflow = "image.yml";
 const service = "minisago";
@@ -73,6 +75,20 @@ function deployRemote() {
   }
 }
 
+async function deploy(commit) {
+  const deploySocket = process.env.MINISAGO_DEPLOY_SOCKET?.trim();
+  if (!deploySocket) {
+    deployRemote();
+    return;
+  }
+
+  const channelId = process.env.MINISAGO_DISCORD_CHANNEL_ID?.trim() || "";
+  await requestMinisagoDeployment(deploySocket, commit, channelId);
+  console.log(
+    `MiniSago deployment for ${commit} was accepted. The bot and Oracle will restart.`,
+  );
+}
+
 function waitForImage(commit) {
   let runId = "";
 
@@ -136,4 +152,4 @@ if (commit !== remoteCommit) {
 }
 
 waitForImage(commit);
-deployRemote();
+await deploy(commit);

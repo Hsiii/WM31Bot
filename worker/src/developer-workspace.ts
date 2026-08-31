@@ -7,6 +7,8 @@ type DeveloperWorkspaceOptions = {
   githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
+  deploySocketPath?: string;
+  deploySocketRepository?: string;
   signal?: AbortSignal;
 };
 
@@ -63,7 +65,14 @@ case "$command:$subcommand" in
     done
     [ "$draft" = true ] || deny
     ;;
-  pr:merge|pr:ready|pr:review|pr:comment|repo:create|repo:delete|repo:archive|repo:edit|repo:fork|release:*|workflow:run|run:rerun|run:cancel|run:delete|secret:*|variable:*)
+  pr:merge)
+    for argument in "$@"; do
+      case "$argument" in
+        --admin|--admin=*) deny ;;
+      esac
+    done
+    ;;
+  pr:ready|pr:review|pr:comment|repo:create|repo:delete|repo:archive|repo:edit|repo:fork|release:*|workflow:run|run:rerun|run:cancel|run:delete|secret:*|variable:*)
     deny
     ;;
   auth:status|repo:view|repo:clone|repo:list|pr:view|pr:list|pr:checks|pr:diff|pr:status|issue:view|issue:list|issue:status|run:view|run:list|run:watch|workflow:view|workflow:list|release:view|release:list|release:download|search:*|status:*|help:*|version:*)
@@ -158,6 +167,12 @@ export async function prepareDeveloperWorkspace(
   runCommand: RunCommand = run,
 ): Promise<DeveloperWorkspace> {
   const repository = selectedRepository(job, options.githubRepositories);
+  const deploySocketPath =
+    options.deploySocketPath &&
+    options.deploySocketRepository?.toLocaleLowerCase("en-US") ===
+      repository.toLocaleLowerCase("en-US")
+      ? options.deploySocketPath
+      : undefined;
   const workspaceId = job.developerTask?.id ?? job.id;
   const jobRoot = resolve(options.githubWorktreeRoot, safeJobId(workspaceId));
   const directory = join(jobRoot, ...repository.split("/"));
@@ -227,13 +242,22 @@ export async function prepareDeveloperWorkspace(
     MINISAGO_REAL_GH: Bun.which("gh") || "/usr/bin/gh",
     MINISAGO_REAL_GIT: Bun.which("git") || "/usr/bin/git",
     PATH: `${binDirectory}:${process.env.PATH || "/usr/bin:/bin"}`,
+    ...(deploySocketPath
+      ? {
+          MINISAGO_DEPLOY_SOCKET: deploySocketPath,
+          MINISAGO_DISCORD_CHANNEL_ID: job.channelId,
+        }
+      : {}),
   };
 
   return {
     directory,
     environment,
     sandboxReadPaths: [binDirectory, resolve(options.githubConfigDir)],
-    sandboxWritePaths: [resolve(directory, ".git")],
+    sandboxWritePaths: [
+      resolve(directory, ".git"),
+      ...(deploySocketPath ? [deploySocketPath] : []),
+    ],
     cleanup: job.developerTask
       ? () => {
           preserveThenRemove(jobRoot);

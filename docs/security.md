@@ -106,7 +106,9 @@ repository work without a second inferred authorization scope:
 
 - issue operations are allowed;
 - the prepared feature branch may be pushed and used to open a draft PR;
-- merge, ready, review, protected-branch, and force-push operations are denied.
+- an explicit owner request may merge a pull request without administrative
+  bypass; and
+- ready, review, protected-branch, and force-push operations are denied.
 
 GitHub rulesets must independently block direct and force pushes to protected
 branches. The credential should have repository contents, issues, and pull
@@ -114,6 +116,15 @@ request access plus read access to checks and Actions when needed; never grant
 administration, secrets, environments, deployments, organization, or unrelated
 repository access. Credential and ruleset setup is tracked in
 [issue #12](https://github.com/sago-cream/mini-sago/issues/12).
+
+The production Oracle worker exposes one Unix socket only to jobs for the
+configured MiniSago repository. It accepts a full MiniSago commit SHA plus the
+worker-injected originating Discord thread ID. The host verifies the fixed
+request shape and deploys the matching immutable core and worker image tags.
+Codex receives no Docker socket, SSH credential, command argument, host path,
+or general deployment target through this channel. The bot reads the terminal
+status from a read-only mount and checkpoints its Discord notification in the
+existing persistent state volume.
 
 ## Retention and privacy
 

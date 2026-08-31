@@ -915,6 +915,8 @@ describe("Codex chatbot runner", () => {
     expect(policy).toContain("sago-cream/mini-sago");
     expect(policy).toContain("routed to Oracle");
     expect(policy).toContain("draft pull requests");
+    expect(policy).toContain("ordinary pull-request merges");
+    expect(policy).toContain("current request explicitly asks");
     expect(policy).toContain("dedicated repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");
     expect(chatPrompt).not.toContain("github_development_policy");

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  deploySocketPath,
   macFileRoots,
   parseGitHubRepositories,
   validateBridgeUrl,
@@ -9,6 +10,14 @@ import {
 } from "./config";
 
 describe("worker configuration", () => {
+  test("accepts only an absolute deployment socket path", () => {
+    expect(deploySocketPath("/run/sago-cloud/deploy.sock")).toBe(
+      "/run/sago-cloud/deploy.sock",
+    );
+    expect(deploySocketPath(" ")).toBeUndefined();
+    expect(() => deploySocketPath("deploy.sock")).toThrow("absolute path");
+  });
+
   test("discovers every valid repository visible to the worker account", () => {
     expect(
       parseGitHubRepositories(
