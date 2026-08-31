@@ -34,6 +34,7 @@ import {
   parsePreviousTraceLookup,
   postChatbotResponse,
   searchGuildMessages,
+  supplementalCapabilities,
   toChatbotMessage,
   type DiscordRequest,
 } from "./chatbot";
@@ -77,6 +78,34 @@ describe("Discord chatbot", () => {
     );
     expect(developerThreadName("x".repeat(200)).length).toBe(100);
     expect(developerThreadName()).toBe("Coding task");
+  });
+
+  test("advertises owner merges and self-deploys in chat", () => {
+    const capabilities = supplementalCapabilities({
+      isOwner: true,
+      hasAttachments: false,
+      hasReactions: false,
+      availableRepositories: ["sago-cream/mini-sago"],
+      chatbotRepository: "sago-cream/mini-sago",
+      executionRoute: "chat",
+    });
+
+    expect(capabilities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "repository_work",
+          availability: "conditional",
+          description: expect.stringContaining("pull-request merges"),
+          condition: expect.stringContaining("explicit current request"),
+        }),
+        expect.objectContaining({
+          id: "self_development",
+          availability: "conditional",
+          description: expect.stringContaining("deploy it from main"),
+          condition: expect.stringContaining("deployment"),
+        }),
+      ]),
+    );
   });
 
   test("detaches developer work into a steerable Discord thread", async () => {
