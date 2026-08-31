@@ -67,7 +67,9 @@ case "$command:$subcommand" in
     ;;
   pr:merge)
     for argument in "$@"; do
-      [ "$argument" != "--admin" ] || deny
+      case "$argument" in
+        --admin|--admin=*) deny ;;
+      esac
     done
     ;;
   pr:ready|pr:review|pr:comment|repo:create|repo:delete|repo:archive|repo:edit|repo:fork|release:*|workflow:run|run:rerun|run:cancel|run:delete|secret:*|variable:*)

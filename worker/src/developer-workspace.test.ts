@@ -214,6 +214,15 @@ describe("developer workspace", () => {
       stderr: "ignore",
     });
     expect(await denied.exited).toBe(77);
+    const assignedAdmin = Bun.spawn(
+      [gh, "pr", "merge", "12", "--admin=true"],
+      {
+        env: environment,
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    );
+    expect(await assignedAdmin.exited).toBe(77);
   });
 
   test("rejects a repository outside the worker advertisement", async () => {
