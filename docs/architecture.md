@@ -116,6 +116,12 @@ through fixed FFmpeg presets. The worker can exchange bytes only with the
 bearer-bound request media endpoint; it accepts no paths, URLs, or arbitrary
 network destinations. The server, token, and local manifest are request-scoped.
 
+Ordinary answer jobs also connect to the public NTHU Campus Assistant MCP at
+`https://api.nthusa.tw/mcp`. Its read-only tools cover campus search, buses,
+courses, announcements, dining schedules, library information, newsletters,
+and electricity usage. The server is optional, so an upstream outage does not
+prevent MiniSago from answering unrelated requests.
+
 Reminder identity and destination are fixed to the requester and current
 channel. Relative timers need no timezone; wall-clock and recurring requests
 require an IANA timezone or an unambiguous location. Each requester may keep at

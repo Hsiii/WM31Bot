@@ -145,6 +145,24 @@ export function supplementalCapabilities({
       description:
         "Answer, explain, write, reason, and use the supplied nearby Discord conversation while matching the requester's language.",
     },
+    {
+      id: "nthu_campus",
+      category: "system",
+      availability: "available",
+      description:
+        "Look up current NTHU campus locations, departments, staff contacts, buses, courses, announcements, dining schedules, library spaces and lost items, newsletters, and electricity usage through the public NTHU Campus Assistant.",
+      tools: [
+        "search_campus",
+        "get_next_buses",
+        "get_bus_stops",
+        "search_courses",
+        "get_announcements",
+        "find_dining",
+        "get_library_info",
+        "get_newsletters",
+        "get_energy_usage",
+      ],
+    },
   ];
 
   if (hasReactions) {

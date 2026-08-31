@@ -59,6 +59,7 @@ const MAC_FILES_MCP_SERVER_PATH = join(
   "mac",
   "mac-files-mcp.ts",
 );
+export const NTHU_CAMPUS_MCP_URL = "https://api.nthusa.tw/mcp";
 export const EXPRESSION_ADD_MCP_APPROVAL_CONFIG =
   'mcp_servers.minisago.tools.add_guild_expression.approval_mode="approve"';
 export const EMOJI_RENAME_MCP_APPROVAL_CONFIG =
@@ -329,6 +330,23 @@ export function mediaMcpConfig(
       MINISAGO_MCP_URL: mcpUrl,
       MINISAGO_MCP_TOKEN: mcpToken,
     },
+  };
+}
+
+export function nthuCampusMcpConfig(url = NTHU_CAMPUS_MCP_URL) {
+  return {
+    arguments: [
+      "--config",
+      `mcp_servers.nthusa.url=${JSON.stringify(url)}`,
+      "--config",
+      "mcp_servers.nthusa.required=false",
+      "--config",
+      'mcp_servers.nthusa.default_tools_approval_mode="approve"',
+      "--config",
+      "mcp_servers.nthusa.startup_timeout_sec=10",
+      "--config",
+      "mcp_servers.nthusa.tool_timeout_sec=30",
+    ],
   };
 }
 
@@ -800,6 +818,10 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
     const macFilesMcp = hasMacFileAccess
       ? macFilesMcpConfig(options.macFileRoots)
       : undefined;
+    const nthuCampusMcp =
+      job.purpose === "answer" && !job.developerTask
+        ? nthuCampusMcpConfig()
+        : undefined;
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -901,6 +923,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
 
     if (mediaMcp) codexArguments.push(...mediaMcp.arguments);
     if (macFilesMcp) codexArguments.push(...macFilesMcp.arguments);
+    if (nthuCampusMcp) codexArguments.push(...nthuCampusMcp.arguments);
 
     if (hasDeveloperAccess && job.developerTask && options.appServer) {
       const content = await options.appServer.run({

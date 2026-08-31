@@ -108,6 +108,29 @@ describe("Discord chatbot", () => {
     );
   });
 
+  test("advertises live NTHU campus lookups to every chatbot user", () => {
+    const capabilities = supplementalCapabilities({
+      isOwner: false,
+      hasAttachments: false,
+      hasReactions: false,
+      availableRepositories: [],
+      executionRoute: "chat",
+    });
+
+    expect(capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "nthu_campus",
+        availability: "available",
+        tools: expect.arrayContaining([
+          "search_campus",
+          "get_next_buses",
+          "search_courses",
+          "get_library_info",
+        ]),
+      }),
+    );
+  });
+
   test("detaches developer work into a steerable Discord thread", async () => {
     const oldWorkerSecret = process.env.MINISAGO_WORKER_BRIDGE_SECRET;
     const oldMacSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET;

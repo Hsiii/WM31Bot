@@ -37,6 +37,8 @@ import {
   macFilesMcpConfig,
   mediaMcpConfig,
   minisagoMcpApprovalMode,
+  NTHU_CAMPUS_MCP_URL,
+  nthuCampusMcpConfig,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
@@ -198,6 +200,24 @@ describe("Codex chatbot runner", () => {
 
   test("removes the local shell from chat runs", () => {
     expect(CHAT_LOCAL_TOOLS_CONFIG).toBe("features.shell_tool=false");
+  });
+
+  test("connects ordinary answers to the public NTHU campus MCP", () => {
+    expect(NTHU_CAMPUS_MCP_URL).toBe("https://api.nthusa.tw/mcp");
+    expect(nthuCampusMcpConfig()).toEqual({
+      arguments: [
+        "--config",
+        'mcp_servers.nthusa.url="https://api.nthusa.tw/mcp"',
+        "--config",
+        "mcp_servers.nthusa.required=false",
+        "--config",
+        'mcp_servers.nthusa.default_tools_approval_mode="approve"',
+        "--config",
+        "mcp_servers.nthusa.startup_timeout_sec=10",
+        "--config",
+        "mcp_servers.nthusa.tool_timeout_sec=30",
+      ],
+    });
   });
 
   test("injects the request-local media server only into Linux chat answers", () => {
