@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 
 import {
   defaultFeatureAvailability,
+  featureAvailabilityFile,
   FeatureAvailabilityStore,
 } from "./feature-availability";
 
@@ -31,6 +32,21 @@ async function store(environment: NodeJS.ProcessEnv = {}) {
 }
 
 describe("feature availability", () => {
+  test("uses persistent state by default in production", () => {
+    expect(featureAvailabilityFile({ NODE_ENV: "production" })).toBe(
+      "/app/state/feature-availability.json",
+    );
+    expect(featureAvailabilityFile({ NODE_ENV: "development" })).toBe(
+      ".data/feature-availability.json",
+    );
+    expect(
+      featureAvailabilityFile({
+        NODE_ENV: "production",
+        MINISAGO_FEATURE_AVAILABILITY_FILE: "/custom/features.json",
+      }),
+    ).toBe("/custom/features.json");
+  });
+
   test("preserves the old environment coverage as initial policy", () => {
     const snapshot = defaultFeatureAvailability({
       MINISAGO_CHATBOT_GUILD_IDS: "917436845187563610",

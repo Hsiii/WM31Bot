@@ -107,13 +107,14 @@ directory is an independent local-only Git repository with no configured
 remote. Its files and Git history must never be committed to the application
 repository. Each guild file is capped at 4,000 characters.
 
-Feature availability defaults to `.data/feature-availability.json`. On the
-first change, MiniSago writes a complete policy initialized from the existing
-chatbot environment lists and built-in behavior. After that, the file is the
-source of truth. An owner can ask MiniSago to list, enable, disable, or restore
-inherited availability for a feature in an exact server or channel. Channel
-rules override server rules, and server rules override the feature default.
-The scoped features are chatbot access, ambient reactions, and the trip
+Feature availability defaults to `/app/state/feature-availability.json` in
+production and `.data/feature-availability.json` elsewhere. On the first
+change, MiniSago writes a complete policy initialized from the existing chatbot
+environment lists and built-in behavior. After that, the file is the source of
+truth. An owner can ask MiniSago to list, enable, disable, or restore inherited
+availability for a feature in an exact server or channel. Channel rules
+override server rules, and server rules override the feature default. The
+scoped features are chatbot access, ambient reactions, and the trip
 planner. Always-on capabilities do not appear in this policy.
 
 Background-service subscriptions default to
