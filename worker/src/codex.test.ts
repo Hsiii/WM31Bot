@@ -965,10 +965,15 @@ describe("Codex chatbot runner", () => {
     expect(policy).toContain("sago-cream/mini-sago");
     expect(policy).toContain("routed to Oracle");
     expect(policy).toContain("draft pull requests");
+    expect(policy).toContain("marking those pull requests ready");
     expect(policy).toContain("ordinary pull-request merges");
     expect(policy).toContain("current request explicitly asks");
     expect(policy).toContain("dedicated repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");
+    expect(devPrompt).toContain("pull request may be marked ready");
+    expect(devPrompt).not.toContain(
+      "Never bypass the command wrapper, use administrative bypass, mark a pull request ready",
+    );
     expect(chatPrompt).not.toContain("github_development_policy");
   });
 });
