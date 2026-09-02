@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 import type { ChatbotTaskProgress } from "../../contracts/worker-contract";
-import { CodexAppServerManager } from "./codex-app-server";
+import {
+  CodexAppServerManager,
+  isSuccessfulPullRequestMerge,
+} from "./codex-app-server";
 
 const fakeServer = join(
   import.meta.dir,
@@ -30,6 +33,33 @@ function runOptions(
 }
 
 describe("Codex App Server manager", () => {
+  test("recognizes only successful pull request merge commands", () => {
+    expect(
+      isSuccessfulPullRequestMerge({
+        type: "commandExecution",
+        command: '/bin/zsh -lc "gh pr merge 42 --merge"',
+        status: "completed",
+        exitCode: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isSuccessfulPullRequestMerge({
+        type: "commandExecution",
+        command: "gh pr merge 42 --merge",
+        status: "failed",
+        exitCode: 1,
+      }),
+    ).toBe(false);
+    expect(
+      isSuccessfulPullRequestMerge({
+        type: "commandExecution",
+        command: "gh pr view 42",
+        status: "completed",
+        exitCode: 0,
+      }),
+    ).toBe(false);
+  });
+
   test("keeps steering in the active turn and returns only its final answer", async () => {
     const manager = new CodexAppServerManager();
     expect(manager.status()).toEqual({ ok: true, sessions: 0, active: 0 });

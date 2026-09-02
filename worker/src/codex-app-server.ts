@@ -62,6 +62,16 @@ function errorMessage(value: unknown, fallback: string) {
   return typeof error?.message === "string" ? error.message : fallback;
 }
 
+export function isSuccessfulPullRequestMerge(item: JsonObject) {
+  if (item.type !== "commandExecution") return false;
+  const command = text(item.command);
+  return (
+    item.status === "completed" &&
+    item.exitCode === 0 &&
+    /(?:^|[\s"'=\/])gh\s+pr\s+merge(?:\s|$)/u.test(command)
+  );
+}
+
 class CodexTurnInterruptedError extends Error {}
 
 class CodexAppServerSession {
@@ -341,6 +351,14 @@ class CodexAppServerSession {
 
   private handleCompletedItem(active: ActiveTurn, item?: JsonObject) {
     if (!item || typeof item.type !== "string") return;
+    if (isSuccessfulPullRequestMerge(item)) {
+      active.onProgress?.({
+        phase: "reviewing",
+        summary: "Pull request merged.",
+        completion: "pull_request_merged",
+      });
+      return;
+    }
     if (item.type === "reasoning") {
       const summary = text(item.summary).trim();
       if (summary) {

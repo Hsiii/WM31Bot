@@ -527,6 +527,18 @@ describe("Discord chatbot", () => {
       macAgentBridge.message(
         socket,
         JSON.stringify({
+          type: "progress",
+          jobId: fallbackJob.job.id,
+          progress: {
+            phase: "reviewing",
+            summary: "Pull request merged.",
+            completion: "pull_request_merged",
+          },
+        }),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
           type: "result",
           jobId: fallbackJob.job.id,
           ok: true,
@@ -537,6 +549,114 @@ describe("Discord chatbot", () => {
         discordCalls.find(
           ({ body }) =>
             (body as { content?: string })?.content === "edge cases included",
+        ),
+      );
+
+      expect(
+        await handleChatbotMention({
+          message: {
+            id: "ambient-after-merge",
+            channel_id: "coding-thread",
+            guild_id: "917436845187563610",
+            content: "this should stay a normal thread message",
+            timestamp: "2026-08-10T12:03:00.000Z",
+            author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+          },
+          botUserId: BOT_ID,
+          accessConfig: ACCESS_CONFIG,
+          discordRequest: async () => ({ id: "unused" }) as never,
+        }),
+      ).toBe(false);
+
+      expect(
+        await handleChatbotMention({
+          message: {
+            id: "mention-after-merge",
+            channel_id: "coding-thread",
+            guild_id: "917436845187563610",
+            content: `<@${BOT_ID}> review the release notes`,
+            timestamp: "2026-08-10T12:03:30.000Z",
+            author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+            mentions: [{ id: BOT_ID }],
+          },
+          botUserId: BOT_ID,
+          accessConfig: ACCESS_CONFIG,
+          discordRequest: async () => ({ id: "unused" }) as never,
+        }),
+      ).toBe(true);
+      const mentionedJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" &&
+              value.job.purpose === "answer" &&
+              value.job.request === "review the release notes",
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: mentionedJob.job.id,
+          ok: true,
+          content: "release notes reviewed",
+        }),
+      );
+      await waitFor(() =>
+        discordCalls.find(
+          ({ body }) =>
+            (body as { content?: string })?.content ===
+            "release notes reviewed",
+        ),
+      );
+
+      expect(
+        await handleChatbotMention({
+          message: {
+            id: "reply-after-merge",
+            channel_id: "coding-thread",
+            guild_id: "917436845187563610",
+            content: "check the changelog too",
+            timestamp: "2026-08-10T12:04:00.000Z",
+            author: { id: ACCESS_CONFIG.ownerUserId, username: "Hsi" },
+            mentions: [{ id: BOT_ID }],
+            referenced_message: {
+              id: "bot-result",
+              channel_id: "coding-thread",
+              content: "release notes reviewed",
+              timestamp: "2026-08-10T12:03:45.000Z",
+              author: { id: BOT_ID, username: "MiniSago" },
+            },
+          },
+          botUserId: BOT_ID,
+          accessConfig: ACCESS_CONFIG,
+          discordRequest: async () => ({ id: "unused" }) as never,
+        }),
+      ).toBe(true);
+      const repliedJob = await waitFor(() =>
+        sent
+          .map((value) => JSON.parse(value))
+          .find(
+            (value) =>
+              value.type === "job" &&
+              value.job.purpose === "answer" &&
+              value.job.request === "check the changelog too",
+          ),
+      );
+      macAgentBridge.message(
+        socket,
+        JSON.stringify({
+          type: "result",
+          jobId: repliedJob.job.id,
+          ok: true,
+          content: "changelog checked",
+        }),
+      );
+      await waitFor(() =>
+        discordCalls.find(
+          ({ body }) =>
+            (body as { content?: string })?.content === "changelog checked",
         ),
       );
     } finally {
