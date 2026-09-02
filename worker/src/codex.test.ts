@@ -458,15 +458,33 @@ describe("Codex chatbot runner", () => {
     expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
   });
 
-  test("uses native Codex output for Discord coding threads", () => {
+  test("uses native Codex output in the requester's language for Discord coding threads", () => {
     const developerJob: OracleAnswerJob = oracleJob({
       requesterUserId: ACCESS_CONFIG.ownerUserId,
+      request: "Fix the Discord reply. English only.",
       developerTask: { id: "task-1" },
+      messages: [
+        {
+          id: "nearby-message",
+          author: "Nearby member",
+          timestamp: "2026-09-02T00:00:00.000Z",
+          content: "請幫忙修好它",
+          attachments: [],
+        },
+      ],
     });
     const prompt = buildCodexPrompt(developerJob, [], [], "Repository policy");
 
     expect(outputSchemaForJob(developerJob)).toBeUndefined();
     expect(prompt).toContain("Repository policy");
+    expect(prompt).toContain(
+      "Choose the language from current_request, not nearby Discord messages or server memory",
+    );
+    expect(prompt).toContain(
+      'Follow explicit language requests such as "English only"',
+    );
+    expect(prompt).toContain("Fix the Discord reply. English only.");
+    expect(prompt).toContain("請幫忙修好它");
     expect(prompt).not.toContain("referenceResolution");
   });
 
