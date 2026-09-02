@@ -890,6 +890,18 @@ describe("Codex chatbot runner", () => {
     expect(environment.PATH.split(":")).toContain("/usr/bin");
   });
 
+  test("uses the request-local temporary directory", () => {
+    const environment = codexEnvironment(
+      "/tmp/codex-home",
+      "/usr/local/bin/codex",
+      false,
+      {},
+      { TMPDIR: "/tmp/minisago-chatbot-1/outputs" },
+    );
+
+    expect(environment.TMPDIR).toBe("/tmp/minisago-chatbot-1/outputs");
+  });
+
   test("exposes no token and gives GitHub paths only to owner dev answers", () => {
     const developerEnvironment = {
       MINISAGO_GITHUB_CONFIG_DIR: "/tmp/github-config",

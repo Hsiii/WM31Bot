@@ -771,8 +771,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   if (options.signal?.aborted) timeoutController.abort();
   let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
   let developerWorkspace:
-    | Awaited<ReturnType<typeof prepareDeveloperWorkspace>>
-    | undefined;
+    Awaited<ReturnType<typeof prepareDeveloperWorkspace>> | undefined;
 
   try {
     prepared = await prepareAttachments(
@@ -871,7 +870,10 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
           hasMacFileAccess
             ? options.macFileRoots
             : (developerWorkspace?.sandboxReadPaths ?? []),
-          developerWorkspace?.sandboxWritePaths ?? [],
+          [
+            ...(developerWorkspace?.sandboxWritePaths ?? []),
+            prepared.outputsDirectory,
+          ],
         )}`,
         "--config",
         `permissions.${permissionName}.network.enabled=true`,
@@ -879,11 +881,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
     } else {
       codexArguments.push(
         "--config",
-        `permissions.minisago-chatbot.filesystem={":minimal"="read",${
-          hasMediaTools
-            ? `${JSON.stringify(prepared.outputsDirectory)}="write",`
-            : ""
-        }":workspace_roots"={"."="read"}}`,
+        `permissions.minisago-chatbot.filesystem={":minimal"="read",${JSON.stringify(prepared.outputsDirectory)}="write",":workspace_roots"={"."="read"}}`,
         "--config",
         "permissions.minisago-chatbot.network.enabled=false",
       );
@@ -947,7 +945,10 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
             MINISAGO_GITHUB_REPOSITORY: job.repository,
             MINISAGO_JOB_ID: job.id,
           },
-          { MINISAGO_MCP_TOKEN: job.mcpAccessToken },
+          {
+            MINISAGO_MCP_TOKEN: job.mcpAccessToken,
+            TMPDIR: prepared.outputsDirectory,
+          },
         ),
         model: profile.model,
         effort: profile.reasoningEffort,
@@ -1000,6 +1001,7 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
           ...(job.mcpAccessToken
             ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
             : {}),
+          TMPDIR: prepared.outputsDirectory,
           ...mediaMcp?.environment,
           ...macFilesMcp?.environment,
           ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
