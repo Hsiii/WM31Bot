@@ -84,6 +84,37 @@ describe("GitHub PR webhook", () => {
     expect(verifyGithubWebhookSignature(body, null, secret)).toBe(false);
   });
 
+  test("queues an Oracle skill refresh for Skillbook main pushes", async () => {
+    const secret = "test-secret";
+    const originalSecret = process.env.GITHUB_WEBHOOK_SECRET;
+    const originalToken = process.env.DISCORD_BOT_TOKEN;
+    process.env.GITHUB_WEBHOOK_SECRET = secret;
+    process.env.DISCORD_BOT_TOKEN = "test-token";
+    let refreshes = 0;
+    try {
+      const response = await handleGithubWebhookRequest(
+        webhookRequest(
+          {
+            ref: "refs/heads/main",
+            repository: { full_name: "sago-cream/skillbook" },
+          },
+          secret,
+          "push",
+        ),
+        () => {
+          refreshes += 1;
+          return true;
+        },
+      );
+      expect(response.status).toBe(202);
+      expect(await response.json()).toEqual({ ok: true, result: "queued" });
+      expect(refreshes).toBe(1);
+    } finally {
+      restoreEnvironmentVariable("GITHUB_WEBHOOK_SECRET", originalSecret);
+      restoreEnvironmentVariable("DISCORD_BOT_TOKEN", originalToken);
+    }
+  });
+
   test("mentions Daniel and Jasmine for Hsi's PR", () => {
     expect(
       buildReviewRequest({

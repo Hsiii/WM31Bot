@@ -18,6 +18,19 @@ At startup, each worker discovers and advertises every repository visible to its
 GitHub login. A repository does not need to exist locally in advance. Oracle jobs
 always receive a disposable checkout and prepared feature branch.
 
+The headless Oracle worker also reads the GitHub skill links in
+`sago-cream/skillbook` and installs them into its isolated Codex home before
+connecting. It checks the Skillbook revision every 15 minutes. A new Skillbook
+revision snapshots the current commit of every linked skill, and that set is
+available to the next Discord development turn without restarting the worker.
+The Mac helper leaves its skills alone so the Mac remains the authoring copy.
+Set `MINISAGO_SKILLBOOK_REPOSITORY` explicitly to enable or change syncing on
+another worker, and adjust
+`MINISAGO_SKILLBOOK_SYNC_INTERVAL_MS` when a slower refresh is preferable.
+Pushes to `sago-cream/skillbook` also trigger an immediate Oracle refresh through
+the existing GitHub webhook. The periodic check remains as recovery when a
+delivery arrives while Oracle is offline.
+
 ## Oracle worker
 
 Use an OCI Ampere A1 Compute VM rather than Container Instances because Codex,

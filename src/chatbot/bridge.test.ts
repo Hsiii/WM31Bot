@@ -128,6 +128,47 @@ describe("Mac agent bridge", () => {
     expect(bridge.getStatus()).toBe("available");
   });
 
+  test("triggers and records Oracle Skillbook refreshes", () => {
+    useWorker();
+    const bridge = new MacAgentBridge();
+    const { socket, sent } = connectWorker(bridge);
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "availability",
+        available: true,
+        capacity: 1,
+        skillbook: { ok: true, syncing: false, skills: 21 },
+      }),
+    );
+
+    expect(bridge.triggerOracleSkillSync()).toBe(true);
+    expect(bridge.getWorkerSummary().skillbook?.syncing).toBe(true);
+    const request = JSON.parse(sent.at(-1)!);
+    expect(request).toMatchObject({ type: "skill_sync_request" });
+    expect(typeof request.requestId).toBe("string");
+
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "skill_sync_result",
+        requestId: request.requestId,
+        status: {
+          ok: true,
+          syncing: false,
+          skills: 21,
+          lastSyncedAt: "2026-09-02T00:00:00.000Z",
+        },
+      }),
+    );
+    expect(bridge.getWorkerSummary().skillbook).toEqual({
+      ok: true,
+      syncing: false,
+      skills: 21,
+      lastSyncedAt: "2026-09-02T00:00:00.000Z",
+    });
+  });
+
   test("enforces the advertised capacity and resolves matching results", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
