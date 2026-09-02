@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 34;
+export const CHATBOT_PROTOCOL_VERSION = 35;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -115,6 +115,7 @@ export type ChatbotTaskProgress = {
   summary: string;
   sessionId?: string;
   kind?: "trace";
+  completion?: "pull_request_merged";
 };
 
 export type ChatbotTraceContext = {

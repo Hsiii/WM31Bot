@@ -581,6 +581,7 @@ type DeveloperTask = {
   sessionId?: string;
   activeJobId?: string;
   nextRequest?: string;
+  requiresAddressing?: boolean;
   traceMessageIds: string[];
   messageQueue: Promise<void>;
   cleanupTimer?: ReturnType<typeof setTimeout>;
@@ -623,11 +624,31 @@ class DeveloperTaskRegistry {
     this.launch(task, task.request);
   }
 
-  async handle(message: DiscordMessage) {
+  async handle(
+    message: DiscordMessage,
+    botUserId: string,
+    accessConfig: ChatbotAccessConfig,
+  ) {
     const task = this.tasks.get(message.channel_id);
     if (!task || message.author?.id !== task.requesterUserId) return false;
     if (message.webhook_id) return false;
-    const request = message.content?.trim() ?? "";
+    const addressingMode = chatbotAddressingMode(
+      message,
+      botUserId,
+      accessConfig,
+    );
+    if (
+      task.requiresAddressing &&
+      task.state !== "running" &&
+      task.state !== "stopping" &&
+      !addressingMode
+    ) {
+      return false;
+    }
+    const request =
+      addressingMode && task.requiresAddressing
+        ? (extractChatbotRequest(message, botUserId, accessConfig) ?? "")
+        : (message.content?.trim() ?? "");
     if (!request) return true;
 
     if (/^(?:stop|pause|停止|暫停)[.!。！\s]*$/iu.test(request)) {
@@ -786,6 +807,9 @@ class DeveloperTaskRegistry {
 
   private onProgress(task: DeveloperTask, progress: ChatbotTaskProgress) {
     if (progress.sessionId) task.sessionId = progress.sessionId;
+    if (progress.completion === "pull_request_merged") {
+      task.requiresAddressing = true;
+    }
     task.summary = progress.summary;
     if (progress.kind === "trace") this.postTrace(task, progress.summary);
   }
@@ -990,7 +1014,7 @@ export async function handleChatbotMention({
   }
 
   if (!invocation && developerTasks.has(message.channel_id)) {
-    return developerTasks.handle(message);
+    return developerTasks.handle(message, botUserId, accessConfig);
   }
 
   let addressingMode =
