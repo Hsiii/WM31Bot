@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  configuredSkillbookRepository,
   deploySocketPath,
   macFileRoots,
   parseGitHubRepositories,
@@ -10,6 +11,16 @@ import {
 } from "./config";
 
 describe("worker configuration", () => {
+  test("syncs Skillbook on Oracle without managing Mac skills", () => {
+    expect(configuredSkillbookRepository(true, undefined)).toBe(
+      "sago-cream/skillbook",
+    );
+    expect(configuredSkillbookRepository(false, undefined)).toBeUndefined();
+    expect(configuredSkillbookRepository(false, "owner/skillbook")).toBe(
+      "owner/skillbook",
+    );
+  });
+
   test("accepts only an absolute deployment socket path", () => {
     expect(deploySocketPath("/run/sago-cloud/deploy.sock")).toBe(
       "/run/sago-cloud/deploy.sock",

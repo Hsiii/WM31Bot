@@ -25,6 +25,8 @@ export type MacAgentConfig = {
   sandboxUrl: string;
   headless: boolean;
   sessionMonitorPath: string;
+  skillbookRepository?: string;
+  skillbookSyncIntervalMs: number;
   traceDatabasePath: string;
   workspaceRoot: string;
   workerId: string;
@@ -67,6 +69,13 @@ export function deploySocketPath(
     throw new Error("MINISAGO_DEPLOY_SOCKET must be an absolute path.");
   }
   return resolve(path);
+}
+
+export function configuredSkillbookRepository(
+  headless: boolean,
+  configured = process.env.MINISAGO_SKILLBOOK_REPOSITORY,
+) {
+  return configured?.trim() || (headless ? "sago-cream/skillbook" : undefined);
 }
 
 async function isExecutable(path: string) {
@@ -292,6 +301,14 @@ export async function loadMacAgentConfig(
     sessionMonitorPath:
       process.env.MINISAGO_SESSION_MONITOR_PATH?.trim() ||
       join(defaultApplicationSupport, "bin", "session-monitor"),
+    skillbookRepository: configuredSkillbookRepository(headless),
+    skillbookSyncIntervalMs: Math.max(
+      60_000,
+      Number.parseInt(
+        process.env.MINISAGO_SKILLBOOK_SYNC_INTERVAL_MS || "900000",
+        10,
+      ) || 900_000,
+    ),
     traceDatabasePath:
       process.env.MINISAGO_TRACE_DATABASE_PATH?.trim() ||
       join(defaultApplicationSupport, "traces.sqlite"),

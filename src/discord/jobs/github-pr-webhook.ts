@@ -2,8 +2,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { createDiscordRequest } from "../api/request";
 import { readJsonFile, writeJsonFile } from "./job-utils";
+import { macAgentBridge } from "../../chatbot/bridge";
 
 const TARGET_REPOSITORY = "sago-cream/health-check-system";
+const SKILLBOOK_REPOSITORY = "sago-cream/skillbook";
 const DEFAULT_THREAD_CHANNEL_ID = "1521506395034226830";
 const DEFAULT_STATE_FILE = ".data/github-pr-threads.json";
 const PUBLIC_THREAD_TYPE = 11;
@@ -38,6 +40,11 @@ type PullRequestPayload = {
   review?: {
     state?: string;
   };
+};
+
+type PushPayload = {
+  ref?: string;
+  repository?: { full_name?: string };
 };
 
 type ThreadRecord = {
@@ -411,7 +418,10 @@ function enqueue<T>(operation: () => Promise<T>) {
   return result;
 }
 
-export async function handleGithubWebhookRequest(request: Request) {
+export async function handleGithubWebhookRequest(
+  request: Request,
+  triggerSkillSync = () => macAgentBridge.triggerOracleSkillSync(),
+) {
   const config = getWebhookConfig();
 
   if (!config) {
@@ -437,6 +447,30 @@ export async function handleGithubWebhookRequest(request: Request) {
   }
 
   const event = request.headers.get("X-GitHub-Event");
+
+  if (event === "push") {
+    let payload: PushPayload;
+    try {
+      payload = JSON.parse(body) as PushPayload;
+    } catch {
+      return Response.json(
+        { ok: false, error: "請求資料格式無效" },
+        { status: 400 },
+      );
+    }
+    if (
+      payload.repository?.full_name?.toLowerCase() !==
+        SKILLBOOK_REPOSITORY.toLowerCase() ||
+      payload.ref !== "refs/heads/main"
+    ) {
+      return Response.json({ ok: true, ignored: true }, { status: 202 });
+    }
+    const queued = triggerSkillSync();
+    return Response.json(
+      { ok: queued, result: queued ? "queued" : "oracle_offline" },
+      { status: queued ? 202 : 503 },
+    );
+  }
 
   if (event !== "pull_request" && event !== "pull_request_review") {
     return Response.json({ ok: true, ignored: true }, { status: 202 });

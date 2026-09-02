@@ -13,6 +13,7 @@ import {
   type CodexUsageSnapshot,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
+  type WorkerSkillbookStatus,
 } from "../../contracts/worker-contract";
 
 export type MacAgentSocketData = {
@@ -52,6 +53,7 @@ type Worker = {
   chatbotRepository?: string;
   available: boolean;
   capacity: number;
+  skillbook?: WorkerSkillbookStatus;
 };
 
 type WorkerProfile = "oracle" | "mac";
@@ -203,6 +205,27 @@ function validCodexUsage(value: unknown): value is CodexUsageSnapshot | null {
   );
 }
 
+function validSkillbookStatus(value: unknown): value is WorkerSkillbookStatus {
+  if (!value || typeof value !== "object") return false;
+  const status = value as WorkerSkillbookStatus;
+  return (
+    typeof status.ok === "boolean" &&
+    typeof status.syncing === "boolean" &&
+    Number.isInteger(status.skills) &&
+    status.skills >= 0 &&
+    status.skills <= 1_000 &&
+    (status.revision === undefined ||
+      (typeof status.revision === "string" &&
+        /^[a-f0-9]{40}$/u.test(status.revision))) &&
+    (status.lastSyncedAt === undefined ||
+      (typeof status.lastSyncedAt === "string" &&
+        status.lastSyncedAt.length <= 40 &&
+        Number.isFinite(Date.parse(status.lastSyncedAt)))) &&
+    (status.error === undefined ||
+      (typeof status.error === "string" && status.error.length <= 500))
+  );
+}
+
 function validTaskProgress(value: unknown): value is ChatbotTaskProgress {
   if (!value || typeof value !== "object") return false;
   const progress = value as ChatbotTaskProgress;
@@ -288,13 +311,32 @@ export class MacAgentBridge {
 
   getWorkerSummary() {
     const workers = [...this.workers.values()];
+    const skillbook = workers.find(
+      (worker) => worker.profile === "oracle",
+    )?.skillbook;
     return {
       connected: workers.length,
       available: workers.filter((worker) => worker.available).length,
       capacity: workers.reduce((total, worker) => total + worker.capacity, 0),
       active: this.pendingJobs.size,
       mac: this.getStatus(["mac"]),
+      ...(skillbook ? { skillbook } : {}),
     };
+  }
+
+  triggerOracleSkillSync() {
+    const worker = [...this.workers.values()].find(
+      (candidate) => candidate.profile === "oracle" && candidate.available,
+    );
+    if (!worker) return false;
+    if (worker.skillbook) {
+      worker.skillbook = { ...worker.skillbook, syncing: true };
+    }
+    send(worker.socket, {
+      type: "skill_sync_request",
+      requestId: randomUUID(),
+    });
+    return true;
   }
 
   handleUpgrade(request: Request, server: Server<MacAgentSocketData>) {
@@ -414,10 +456,18 @@ export class MacAgentBridge {
     if (message.type === "heartbeat") return;
 
     if (message.type === "availability") {
+      if (
+        message.skillbook !== undefined &&
+        !validSkillbookStatus(message.skillbook)
+      ) {
+        socket.close(4002, "Invalid availability");
+        return;
+      }
       worker.available = message.available;
       worker.capacity = Number.isFinite(message.capacity)
         ? Math.max(1, Math.min(16, Math.floor(message.capacity)))
         : 1;
+      if (message.skillbook) worker.skillbook = message.skillbook;
       return;
     }
 
@@ -454,6 +504,17 @@ export class MacAgentBridge {
     if (message.type === "codex_usage_result") {
       this.finishUsageRequest(worker, message);
       return;
+    }
+
+    if (message.type === "skill_sync_result") {
+      if (
+        typeof message.requestId === "string" &&
+        message.requestId.length <= 128 &&
+        validSkillbookStatus(message.status)
+      ) {
+        worker.skillbook = message.status;
+        return;
+      }
     }
 
     socket.close(4002, "Unexpected message");
@@ -728,6 +789,7 @@ export class MacAgentBridge {
       chatbotRepository: message.chatbotRepository,
       available: false,
       capacity: 1,
+      skillbook: undefined,
     };
     this.workers.set(worker.id, worker);
     this.armHeartbeatTimeout(worker);

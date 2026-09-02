@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 33;
+export const CHATBOT_PROTOCOL_VERSION = 34;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -47,6 +47,15 @@ export type CodexUsageWindow = {
 export type CodexUsageSnapshot = {
   windows: CodexUsageWindow[];
   updatedAt: string;
+};
+
+export type WorkerSkillbookStatus = {
+  ok: boolean;
+  syncing: boolean;
+  skills: number;
+  revision?: string;
+  lastSyncedAt?: string;
+  error?: string;
 };
 
 export type ChatbotToolCapability = {
@@ -478,6 +487,7 @@ export type MacAgentClientMessage =
       type: "availability";
       available: boolean;
       capacity: number;
+      skillbook?: WorkerSkillbookStatus;
     }
   | {
       type: "heartbeat";
@@ -486,6 +496,11 @@ export type MacAgentClientMessage =
       type: "codex_usage_result";
       requestId: string;
       usage: CodexUsageSnapshot | null;
+    }
+  | {
+      type: "skill_sync_result";
+      requestId: string;
+      status: WorkerSkillbookStatus;
     }
   | {
       type: "progress";
@@ -535,5 +550,9 @@ export type MacAgentServerMessage =
     }
   | {
       type: "codex_usage_request";
+      requestId: string;
+    }
+  | {
+      type: "skill_sync_request";
       requestId: string;
     };

@@ -43,10 +43,17 @@ Oracle and Mac use independent random bridge secrets of at least 32 bytes. The
 secret selects a fixed server-owned profile; workers cannot raise their own
 capabilities or priority.
 
-Every Codex run is ephemeral and ignores normal user configuration, memories,
-skills, plugins, and user-configured MCP servers. Chat jobs have restricted
-filesystem access and no general network permission outside Codex's own web
-search and MiniSago's MCP server.
+Every Codex run ignores normal user configuration, memories, plugins, and
+user-configured MCP servers. Chat jobs cannot read installed skills, have
+restricted filesystem access, and have no general network permission outside
+Codex's own web search and MiniSago's MCP server.
+
+Oracle development jobs can read the skills installed in their isolated Codex
+home. Oracle snapshots the linked skill commits only when the trusted Skillbook
+repository advances, rejects symbolic links, and replaces managed skill
+directories as one transaction. A linked skill is trusted developer guidance,
+so only reviewed Skillbook changes should advance the snapshot. The Mac helper
+does not sync or replace the Mac's local skills.
 
 Kyushu itinerary access is exposed only when the host-bound Discord guild is
 `1282936453134815275`. Reads use the public planner endpoint; edits require a
