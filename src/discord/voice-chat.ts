@@ -26,7 +26,6 @@ export type VoiceChatTurn = {
 export type VoiceChatResponse = {
   transcript: string;
   reply: string;
-  audio: Buffer;
 };
 
 type VoiceChatSessionOptions = {
@@ -40,6 +39,7 @@ type VoiceChatSessionOptions = {
     userId: string;
     audio: Buffer;
     history: VoiceChatTurn[];
+    onAudio: (audio: Buffer) => void;
   }) => Promise<VoiceChatResponse | null>;
 };
 
@@ -64,6 +64,7 @@ class VoiceChatSession {
   });
   private readonly listeningTo = new Set<string>();
   private readonly history: VoiceChatTurn[] = [];
+  private cancelActiveAudio?: () => void;
   private responseQueue = Promise.resolve();
   private closed = false;
 
@@ -79,6 +80,7 @@ class VoiceChatSession {
 
     this.connection.receiver.speaking.on("start", (userId) => {
       if (userId !== this.options.getBotUserId()) {
+        this.cancelActiveAudio?.();
         this.player.stop(true);
         this.listen(userId);
       }
@@ -91,6 +93,7 @@ class VoiceChatSession {
   destroy() {
     if (this.closed) return;
     this.closed = true;
+    this.cancelActiveAudio?.();
     this.player.stop(true);
     this.connection.destroy();
   }
@@ -141,13 +144,37 @@ class VoiceChatSession {
 
   private async respond(userId: string, audio: Buffer) {
     if (this.closed) return;
-    const response = await this.options.respond({
-      guildId: this.options.guildId,
-      channelId: this.options.channelId,
-      userId,
-      audio,
-      history: [...this.history],
-    });
+    let output: PassThrough | undefined;
+    let cancelled = false;
+    const cancelAudio = () => {
+      cancelled = true;
+      output?.end();
+    };
+    this.cancelActiveAudio = cancelAudio;
+    const response = await this.options
+      .respond({
+        guildId: this.options.guildId,
+        channelId: this.options.channelId,
+        userId,
+        audio,
+        history: [...this.history],
+        onAudio: (chunk) => {
+          if (cancelled || this.closed) return;
+          if (!output) {
+            output = new PassThrough();
+            this.player.play(
+              createAudioResource(output, { inputType: StreamType.Raw }),
+            );
+          }
+          output.write(chunk);
+        },
+      })
+      .finally(() => {
+        output?.end();
+        if (this.cancelActiveAudio === cancelAudio) {
+          this.cancelActiveAudio = undefined;
+        }
+      });
     if (!response || this.closed) return;
 
     this.history.push(
@@ -157,12 +184,6 @@ class VoiceChatSession {
     this.history.splice(
       0,
       Math.max(0, this.history.length - MAX_HISTORY_TURNS),
-    );
-
-    const output = new PassThrough();
-    output.end(response.audio);
-    this.player.play(
-      createAudioResource(output, { inputType: StreamType.Raw }),
     );
   }
 }

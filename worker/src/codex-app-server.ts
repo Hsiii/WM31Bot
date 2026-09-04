@@ -20,6 +20,9 @@ type RunOptions = {
   developerInstructions: string;
   prompt: string;
   imagePaths: string[];
+  outputSchema?: JsonObject;
+  ephemeral?: boolean;
+  onAgentMessageDelta?: (delta: string) => void;
   onProgress?: (progress: ChatbotTaskProgress) => void;
   onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
   signal?: AbortSignal;
@@ -30,6 +33,7 @@ type ActiveTurn = {
   turnId?: string;
   finalAnswer: string;
   lastAgentMessage: string;
+  onAgentMessageDelta?: RunOptions["onAgentMessageDelta"];
   onProgress?: RunOptions["onProgress"];
   onMcpToolCall?: RunOptions["onMcpToolCall"];
   resolve: (content: string) => void;
@@ -121,6 +125,7 @@ class CodexAppServerSession {
       jobId: options.jobId,
       finalAnswer: "",
       lastAgentMessage: "",
+      onAgentMessageDelta: options.onAgentMessageDelta,
       onProgress: options.onProgress,
       onMcpToolCall: options.onMcpToolCall,
       resolve: resolveResult,
@@ -138,6 +143,7 @@ class CodexAppServerSession {
         model: options.model,
         effort: options.effort,
         summary: "detailed",
+        ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
       });
       const turn = record(response.turn);
       if (!turn || typeof turn.id !== "string") {
@@ -325,6 +331,13 @@ class CodexAppServerSession {
       return;
     }
 
+    if (method === "item/agentMessage/delta") {
+      if (typeof params.delta === "string" && params.delta) {
+        active.onAgentMessageDelta?.(params.delta);
+      }
+      return;
+    }
+
     if (method === "item/completed") {
       this.handleCompletedItem(active, record(params.item));
       return;
@@ -421,6 +434,17 @@ export class CodexAppServerManager {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   async run(options: RunOptions) {
+    if (options.ephemeral) {
+      const session = new CodexAppServerSession(options);
+      this.jobs.set(options.jobId, session);
+      try {
+        return await session.run(options);
+      } finally {
+        this.jobs.delete(options.jobId);
+        session.close();
+      }
+    }
+
     this.clearTimer(options.taskId);
     let session = this.sessions.get(options.taskId);
     if (!session) {
@@ -465,7 +489,12 @@ export class CodexAppServerManager {
 
   close() {
     for (const timer of this.timers.values()) clearTimeout(timer);
-    for (const session of this.sessions.values()) session.close();
+    for (const session of new Set([
+      ...this.sessions.values(),
+      ...this.jobs.values(),
+    ])) {
+      session.close();
+    }
     this.timers.clear();
     this.jobs.clear();
     this.sessions.clear();

@@ -46,8 +46,11 @@ import {
   progressForCodexEvent,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
   SOCIAL_ACTION_PROFILE,
+  StreamingReplyParser,
   TRIP_PLAN_EDIT_MCP_APPROVAL_CONFIG,
   usesOuterSeatbelt,
+  VOICE_CHATBOT_PROFILE,
+  VOICE_ANSWER_OUTPUT_SCHEMA,
 } from "./codex";
 
 const ACCESS_CONFIG: ChatbotAccessConfig = {
@@ -131,6 +134,17 @@ function oracleJob(overrides: Partial<OracleAnswerJob> = {}): OracleAnswerJob {
 }
 
 describe("Codex chatbot runner", () => {
+  test("streams decoded text from the structured voice reply", () => {
+    const deltas: string[] = [];
+    const parser = new StreamingReplyParser((delta) => deltas.push(delta));
+
+    parser.push('{"rep');
+    parser.push('ly":"今日は晴れ。\\n次は\\u732b');
+    parser.push('だよ。","ignored":true}');
+
+    expect(deltas.join("")).toBe("今日は晴れ。\n次は猫だよ。");
+  });
+
   test("turns Codex JSONL into bounded public progress", () => {
     expect(
       progressForCodexEvent(
@@ -332,6 +346,10 @@ describe("Codex chatbot runner", () => {
       model: "gpt-5.6-sol",
       reasoningEffort: "medium",
     });
+    expect(VOICE_CHATBOT_PROFILE).toEqual({
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
+    });
     expect(OWNER_ROUTER_PROFILE).toEqual({
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
@@ -348,6 +366,9 @@ describe("Codex chatbot runner", () => {
       "oracle",
     ]);
     expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
+    expect(codexProfileForJob({ ...job, streamReply: true })).toBe(
+      VOICE_CHATBOT_PROFILE,
+    );
     expect(
       codexProfileForJob(
         oracleJob({
@@ -456,6 +477,12 @@ describe("Codex chatbot runner", () => {
     expect(outputSchemaForJob(answerJob)).toBe(ARTIFACT_ANSWER_OUTPUT_SCHEMA);
     expect(ARTIFACT_ANSWER_OUTPUT_SCHEMA.properties.artifacts.maxItems).toBe(1);
     expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
+
+    const voiceJob = { ...answerJob, streamReply: true };
+    expect(outputSchemaForJob(voiceJob)).toBe(VOICE_ANSWER_OUTPUT_SCHEMA);
+    expect(buildCodexPrompt(voiceJob, [], [])).toContain(
+      "brief, natural Japanese reply",
+    );
   });
 
   test("uses native Codex output in the requester's language for Discord coding threads", () => {

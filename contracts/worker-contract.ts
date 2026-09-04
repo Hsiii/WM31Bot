@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 35;
+export const CHATBOT_PROTOCOL_VERSION = 36;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -212,6 +212,7 @@ type AnswerJobBase = ChatbotJobBase &
     availableTools?: ChatbotToolCapability[];
     addressingMode?: ChatbotAddressingMode;
     serverMemory?: ChatbotServerMemory;
+    streamReply?: boolean;
     socialActionCandidateMessageIds?: never;
   };
 
@@ -375,6 +376,7 @@ const ANSWER_ONLY_FIELDS = [
   "capabilities",
   "addressingMode",
   "serverMemory",
+  "streamReply",
   "developerTask",
 ] as const;
 
@@ -451,6 +453,8 @@ export function parseChatbotJob(value: unknown): ChatbotJob | null {
         String(value.addressingMode),
       )) ||
     (value.serverMemory !== undefined && !isServerMemory(value.serverMemory)) ||
+    (value.streamReply !== undefined &&
+      typeof value.streamReply !== "boolean") ||
     !hasOnlyAbsent(value, [
       ...ROUTING_ONLY_FIELDS,
       "socialActionCandidateMessageIds",
@@ -507,6 +511,11 @@ export type MacAgentClientMessage =
       type: "progress";
       jobId: string;
       progress: ChatbotTaskProgress;
+    }
+  | {
+      type: "answer_delta";
+      jobId: string;
+      delta: string;
     }
   | {
       type: "steer_result";

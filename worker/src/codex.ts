@@ -38,6 +38,7 @@ export {
   PROMPT_VERSION,
   MAC_FILE_ANSWER_OUTPUT_SCHEMA,
   SOCIAL_ACTION_OUTPUT_SCHEMA,
+  VOICE_ANSWER_OUTPUT_SCHEMA,
 } from "./prompts";
 
 const LOCAL_CHAT_TIMEOUT_MS = 150_000;
@@ -85,6 +86,10 @@ export const COMMUNITY_CHATBOT_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "high",
 } as const;
+export const VOICE_CHATBOT_PROFILE = {
+  model: "gpt-5.6-luna",
+  reasoningEffort: "low",
+} as const;
 export const OWNER_CHATBOT_PROFILE = {
   model: "gpt-5.6-sol",
   reasoningEffort: "medium",
@@ -116,6 +121,7 @@ type CodexRunOptions = {
   onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
   onPromptCompiled?: (telemetry: ChatbotPromptTelemetry) => void;
   onProgress?: (progress: ChatbotTaskProgress) => void;
+  onReplyDelta?: (delta: string) => void;
   signal?: AbortSignal;
 };
 
@@ -177,6 +183,74 @@ export function progressForCodexEvent(
   return undefined;
 }
 
+export class StreamingReplyParser {
+  private mode: "search" | "string" | "escape" | "unicode" | "done" = "search";
+  private search = "";
+  private unicode = "";
+
+  constructor(private readonly onDelta: (delta: string) => void) {}
+
+  push(delta: string) {
+    let output = "";
+
+    for (const character of delta) {
+      if (this.mode === "done") break;
+      if (this.mode === "search") {
+        this.search += character;
+        const match = /"reply"\s*:\s*"$/u.exec(this.search);
+        if (match) {
+          this.mode = "string";
+          this.search = "";
+        } else if (this.search.length > 100) {
+          this.search = this.search.slice(-100);
+        }
+        continue;
+      }
+      if (this.mode === "escape") {
+        if (character === "u") {
+          this.mode = "unicode";
+          this.unicode = "";
+        } else {
+          output +=
+            (
+              {
+                '"': '"',
+                "\\": "\\",
+                "/": "/",
+                b: "\b",
+                f: "\f",
+                n: "\n",
+                r: "\r",
+                t: "\t",
+              } as Record<string, string>
+            )[character] ?? character;
+          this.mode = "string";
+        }
+        continue;
+      }
+      if (this.mode === "unicode") {
+        this.unicode += character;
+        if (this.unicode.length === 4) {
+          const value = Number.parseInt(this.unicode, 16);
+          if (Number.isFinite(value)) output += String.fromCharCode(value);
+          this.unicode = "";
+          this.mode = "string";
+        }
+        continue;
+      }
+      if (character === "\\") {
+        this.mode = "escape";
+      } else if (character === '"') {
+        this.mode = "done";
+      } else {
+        output += character;
+      }
+    }
+
+    if (output) this.onDelta(output);
+  }
+}
+
 async function consumeCodexOutput(
   stream: ReadableStream<Uint8Array>,
   onProgress?: CodexRunOptions["onProgress"],
@@ -235,6 +309,9 @@ export function codexProfileForJob(
 ) {
   if (job.purpose === "execution_route") return OWNER_ROUTER_PROFILE;
   if (job.purpose === "social_action") return SOCIAL_ACTION_PROFILE;
+  if (job.purpose === "answer" && job.streamReply) {
+    return VOICE_CHATBOT_PROFILE;
+  }
   return chatbotAccessTier(job.requesterUserId, accessConfig) === "owner" &&
     job.executionRoute === "oracle"
     ? OWNER_CHATBOT_PROFILE
@@ -771,7 +848,8 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
   if (options.signal?.aborted) timeoutController.abort();
   let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
   let developerWorkspace:
-    Awaited<ReturnType<typeof prepareDeveloperWorkspace>> | undefined;
+    | Awaited<ReturnType<typeof prepareDeveloperWorkspace>>
+    | undefined;
 
   try {
     prepared = await prepareAttachments(
@@ -962,57 +1040,94 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       return { content, files: [] };
     }
 
-    if (outputSchema) {
-      const schemaPath = join(prepared.directory, "output-schema.json");
-      await Bun.write(schemaPath, JSON.stringify(outputSchema));
-      codexArguments.push("--output-schema", schemaPath);
-    }
+    const runEnvironment = codexEnvironment(
+      options.codexHome,
+      options.codexPath,
+      hasDeveloperAccess,
+      developerWorkspace
+        ? {
+            ...developerWorkspace.environment,
+            MINISAGO_GITHUB_REPOSITORY: job.repository!,
+            MINISAGO_JOB_ID: job.id,
+          }
+        : {},
+      {
+        ...(job.mcpAccessToken
+          ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
+          : {}),
+        TMPDIR: prepared.outputsDirectory,
+        ...mediaMcp?.environment,
+        ...macFilesMcp?.environment,
+        ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
+      },
+    );
 
-    for (const imagePath of prepared.imagePaths) {
-      codexArguments.push("--image", imagePath);
-    }
-
-    if (job.developerTask?.resumeSessionId) {
-      codexArguments.push(
-        "resume",
-        job.developerTask.resumeSessionId,
-        prompt.taskInstruction,
+    let content: string;
+    if (
+      job.purpose === "answer" &&
+      job.streamReply &&
+      options.appServer &&
+      outputSchema
+    ) {
+      const replyParser = new StreamingReplyParser(
+        options.onReplyDelta ?? (() => undefined),
       );
+      content = await options.appServer.run({
+        jobId: job.id,
+        taskId: job.id,
+        ephemeral: true,
+        command: [
+          options.codexPath,
+          "app-server",
+          "--strict-config",
+          ...codexArguments.slice(codexArguments.indexOf("--config")),
+        ],
+        cwd: prepared.directory,
+        environment: runEnvironment,
+        model: profile.model,
+        effort: profile.reasoningEffort,
+        developerInstructions: prompt.developerInstructions,
+        prompt: `${prompt.taskInstruction}\n\n${prompt.context}`.trim(),
+        imagePaths: prepared.imagePaths,
+        outputSchema: outputSchema as unknown as Record<string, unknown>,
+        onAgentMessageDelta: (delta) => replyParser.push(delta),
+        onProgress: options.onProgress,
+        onMcpToolCall: options.onMcpToolCall,
+        signal: timeoutController.signal,
+      });
     } else {
-      if (!job.developerTask) codexArguments.push("--ephemeral");
-      codexArguments.push(prompt.taskInstruction);
-    }
+      if (outputSchema) {
+        const schemaPath = join(prepared.directory, "output-schema.json");
+        await Bun.write(schemaPath, JSON.stringify(outputSchema));
+        codexArguments.push("--output-schema", schemaPath);
+      }
 
-    const content = await executeCodex({
-      codexArguments,
-      input: prompt.context,
-      environment: codexEnvironment(
-        options.codexHome,
-        options.codexPath,
-        hasDeveloperAccess,
-        developerWorkspace
-          ? {
-              ...developerWorkspace.environment,
-              MINISAGO_GITHUB_REPOSITORY: job.repository!,
-              MINISAGO_JOB_ID: job.id,
-            }
-          : {},
-        {
-          ...(job.mcpAccessToken
-            ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken }
-            : {}),
-          TMPDIR: prepared.outputsDirectory,
-          ...mediaMcp?.environment,
-          ...macFilesMcp?.environment,
-          ...(hasMacFileAccess ? { ZDOTDIR: prepared.directory } : {}),
-        },
-      ),
-      signal: timeoutController.signal,
-      seatbelt: usesOuterSeatbelt(hasDeveloperAccess, hasMacFileAccess),
-      onProgress: options.onProgress,
-      allowDeveloperTools: hasDeveloperAccess,
-      onMcpToolCall: options.onMcpToolCall,
-    });
+      for (const imagePath of prepared.imagePaths) {
+        codexArguments.push("--image", imagePath);
+      }
+
+      if (job.developerTask?.resumeSessionId) {
+        codexArguments.push(
+          "resume",
+          job.developerTask.resumeSessionId,
+          prompt.taskInstruction,
+        );
+      } else {
+        if (!job.developerTask) codexArguments.push("--ephemeral");
+        codexArguments.push(prompt.taskInstruction);
+      }
+
+      content = await executeCodex({
+        codexArguments,
+        input: prompt.context,
+        environment: runEnvironment,
+        signal: timeoutController.signal,
+        seatbelt: usesOuterSeatbelt(hasDeveloperAccess, hasMacFileAccess),
+        onProgress: options.onProgress,
+        allowDeveloperTools: hasDeveloperAccess,
+        onMcpToolCall: options.onMcpToolCall,
+      });
+    }
     if (job.purpose !== "answer" || hasDeveloperAccess) {
       return { content, files: [] };
     }
@@ -1037,6 +1152,16 @@ export async function runCodexJob(job: CodexJob, options: CodexRunOptions) {
       answer.reply = safeReply;
     }
     const safeContent = JSON.stringify(answer);
+    if (job.streamReply) {
+      return {
+        content: JSON.stringify({
+          reply: answer.reply ?? null,
+          reaction: null,
+          referenceResolution: [],
+        }),
+        files: [],
+      };
+    }
     return await (hasMacFileAccess
       ? prepareOutgoingFiles(safeContent, options.macFileRoots)
       : prepareGeneratedArtifacts(safeContent, prepared.outputsDirectory));

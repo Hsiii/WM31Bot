@@ -15,6 +15,7 @@ import {
   type MacAgentServerMessage,
   type WorkerSkillbookStatus,
 } from "../../contracts/worker-contract";
+import { CHATBOT_REPLY_MAX_CHARACTERS } from "../../contracts/answer-contract";
 
 export type MacAgentSocketData = {
   authenticated: boolean;
@@ -28,6 +29,8 @@ type PendingJob = {
   resolve: (result: MacAgentJobResult) => void;
   timer: ReturnType<typeof setTimeout>;
   onProgress?: (progress: ChatbotTaskProgress) => void;
+  onReplyDelta?: (delta: string) => void;
+  replyCharacters: number;
   stopping?: boolean;
 };
 
@@ -360,10 +363,17 @@ export class MacAgentBridge {
     capabilities: ChatbotWorkerCapability[] = [
       job.executionRoute === "oracle" ? "dev" : "chat",
     ],
+    onReplyDelta?: (delta: string) => void,
   ): DispatchResult {
     const selected = this.selectWorker(capabilities, undefined, job.repository);
     if (selected.status !== "accepted") return selected;
-    return this.dispatchJob(job, selected.worker.id);
+    return this.dispatchJob(
+      job,
+      selected.worker.id,
+      undefined,
+      undefined,
+      onReplyDelta,
+    );
   }
 
   acquireWorkflow(
@@ -484,6 +494,22 @@ export class MacAgentBridge {
       return;
     }
 
+    if (message.type === "answer_delta") {
+      const pendingJob = this.pendingJobs.get(message.jobId);
+      if (
+        pendingJob?.workerId === worker.id &&
+        typeof message.delta === "string" &&
+        message.delta.length > 0 &&
+        message.delta.length <= CHATBOT_REPLY_MAX_CHARACTERS &&
+        pendingJob.replyCharacters + message.delta.length <=
+          CHATBOT_REPLY_MAX_CHARACTERS
+      ) {
+        pendingJob.replyCharacters += message.delta.length;
+        pendingJob.onReplyDelta?.(message.delta);
+      }
+      return;
+    }
+
     if (message.type === "result") {
       this.finishJob(worker, message);
       return;
@@ -578,6 +604,7 @@ export class MacAgentBridge {
     workerId: string,
     workflowId?: string,
     onProgress?: (progress: ChatbotTaskProgress) => void,
+    onReplyDelta?: (delta: string) => void,
   ): DispatchResult {
     const worker = this.workers.get(workerId);
     if (!worker?.available) return { status: "offline" };
@@ -620,6 +647,8 @@ export class MacAgentBridge {
         resolve,
         timer,
         onProgress,
+        onReplyDelta,
+        replyCharacters: 0,
       };
       this.pendingJobs.set(job.id, pendingJob);
       if (workflowId) {

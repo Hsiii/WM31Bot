@@ -12,6 +12,37 @@ import { registerChatbotMcpSession } from "./mcp";
 
 const MIN_UTTERANCE_BYTES = 12_000;
 
+function spokenText(text: string) {
+  return text
+    .replace(/<\/?self-introduction>/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+export class VoiceSentenceBuffer {
+  private pending = "";
+
+  constructor(private readonly emit: (sentence: string) => void) {}
+
+  push(delta: string) {
+    this.pending += delta;
+    while (true) {
+      const match = /[。！？!?\n]+/u.exec(this.pending);
+      if (!match) return;
+      const end = match.index + match[0].length;
+      const sentence = spokenText(this.pending.slice(0, end));
+      this.pending = this.pending.slice(end);
+      if (sentence) this.emit(sentence);
+    }
+  }
+
+  flush() {
+    const sentence = spokenText(this.pending);
+    this.pending = "";
+    if (sentence) this.emit(sentence);
+  }
+}
+
 function contextMessages(
   history: VoiceChatTurn[],
   channelId: string,
@@ -35,6 +66,7 @@ export async function respondToVoiceChat(input: {
   userId: string;
   audio: Buffer;
   history: VoiceChatTurn[];
+  onAudio: (audio: Buffer) => void;
 }): Promise<VoiceChatResponse | null> {
   if (input.audio.length < MIN_UTTERANCE_BYTES) return null;
 
@@ -81,20 +113,43 @@ export async function respondToVoiceChat(input: {
       },
     ],
     executionRoute: "chat",
+    streamReply: true,
   };
 
   try {
-    const dispatch = macAgentBridge.dispatch(job, ["chat"]);
+    let streamedReply = "";
+    let speech = Promise.resolve();
+    const sentences = new VoiceSentenceBuffer((sentence) => {
+      speech = speech.then(async () => {
+        input.onAudio(await synthesizeSpeech(sentence));
+      });
+    });
+    const dispatch = macAgentBridge.dispatch(job, ["chat"], (delta) => {
+      streamedReply += delta;
+      sentences.push(delta);
+    });
     if (dispatch.status !== "accepted") return null;
     const result = await dispatch.result;
-    if (!result.ok) return null;
+    if (!result.ok) {
+      await speech.catch(() => undefined);
+      return null;
+    }
 
     const reply = parseChatbotAnswerDecision(result.content).reply;
-    if (!reply) return null;
+    if (!reply) {
+      await speech.catch(() => undefined);
+      return null;
+    }
+    if (!streamedReply) {
+      sentences.push(reply);
+    } else if (reply.startsWith(streamedReply)) {
+      sentences.push(reply.slice(streamedReply.length));
+    }
+    sentences.flush();
+    await speech;
     return {
       transcript,
       reply,
-      audio: await synthesizeSpeech(reply),
     };
   } finally {
     mcpSession.revoke();

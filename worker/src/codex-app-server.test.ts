@@ -95,6 +95,23 @@ describe("Codex App Server manager", () => {
     manager.close();
   });
 
+  test("streams reply deltas from an ephemeral turn", async () => {
+    const manager = new CodexAppServerManager();
+    const deltas: string[] = [];
+    const result = await manager.run({
+      ...runOptions(() => undefined, "job-stream"),
+      taskId: "job-stream",
+      ephemeral: true,
+      outputSchema: { type: "object" },
+      onAgentMessageDelta: (delta) => deltas.push(delta),
+    });
+
+    expect(result).toBe('{"reply":"最初の文。次の文。"}');
+    expect(deltas.join("")).toBe('{"reply":"最初の文。次の文。"}');
+    expect(manager.status()).toEqual({ ok: true, sessions: 0, active: 0 });
+    manager.close();
+  });
+
   test("interrupts without discarding the persistent Codex thread", async () => {
     const manager = new CodexAppServerManager();
     const firstProgress: ChatbotTaskProgress[] = [];
