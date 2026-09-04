@@ -1,6 +1,23 @@
 import { expect, test } from "bun:test";
 
-import { VoiceSentenceBuffer } from "./voice-chat";
+import {
+  nextVoiceFillerDelay,
+  selectVoiceFiller,
+  VoiceSentenceBuffer,
+  VOICE_FILLERS,
+} from "./voice-chat";
+
+test("spaces random voice fillers without immediate repeats", () => {
+  expect(nextVoiceFillerDelay(() => 0)).toBe(2_500);
+  expect(nextVoiceFillerDelay(() => 0.999_999)).toBe(4_000);
+
+  const first = selectVoiceFiller(undefined, () => 0);
+  const second = selectVoiceFiller(first, () => 0);
+
+  expect(VOICE_FILLERS).toContain(first);
+  expect(VOICE_FILLERS).toContain(second);
+  expect(second).not.toBe(first);
+});
 
 test("emits complete spoken sentences as reply text arrives", () => {
   const sentences: string[] = [];

@@ -15,16 +15,39 @@ import { macAgentBridge } from "./bridge";
 import { registerChatbotMcpSession } from "./mcp";
 
 const MIN_UTTERANCE_BYTES = 12_000;
-const WAITING_FEEDBACK_DELAY_MS = 8_000;
-const HEARD_FEEDBACK = "うん、聞いてるよ。";
-const WAITING_FEEDBACK = "ちょっと待ってね。";
+const FILLER_FEEDBACK_DELAY_MS = 1_500;
+const MIN_FOLLOWUP_FILLER_DELAY_MS = 2_500;
+const MAX_FOLLOWUP_FILLER_DELAY_MS = 4_000;
+const HEARD_FEEDBACK = "うん。";
 const FAILURE_FEEDBACK = "ごめん、うまくいかなかった。もう一度お願い。";
+export const VOICE_FILLERS = [
+  "えっとね。",
+  "んーと。",
+  "うーん。",
+  "そうだなあ。",
+  "ちょっと待ってね。",
+] as const;
 const feedbackSpeech = new SpeechCache(synthesizeSpeech);
 const feedbackLines = [
   HEARD_FEEDBACK,
-  WAITING_FEEDBACK,
+  ...VOICE_FILLERS,
   FAILURE_FEEDBACK,
 ] as const;
+
+export function nextVoiceFillerDelay(random = Math.random) {
+  return (
+    MIN_FOLLOWUP_FILLER_DELAY_MS +
+    Math.floor(
+      random() *
+        (MAX_FOLLOWUP_FILLER_DELAY_MS - MIN_FOLLOWUP_FILLER_DELAY_MS + 1),
+    )
+  );
+}
+
+export function selectVoiceFiller(previous?: string, random = Math.random) {
+  const choices = VOICE_FILLERS.filter((filler) => filler !== previous);
+  return choices[Math.floor(random() * choices.length)] ?? VOICE_FILLERS[0];
+}
 
 async function playFeedback(text: string, onAudio: (audio: Buffer) => void) {
   try {
@@ -104,27 +127,39 @@ export async function respondToVoiceChat(input: {
 }): Promise<VoiceChatResponse | null> {
   if (input.audio.length < MIN_UTTERANCE_BYTES) return null;
 
-  const heardFeedback = playFeedback(HEARD_FEEDBACK, input.onAudio);
-  let replyAudioStarted = false;
-  let waitingFeedback: Promise<void> | undefined;
-  const waitingTimer = setTimeout(() => {
-    if (!replyAudioStarted) {
-      waitingFeedback = playFeedback(WAITING_FEEDBACK, input.onAudio);
-    }
-  }, WAITING_FEEDBACK_DELAY_MS);
+  let feedbackPlayback = playFeedback(HEARD_FEEDBACK, input.onAudio);
+  let feedbackStopped = false;
+  let previousFiller: string | undefined;
+  let fillerTimer: ReturnType<typeof setTimeout>;
+  const scheduleFiller = (delayMs: number) => {
+    fillerTimer = setTimeout(() => {
+      if (feedbackStopped) return;
+      const filler = selectVoiceFiller(previousFiller);
+      previousFiller = filler;
+      feedbackPlayback = feedbackPlayback.then(() =>
+        playFeedback(filler, input.onAudio),
+      );
+      scheduleFiller(nextVoiceFillerDelay());
+    }, delayMs);
+  };
+  scheduleFiller(FILLER_FEEDBACK_DELAY_MS);
+  const stopFeedback = () => {
+    feedbackStopped = true;
+    clearTimeout(fillerTimer);
+  };
 
   let transcript: string;
   try {
     transcript = await transcribeSpeech(input.audio);
     if (!transcript) {
-      clearTimeout(waitingTimer);
-      await heardFeedback;
+      stopFeedback();
+      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
   } catch (error) {
-    clearTimeout(waitingTimer);
-    await heardFeedback;
+    stopFeedback();
+    await feedbackPlayback;
     await playFeedback(FAILURE_FEEDBACK, input.onAudio);
     console.warn(
       `Could not transcribe Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
@@ -181,8 +216,8 @@ export async function respondToVoiceChat(input: {
     const sentences = new VoiceSentenceBuffer((sentence) => {
       speech = speech.then(async () => {
         const audio = await synthesizeSpeech(sentence);
-        replyAudioStarted = true;
-        clearTimeout(waitingTimer);
+        stopFeedback();
+        await feedbackPlayback;
         input.onAudio(audio);
       });
     });
@@ -191,27 +226,25 @@ export async function respondToVoiceChat(input: {
       sentences.push(delta);
     });
     if (dispatch.status !== "accepted") {
-      clearTimeout(waitingTimer);
-      await heardFeedback;
+      stopFeedback();
+      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
     const result = await dispatch.result;
     if (!result.ok) {
-      clearTimeout(waitingTimer);
+      stopFeedback();
       await speech.catch(() => undefined);
-      await heardFeedback;
-      await waitingFeedback;
+      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
 
     const reply = parseChatbotAnswerDecision(result.content).reply;
     if (!reply) {
-      clearTimeout(waitingTimer);
+      stopFeedback();
       await speech.catch(() => undefined);
-      await heardFeedback;
-      await waitingFeedback;
+      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
@@ -222,24 +255,22 @@ export async function respondToVoiceChat(input: {
     }
     sentences.flush();
     await speech;
-    clearTimeout(waitingTimer);
-    await heardFeedback;
-    await waitingFeedback;
+    stopFeedback();
+    await feedbackPlayback;
     return {
       transcript,
       reply,
     };
   } catch (error) {
-    clearTimeout(waitingTimer);
-    await heardFeedback;
-    await waitingFeedback;
+    stopFeedback();
+    await feedbackPlayback;
     await playFeedback(FAILURE_FEEDBACK, input.onAudio);
     console.warn(
       `Could not prepare Discord voice reply: ${error instanceof Error ? error.message : "unknown error"}`,
     );
     return null;
   } finally {
-    clearTimeout(waitingTimer);
+    stopFeedback();
     mcpSession.revoke();
   }
 }
