@@ -10,12 +10,17 @@ import {
   type DiscordGatewayAdapterCreator,
   type VoiceConnection,
 } from "@discordjs/voice";
+import buildVAD, { VADEvent, VADMode, type VAD } from "@ozymandiasthegreat/vad";
 import prism from "prism-media";
+
+import { VoiceActivityGate } from "./voice-activity";
 
 const DISCORD_SAMPLE_RATE = 48_000;
 const OPUS_FRAME_SIZE = 960;
+const OPUS_FRAME_BYTES = OPUS_FRAME_SIZE * 2 * 2;
 const MAX_UTTERANCE_BYTES = 60 * 24_000 * 2;
 const MAX_HISTORY_TURNS = 12;
+const vadClass = buildVAD();
 
 export type VoiceChatTurn = {
   role: "user" | "assistant";
@@ -57,6 +62,26 @@ export function discordPcmToSpeechPcm(input: Buffer) {
   return output.subarray(0, outputOffset);
 }
 
+export function discordPcmToVadPcm(input: Buffer) {
+  const output = Buffer.allocUnsafe(Math.floor(input.length / 4) * 2);
+  let outputOffset = 0;
+
+  for (let inputOffset = 0; inputOffset + 3 < input.length; inputOffset += 4) {
+    const left = input.readInt16LE(inputOffset);
+    const right = input.readInt16LE(inputOffset + 2);
+    output.writeInt16LE(Math.round((left + right) / 2), outputOffset);
+    outputOffset += 2;
+  }
+
+  return output.subarray(0, outputOffset);
+}
+
+export function pcmToVadSamples(input: Buffer) {
+  const samples = new Int16Array(Math.floor(input.length / 2));
+  new Uint8Array(samples.buffer).set(input.subarray(0, samples.byteLength));
+  return samples;
+}
+
 class VoiceChatSession {
   private readonly connection: VoiceConnection;
   private readonly player = createAudioPlayer({
@@ -80,9 +105,7 @@ class VoiceChatSession {
 
     this.connection.receiver.speaking.on("start", (userId) => {
       if (userId !== this.options.getBotUserId()) {
-        this.cancelActiveAudio?.();
-        this.player.stop(true);
-        this.listen(userId);
+        void this.listen(userId);
       }
     });
     this.connection.on("error", (error) => {
@@ -98,16 +121,39 @@ class VoiceChatSession {
     this.connection.destroy();
   }
 
-  private listen(userId: string) {
+  private async listen(userId: string) {
     if (this.closed || this.listeningTo.has(userId)) return;
     this.listeningTo.add(userId);
 
-    const chunks: Buffer[] = [];
-    let bytes = 0;
+    let VAD: Awaited<typeof vadClass>;
+    try {
+      VAD = await vadClass;
+    } catch (error) {
+      this.listeningTo.delete(userId);
+      console.warn(
+        `Could not load voice activity detector: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+      return;
+    }
+    if (this.closed) {
+      this.listeningTo.delete(userId);
+      return;
+    }
+
+    const vad: VAD = new VAD(VADMode.VERY_AGGRESSIVE, DISCORD_SAMPLE_RATE);
+    const gate = new VoiceActivityGate({
+      maxUtteranceBytes: MAX_UTTERANCE_BYTES,
+      onSpeechStart: () => {
+        this.cancelActiveAudio?.();
+        this.player.stop(true);
+      },
+      onUtterance: (audio) => this.enqueueResponse(userId, audio),
+    });
+    let decoded = Buffer.alloc(0);
     const opus = this.connection.receiver.subscribe(userId, {
       end: {
-        behavior: EndBehaviorType.AfterSilence,
-        duration: 500,
+        behavior: EndBehaviorType.AfterInactivity,
+        duration: 10_000,
       },
     });
     const decoder = new prism.opus.Decoder({
@@ -118,28 +164,37 @@ class VoiceChatSession {
 
     opus.pipe(decoder);
     decoder.on("data", (chunk: Buffer) => {
-      if (bytes >= MAX_UTTERANCE_BYTES) return;
-      const audio = discordPcmToSpeechPcm(chunk);
-      chunks.push(audio);
-      bytes += audio.length;
+      decoded = Buffer.concat([decoded, chunk]);
+      while (decoded.length >= OPUS_FRAME_BYTES) {
+        const frame = decoded.subarray(0, OPUS_FRAME_BYTES);
+        decoded = decoded.subarray(OPUS_FRAME_BYTES);
+        const vadAudio = discordPcmToVadPcm(frame);
+        const samples = pcmToVadSamples(vadAudio);
+        const voice = vad.processFrame(samples) === VADEvent.VOICE;
+        gate.push(discordPcmToSpeechPcm(frame), voice);
+      }
     });
     decoder.on("error", (error) => {
       console.warn(`Could not decode Discord voice audio: ${error.message}`);
     });
 
     const finish = () => {
-      if (!this.listeningTo.delete(userId) || bytes === 0) return;
-      const audio = Buffer.concat(chunks, Math.min(bytes, MAX_UTTERANCE_BYTES));
-      this.responseQueue = this.responseQueue
-        .then(() => this.respond(userId, audio))
-        .catch((error) => {
-          console.warn(
-            `Could not answer in Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
-          );
-        });
+      if (!this.listeningTo.delete(userId)) return;
+      gate.flush();
+      vad.destroy();
     };
     opus.once("close", finish);
     opus.once("end", finish);
+  }
+
+  private enqueueResponse(userId: string, audio: Buffer) {
+    this.responseQueue = this.responseQueue
+      .then(() => this.respond(userId, audio))
+      .catch((error) => {
+        console.warn(
+          `Could not answer in Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
+        );
+      });
   }
 
   private async respond(userId: string, audio: Buffer) {

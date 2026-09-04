@@ -58,6 +58,10 @@ seconds. She picks a different filler every 2.5 to 4 seconds until the reply is
 ready. She also speaks when the attempt fails. Members can interrupt her by
 speaking.
 
+The bot runs WebRTC voice activity detection on decoded audio before it
+interrupts playback or calls Whisper. It confirms sustained speech, ignores
+short noise, and ends an utterance after detected voice gives way to silence.
+
 ## Gateway ownership
 
 Run only one Gateway-enabled deployment per bot token. Set
