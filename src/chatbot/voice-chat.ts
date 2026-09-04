@@ -5,12 +5,46 @@ import type {
   ChatbotMessage,
 } from "../../contracts/worker-contract";
 import { parseChatbotAnswerDecision } from "../../contracts/answer-contract";
-import { synthesizeSpeech, transcribeSpeech } from "../discord/local-speech";
+import {
+  SpeechCache,
+  synthesizeSpeech,
+  transcribeSpeech,
+} from "../discord/local-speech";
 import type { VoiceChatResponse, VoiceChatTurn } from "../discord/voice-chat";
 import { macAgentBridge } from "./bridge";
 import { registerChatbotMcpSession } from "./mcp";
 
 const MIN_UTTERANCE_BYTES = 12_000;
+const WAITING_FEEDBACK_DELAY_MS = 8_000;
+const HEARD_FEEDBACK = "うん、聞いてるよ。";
+const WAITING_FEEDBACK = "ちょっと待ってね。";
+const FAILURE_FEEDBACK = "ごめん、うまくいかなかった。もう一度お願い。";
+const feedbackSpeech = new SpeechCache(synthesizeSpeech);
+const feedbackLines = [
+  HEARD_FEEDBACK,
+  WAITING_FEEDBACK,
+  FAILURE_FEEDBACK,
+] as const;
+
+async function playFeedback(text: string, onAudio: (audio: Buffer) => void) {
+  try {
+    onAudio(await feedbackSpeech.get(text));
+  } catch (error) {
+    console.warn(
+      `Could not play voice feedback: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
+}
+
+export async function prewarmVoiceChatSpeech() {
+  try {
+    await feedbackSpeech.prewarm(feedbackLines);
+  } catch (error) {
+    console.warn(
+      `Could not prewarm voice feedback: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
+}
 
 function spokenText(text: string) {
   return text
@@ -70,8 +104,33 @@ export async function respondToVoiceChat(input: {
 }): Promise<VoiceChatResponse | null> {
   if (input.audio.length < MIN_UTTERANCE_BYTES) return null;
 
-  const transcript = await transcribeSpeech(input.audio);
-  if (!transcript) return null;
+  const heardFeedback = playFeedback(HEARD_FEEDBACK, input.onAudio);
+  let replyAudioStarted = false;
+  let waitingFeedback: Promise<void> | undefined;
+  const waitingTimer = setTimeout(() => {
+    if (!replyAudioStarted) {
+      waitingFeedback = playFeedback(WAITING_FEEDBACK, input.onAudio);
+    }
+  }, WAITING_FEEDBACK_DELAY_MS);
+
+  let transcript: string;
+  try {
+    transcript = await transcribeSpeech(input.audio);
+    if (!transcript) {
+      clearTimeout(waitingTimer);
+      await heardFeedback;
+      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+      return null;
+    }
+  } catch (error) {
+    clearTimeout(waitingTimer);
+    await heardFeedback;
+    await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+    console.warn(
+      `Could not transcribe Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+    return null;
+  }
 
   const requestMessageId = randomUUID();
   const requestMessage: ChatbotMessage = {
@@ -109,7 +168,7 @@ export async function respondToVoiceChat(input: {
         category: "conversation",
         availability: "available",
         description:
-          "Reply naturally and briefly in Japanese to the current turn in a live Discord group voice chat. The local voice is Japanese-only, so do not include English words, emoji, Markdown, URLs, or other text that would sound unclear when spoken.",
+          "Reply naturally in Japanese using at most two short sentences for a live Discord group voice chat. The local voice is Japanese-only, so do not include English words, emoji, Markdown, URLs, or other text that would sound unclear when spoken.",
       },
     ],
     executionRoute: "chat",
@@ -121,23 +180,39 @@ export async function respondToVoiceChat(input: {
     let speech = Promise.resolve();
     const sentences = new VoiceSentenceBuffer((sentence) => {
       speech = speech.then(async () => {
-        input.onAudio(await synthesizeSpeech(sentence));
+        const audio = await synthesizeSpeech(sentence);
+        replyAudioStarted = true;
+        clearTimeout(waitingTimer);
+        input.onAudio(audio);
       });
     });
     const dispatch = macAgentBridge.dispatch(job, ["chat"], (delta) => {
       streamedReply += delta;
       sentences.push(delta);
     });
-    if (dispatch.status !== "accepted") return null;
+    if (dispatch.status !== "accepted") {
+      clearTimeout(waitingTimer);
+      await heardFeedback;
+      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+      return null;
+    }
     const result = await dispatch.result;
     if (!result.ok) {
+      clearTimeout(waitingTimer);
       await speech.catch(() => undefined);
+      await heardFeedback;
+      await waitingFeedback;
+      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
 
     const reply = parseChatbotAnswerDecision(result.content).reply;
     if (!reply) {
+      clearTimeout(waitingTimer);
       await speech.catch(() => undefined);
+      await heardFeedback;
+      await waitingFeedback;
+      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
     if (!streamedReply) {
@@ -147,11 +222,24 @@ export async function respondToVoiceChat(input: {
     }
     sentences.flush();
     await speech;
+    clearTimeout(waitingTimer);
+    await heardFeedback;
+    await waitingFeedback;
     return {
       transcript,
       reply,
     };
+  } catch (error) {
+    clearTimeout(waitingTimer);
+    await heardFeedback;
+    await waitingFeedback;
+    await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+    console.warn(
+      `Could not prepare Discord voice reply: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+    return null;
   } finally {
+    clearTimeout(waitingTimer);
     mcpSession.revoke();
   }
 }

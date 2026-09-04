@@ -11,6 +11,28 @@ const TRANSCRIPTION_TIMEOUT_MS = 120_000;
 const SYNTHESIS_TIMEOUT_MS = 120_000;
 export const VOICEVOX_SPEAKER_ID = 58;
 
+export class SpeechCache {
+  private readonly audio = new Map<string, Promise<Buffer>>();
+
+  constructor(private readonly synthesize: (text: string) => Promise<Buffer>) {}
+
+  get(text: string) {
+    const cached = this.audio.get(text);
+    if (cached) return cached;
+
+    const synthesis = this.synthesize(text).catch((error) => {
+      if (this.audio.get(text) === synthesis) this.audio.delete(text);
+      throw error;
+    });
+    this.audio.set(text, synthesis);
+    return synthesis;
+  }
+
+  async prewarm(texts: readonly string[]) {
+    for (const text of texts) await this.get(text);
+  }
+}
+
 async function run(
   command: string,
   args: string[],

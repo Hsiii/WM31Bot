@@ -1,10 +1,38 @@
 import { expect, test } from "bun:test";
 
 import {
+  SpeechCache,
   VOICEVOX_SPEAKER_ID,
   voicevoxAudioQueryUrl,
   whisperInferenceUrl,
 } from "./local-speech";
+
+test("caches reusable voice feedback", async () => {
+  let calls = 0;
+  const cache = new SpeechCache(async (text) => {
+    calls += 1;
+    return Buffer.from(text);
+  });
+
+  const first = await cache.get("うん");
+  const second = await cache.get("うん");
+
+  expect(first.toString()).toBe("うん");
+  expect(second).toBe(first);
+  expect(calls).toBe(1);
+});
+
+test("prewarms voice feedback in order", async () => {
+  const calls: string[] = [];
+  const cache = new SpeechCache(async (text) => {
+    calls.push(text);
+    return Buffer.from(text);
+  });
+
+  await cache.prewarm(["聞いてるよ", "待ってね"]);
+
+  expect(calls).toEqual(["聞いてるよ", "待ってね"]);
+});
 
 test("requests Nekotsuka Bi's normal VOICEVOX style", () => {
   expect(VOICEVOX_SPEAKER_ID).toBe(58);

@@ -52,6 +52,11 @@ can begin before the full reply is ready. The voice credit is
 where the owner may add emoji. Manage Expressions is needed where the owner may
 rename emoji.
 
+MiniSago prewarms short VOICEVOX acknowledgements when the gateway starts. She
+confirms that she heard an utterance, asks for a moment when a reply takes more
+than eight seconds, and says when the attempt failed. Members can interrupt her
+by speaking.
+
 ## Gateway ownership
 
 Run only one Gateway-enabled deployment per bot token. Set

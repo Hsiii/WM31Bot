@@ -11,7 +11,10 @@ import {
   ChatbotConversationTracker,
   handleChatbotMention,
 } from "../chatbot/chatbot";
-import { respondToVoiceChat } from "../chatbot/voice-chat";
+import {
+  prewarmVoiceChatSpeech,
+  respondToVoiceChat,
+} from "../chatbot/voice-chat";
 import { createDiscordRequest, type DiscordRequest } from "./api/request";
 import {
   createEphemeralInteractionResponder,
@@ -916,6 +919,7 @@ export function startInstagramGateway() {
   const client = new InstagramGatewayClient(config);
   registerVoiceGateway(client);
   client.connect();
+  void prewarmVoiceChatSpeech();
 
   return client;
 }
