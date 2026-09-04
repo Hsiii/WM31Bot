@@ -827,6 +827,7 @@ describe("MiniSago MCP server", () => {
       status: "complete",
       action: "joined",
       channelId: "voice-1",
+      voiceCredit: "VOICEVOX:猫使ビィ",
     });
 
     const leaveResult = await client.callTool({

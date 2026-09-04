@@ -37,7 +37,7 @@ ENV PORT=3000
 
 COPY package.json bun.lock ./
 RUN apk add --no-cache git
-RUN apk add --no-cache espeak-ng ffmpeg libstdc++
+RUN apk add --no-cache ffmpeg libstdc++
 RUN bun install --frozen-lockfile --production
 
 COPY --from=builder --chown=bun:bun /app/src ./src

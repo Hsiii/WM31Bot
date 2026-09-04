@@ -1052,7 +1052,7 @@ function createServer(session: ChatbotMcpSession) {
       "join_voice_channel",
       {
         description:
-          "Join the current requester's current Discord voice channel for a live spoken conversation. The requester and guild are host-bound; there are no member, channel, or guild arguments. Call only when the requester asks you to join voice chat.",
+          "Join the current requester's current Discord voice channel for a live spoken conversation. The requester and guild are host-bound; there are no member, channel, or guild arguments. Call only when the requester asks you to join voice chat. Include the returned voiceCredit verbatim in the confirmation.",
         inputSchema: {},
         annotations: voiceAnnotations,
       },
@@ -1065,6 +1065,7 @@ function createServer(session: ChatbotMcpSession) {
                   status: "complete",
                   action: "joined",
                   channelId: result.channelId,
+                  voiceCredit: "VOICEVOX:猫使ビィ",
                 }
               : result,
           );

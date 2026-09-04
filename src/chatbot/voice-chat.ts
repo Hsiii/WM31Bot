@@ -77,7 +77,7 @@ export async function respondToVoiceChat(input: {
         category: "conversation",
         availability: "available",
         description:
-          "Reply naturally and briefly to the current turn in a live Discord group voice chat.",
+          "Reply naturally and briefly in Japanese to the current turn in a live Discord group voice chat. The local voice is Japanese-only, so do not include English words, emoji, Markdown, URLs, or other text that would sound unclear when spoken.",
       },
     ],
     executionRoute: "chat",

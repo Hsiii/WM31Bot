@@ -35,9 +35,10 @@ requester, guild, member, or channel.
 MiniSago captures voice-channel audio only after a member explicitly asks her
 to join. The hosted service transcribes each bounded utterance with its bundled
 Whisper model, deletes the temporary audio, and sends the transcript to the
-configured Codex worker as a normal answer job. Spoken replies use local speech
-synthesis. Raw voice audio never reaches Codex or a speech API; transcripts and
-answers follow the normal trace retention policy below.
+configured Codex worker as a normal answer job. A private VOICEVOX engine on the
+same host synthesizes spoken replies with the Nekotsuka Bi voice. Raw voice audio
+never reaches Codex or an external speech API; transcripts and answers follow
+the normal trace retention policy below.
 
 The owner may copy an emoji between shared guilds, create one from an image
 attached directly to the request or its replied-to message, or rename an

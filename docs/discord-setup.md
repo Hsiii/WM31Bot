@@ -45,9 +45,11 @@ Webhooks let those replacements retain the sender's display name and avatar
 while showing the improved social embed. Thread permissions support review
 discussions. Add Reactions supports answer and ambient reactions. Connect and
 Speak let MiniSago join a member's voice channel and answer aloud. She
-transcribes speech and synthesizes her replies locally, while the configured
-Codex worker writes the reply. Create Expressions is needed in every destination guild where the owner may add emoji.
-Manage Expressions is needed where the owner may rename emoji.
+transcribes speech with Whisper and uses a private VOICEVOX engine for spoken
+replies, while the configured Codex worker writes the reply. The voice credit is
+`VOICEVOX:猫使ビィ`. Create Expressions is needed in every destination guild
+where the owner may add emoji. Manage Expressions is needed where the owner may
+rename emoji.
 
 ## Gateway ownership
 

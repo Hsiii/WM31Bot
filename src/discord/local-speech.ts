@@ -6,8 +6,12 @@ const WHISPER_PATH = process.env.MINISAGO_WHISPER_PATH?.trim() || "whisper-cli";
 const WHISPER_MODEL =
   process.env.MINISAGO_WHISPER_MODEL?.trim() ||
   "/opt/minisago-models/ggml-base.bin";
+const VOICEVOX_URL =
+  process.env.MINISAGO_VOICEVOX_URL?.trim() || "http://voicevox:50021";
 const SPEECH_COMMAND_TIMEOUT_MS = 30_000;
 const TRANSCRIPTION_TIMEOUT_MS = 120_000;
+const SYNTHESIS_TIMEOUT_MS = 120_000;
+export const VOICEVOX_SPEAKER_ID = 58;
 
 async function run(
   command: string,
@@ -50,8 +54,30 @@ async function run(
   return Buffer.from(stdout);
 }
 
-export function ttsVoiceFor(text: string) {
-  return /\p{Script=Han}/u.test(text) ? "cmn+f3" : "en-us+f3";
+export function voicevoxAudioQueryUrl(text: string, baseUrl = VOICEVOX_URL) {
+  const url = new URL("audio_query", `${baseUrl.replace(/\/$/u, "")}/`);
+  url.searchParams.set("text", text);
+  url.searchParams.set("speaker", String(VOICEVOX_SPEAKER_ID));
+  return url;
+}
+
+function voicevoxSynthesisUrl() {
+  const url = new URL("synthesis", `${VOICEVOX_URL.replace(/\/$/u, "")}/`);
+  url.searchParams.set("speaker", String(VOICEVOX_SPEAKER_ID));
+  return url;
+}
+
+async function voicevoxRequest(url: URL, options: RequestInit) {
+  const response = await fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `VOICEVOX ${response.status}: ${(await response.text()).trim()}`,
+    );
+  }
+  return response;
 }
 
 export async function transcribeSpeech(audio: Buffer) {
@@ -102,16 +128,15 @@ export async function transcribeSpeech(audio: Buffer) {
 }
 
 export async function synthesizeSpeech(text: string) {
-  const wav = await run("espeak-ng", [
-    "--stdout",
-    "-v",
-    ttsVoiceFor(text),
-    "-s",
-    "180",
-    "-p",
-    "65",
-    text,
-  ]);
+  const query = await voicevoxRequest(voicevoxAudioQueryUrl(text), {
+    method: "POST",
+  }).then((response) => response.text());
+  const wavResponse = await voicevoxRequest(voicevoxSynthesisUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: query,
+  });
+  const wav = Buffer.from(new Uint8Array(await wavResponse.arrayBuffer()));
   return run(
     "ffmpeg",
     [
@@ -119,6 +144,8 @@ export async function synthesizeSpeech(text: string) {
       "error",
       "-i",
       "pipe:0",
+      "-af",
+      "highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=7",
       "-f",
       "s16le",
       "-ar",
