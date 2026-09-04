@@ -12,9 +12,9 @@ RUN wget -qO whisper.tar.gz "https://github.com/ggml-org/whisper.cpp/archive/ref
     -DGGML_OPENMP=OFF \
     -DWHISPER_BUILD_EXAMPLES=ON \
     -DWHISPER_BUILD_TESTS=OFF \
-    -DWHISPER_BUILD_SERVER=OFF \
-  && cmake --build build --config Release --target whisper-cli -j2 \
-  && install -Dm755 build/bin/whisper-cli /out/whisper-cli
+    -DWHISPER_BUILD_SERVER=ON \
+  && cmake --build build --config Release --target whisper-server -j2 \
+  && install -Dm755 build/bin/whisper-server /out/whisper-server
 RUN wget -qO /out/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
   && echo "${WHISPER_MODEL_SHA256}  /out/ggml-base.bin" | sha256sum -c -
 
@@ -43,7 +43,7 @@ RUN bun install --frozen-lockfile --production
 COPY --from=builder --chown=bun:bun /app/src ./src
 COPY --from=builder --chown=bun:bun /app/contracts ./contracts
 COPY --from=builder --chown=bun:bun /app/tsconfig.json ./tsconfig.json
-COPY --from=speech-builder /out/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=speech-builder /out/whisper-server /usr/local/bin/whisper-server
 COPY --from=speech-builder /out/ggml-base.bin /opt/minisago-models/ggml-base.bin
 RUN mkdir -p /app/state && chown -R bun:bun /app/state
 

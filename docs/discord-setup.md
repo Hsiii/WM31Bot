@@ -44,9 +44,10 @@ Instagram and X messages after their proxy succeeds. Embed Links and Manage
 Webhooks let those replacements retain the sender's display name and avatar
 while showing the improved social embed. Thread permissions support review
 discussions. Add Reactions supports answer and ambient reactions. Connect and
-Speak let MiniSago join a member's voice channel and answer aloud. She
-transcribes speech with Whisper and uses a private VOICEVOX engine for spoken
-replies, while the configured Codex worker writes the reply. The voice credit is
+Speak let MiniSago join a member's voice channel and answer aloud. A private,
+persistent Whisper service transcribes speech. The configured Codex worker
+streams complete Japanese sentences to a private VOICEVOX engine, so playback
+can begin before the full reply is ready. The voice credit is
 `VOICEVOX:猫使ビィ`. Create Expressions is needed in every destination guild
 where the owner may add emoji. Manage Expressions is needed where the owner may
 rename emoji.

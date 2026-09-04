@@ -1,11 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const WHISPER_PATH = process.env.MINISAGO_WHISPER_PATH?.trim() || "whisper-cli";
-const WHISPER_MODEL =
-  process.env.MINISAGO_WHISPER_MODEL?.trim() ||
-  "/opt/minisago-models/ggml-base.bin";
+const WHISPER_URL =
+  process.env.MINISAGO_WHISPER_URL?.trim() || "http://whisper:8080";
 const VOICEVOX_URL =
   process.env.MINISAGO_VOICEVOX_URL?.trim() || "http://voicevox:50021";
 const SPEECH_COMMAND_TIMEOUT_MS = 30_000;
@@ -61,6 +59,10 @@ export function voicevoxAudioQueryUrl(text: string, baseUrl = VOICEVOX_URL) {
   return url;
 }
 
+export function whisperInferenceUrl(baseUrl = WHISPER_URL) {
+  return new URL("inference", `${baseUrl.replace(/\/$/u, "")}/`);
+}
+
 function voicevoxSynthesisUrl() {
   const url = new URL("synthesis", `${VOICEVOX_URL.replace(/\/$/u, "")}/`);
   url.searchParams.set("speaker", String(VOICEVOX_SPEAKER_ID));
@@ -83,7 +85,6 @@ async function voicevoxRequest(url: URL, options: RequestInit) {
 export async function transcribeSpeech(audio: Buffer) {
   const directory = await mkdtemp(join(tmpdir(), "minisago-voice-"));
   const wavPath = join(directory, "utterance.wav");
-  const outputPath = join(directory, "transcript");
 
   try {
     await run(
@@ -105,23 +106,25 @@ export async function transcribeSpeech(audio: Buffer) {
       ],
       audio,
     );
-    await run(
-      WHISPER_PATH,
-      [
-        "-m",
-        WHISPER_MODEL,
-        "-f",
-        wavPath,
-        "--output-txt",
-        "--output-file",
-        outputPath,
-        "--no-timestamps",
-        "--no-prints",
-      ],
-      undefined,
-      TRANSCRIPTION_TIMEOUT_MS,
-    );
-    return (await readFile(`${outputPath}.txt`, "utf8")).trim();
+    const form = new FormData();
+    form.append("file", Bun.file(wavPath), "utterance.wav");
+    form.append("language", "auto");
+    form.append("response_format", "json");
+    const response = await fetch(whisperInferenceUrl(), {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Whisper ${response.status}: ${(await response.text()).trim()}`,
+      );
+    }
+    const result = (await response.json()) as { text?: unknown };
+    if (typeof result.text !== "string") {
+      throw new Error("Whisper returned no transcript.");
+    }
+    return result.text.trim();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
