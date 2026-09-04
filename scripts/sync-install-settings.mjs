@@ -21,6 +21,7 @@ const requiredGuildPermissionFlags = [
   ["EMBED_LINKS", 1n << 14n],
   ["READ_MESSAGE_HISTORY", 1n << 16n],
   ["CONNECT", 1n << 20n],
+  ["SPEAK", 1n << 21n],
   ["MANAGE_WEBHOOKS", 1n << 29n],
   ["MANAGE_GUILD_EXPRESSIONS", 1n << 30n],
   ["MANAGE_THREADS", 1n << 34n],

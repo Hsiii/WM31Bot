@@ -10,14 +10,14 @@ import {
 
 afterEach(() => registerVoiceGateway(null));
 
-test("builds a silent Discord voice-state update", () => {
+test("builds a conversational Discord voice-state update", () => {
   expect(buildVoiceStateUpdate("guild-1", "voice-1")).toEqual({
     op: 4,
     d: {
       guild_id: "guild-1",
       channel_id: "voice-1",
-      self_mute: true,
-      self_deaf: true,
+      self_mute: false,
+      self_deaf: false,
     },
   });
   expect(buildVoiceStateUpdate("guild-1", null).d.channel_id).toBeNull();

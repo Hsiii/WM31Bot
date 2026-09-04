@@ -14,4 +14,9 @@ describe("Docker build context", () => {
     expect(rules).not.toContain("!.env.production");
     expect(rules).not.toContain("!.env.worker");
   });
+
+  test("excludes dependency trees from every package", () => {
+    expect(rules).toContain("node_modules");
+    expect(rules).toContain("**/node_modules");
+  });
 });

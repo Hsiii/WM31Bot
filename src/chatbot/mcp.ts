@@ -564,7 +564,7 @@ function availableCapabilities(
       category: "discord",
       availability: "available",
       description:
-        "Join the requester's current voice channel muted and deafened, or leave the current server's voice channel.",
+        "Join the requester's current voice channel for a live spoken conversation, or leave the current server's voice channel.",
       tools: ["join_voice_channel", "leave_voice_channel"],
     });
   }
@@ -1052,7 +1052,7 @@ function createServer(session: ChatbotMcpSession) {
       "join_voice_channel",
       {
         description:
-          "Join the current requester's current Discord voice channel. The requester and guild are host-bound; there are no member, channel, or guild arguments. Call only when the requester asks you to join voice chat. You join muted and deafened without capturing or playing audio.",
+          "Join the current requester's current Discord voice channel for a live spoken conversation. The requester and guild are host-bound; there are no member, channel, or guild arguments. Call only when the requester asks you to join voice chat.",
         inputSchema: {},
         annotations: voiceAnnotations,
       },

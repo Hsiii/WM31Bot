@@ -22,7 +22,7 @@ Configure workers separately using [Workers](workers.md).
 
 ## Permissions
 
-The synchronized permission bitfield is `9124122291264`:
+The synchronized permission bitfield is `9124124388416`:
 
 - Add Reactions
 - View Channels
@@ -31,6 +31,7 @@ The synchronized permission bitfield is `9124122291264`:
 - Embed Links
 - Read Message History
 - Connect
+- Speak
 - Manage Webhooks
 - Manage Expressions
 - Manage Threads
@@ -42,10 +43,11 @@ Manage Messages pins PR review requests and lets MiniSago replace original
 Instagram and X messages after their proxy succeeds. Embed Links and Manage
 Webhooks let those replacements retain the sender's display name and avatar
 while showing the improved social embed. Thread permissions support review
-discussions. Add Reactions supports answer and ambient reactions. Connect lets
-the host-bound MCP tools join and leave voice channels. Create Expressions is
-needed in every destination guild where the owner may add emoji. Manage
-Expressions is needed where the owner may rename emoji.
+discussions. Add Reactions supports answer and ambient reactions. Connect and
+Speak let MiniSago join a member's voice channel and answer aloud. She
+transcribes speech and synthesizes her replies locally, while the configured
+Codex worker writes the reply. Create Expressions is needed in every destination guild where the owner may add emoji.
+Manage Expressions is needed where the owner may rename emoji.
 
 ## Gateway ownership
 

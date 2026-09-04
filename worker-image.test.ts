@@ -82,6 +82,13 @@ test("hosted image includes Git for local server-memory history", () => {
   expect(hostedDockerfile).toContain("RUN apk add --no-cache git");
 });
 
+test("hosted image bundles local speech tools", () => {
+  expect(hostedDockerfile).toContain("espeak-ng ffmpeg");
+  expect(hostedDockerfile).toContain("/usr/local/bin/whisper-cli");
+  expect(hostedDockerfile).toContain("/opt/minisago-models/ggml-base.bin");
+  expect(hostedDockerfile).toContain("WHISPER_MODEL_SHA256");
+});
+
 test("generic Python runs behind a private container boundary", () => {
   const sandboxOffset = workerCompose.indexOf("\n  sandbox:\n");
   const worker = workerCompose.slice(0, sandboxOffset);
