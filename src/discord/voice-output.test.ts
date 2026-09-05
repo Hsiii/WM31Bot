@@ -77,3 +77,34 @@ test("a ready answer cuts off thinking feedback immediately", () => {
   expect(player.plays).toBe(2);
   output.clear();
 });
+
+test("records only started clips, distinguishing interrupted from finished playback", () => {
+  const { player, output } = setup();
+  const heard: string[] = [];
+  output.write(Buffer.alloc(3840), "reply", {
+    finished: (interrupted) => heard.push(`first:${interrupted}`),
+  });
+  player.emit(AudioPlayerStatus.Playing);
+  player.emit(AudioPlayerStatus.Idle);
+  output.write(Buffer.alloc(3840), "reply", {
+    finished: (interrupted) => heard.push(`second:${interrupted}`),
+  });
+  player.emit(AudioPlayerStatus.Playing);
+  output.write(Buffer.alloc(3840), "reply", {
+    finished: (interrupted) => heard.push(`unheard:${interrupted}`),
+  });
+  output.clear();
+  expect(heard).toEqual(["first:false", "second:true"]);
+});
+
+test("clearing a buffering clip does not claim it was heard", () => {
+  const { output } = setup();
+  let heard = false;
+  output.write(Buffer.alloc(3840), "reply", {
+    finished: () => {
+      heard = true;
+    },
+  });
+  output.clear();
+  expect(heard).toBe(false);
+});

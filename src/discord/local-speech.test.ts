@@ -48,3 +48,36 @@ test("uses the persistent Whisper inference endpoint", () => {
     "http://whisper:8080/inference",
   );
 });
+
+test("cancels an in-flight synthesis request", async () => {
+  const { spyOn } = await import("bun:test");
+  const { synthesizeSpeech } = await import("./local-speech");
+  const controller = new AbortController();
+  let requestSignal: AbortSignal | undefined;
+  const request = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      (_url: RequestInfo | URL, options?: RequestInit) => {
+        requestSignal = options?.signal as AbortSignal;
+        return new Promise<Response>((_resolve, reject) => {
+          requestSignal!.addEventListener(
+            "abort",
+            () => reject(requestSignal!.reason),
+            { once: true },
+          );
+        });
+      },
+      { preconnect: fetch.preconnect },
+    ),
+  );
+  try {
+    const speech = synthesizeSpeech("こんにちは", {
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(speech).rejects.toThrow();
+    expect(requestSignal?.aborted).toBe(true);
+    expect(request).toHaveBeenCalledTimes(1);
+  } finally {
+    request.mockRestore();
+  }
+});

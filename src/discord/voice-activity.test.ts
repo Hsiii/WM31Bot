@@ -58,11 +58,27 @@ test("drops a segment without enough voiced audio", () => {
     onUtterance: (audio) => utterances.push(audio),
   });
 
-  for (let index = 0; index < 10; index += 1) gate.push(frame(1), true);
+  for (let index = 0; index < 4; index += 1) gate.push(frame(1), true);
   for (let index = 0; index < 35; index += 1) gate.push(frame(0), false);
 
   expect(utterances).toEqual([]);
-  expect(ends).toBe(1);
+  expect(ends).toBe(0);
   gate.flush();
-  expect(ends).toBe(1);
+  expect(ends).toBe(0);
+});
+
+test("preserves a 240 ms command for recognition", () => {
+  let starts = 0;
+  const utterances: Buffer[] = [];
+  const gate = new VoiceActivityGate({
+    maxUtteranceBytes: 100_000,
+    onSpeechStart: () => {
+      starts++;
+    },
+    onUtterance: (audio) => utterances.push(audio),
+  });
+  for (let i = 0; i < 12; i++) gate.push(frame(1), true);
+  gate.flush();
+  expect(starts).toBe(1);
+  expect(utterances).toHaveLength(1);
 });

@@ -6,19 +6,24 @@ export type VoiceChatTurn = {
 
 export type VoiceChatResponse = { transcript: string; reply: string };
 export type VoiceAudioKind = "reply" | "feedback";
+export type VoicePlayback = { finished: (interrupted: boolean) => void };
 export type VoiceReplyInput = {
   userId: string;
   transcript: string;
   history: VoiceChatTurn[];
+  signal: AbortSignal;
   isCurrent: () => boolean;
-  onAudio: (audio: Buffer, kind?: VoiceAudioKind) => void | Promise<void>;
+  onAudio: (
+    audio: Buffer,
+    kind?: VoiceAudioKind,
+    text?: string,
+  ) => void | Promise<void>;
 };
 
+const ADDRESS =
+  /^(?:(?:hey|hi|ねえ|ねぇ)[\s、,]*)?(?:(?:mini\s*)?sago\b|ミニサゴ|みにさご|サゴ|さご)[\s、,。:：]*/iu;
 export function voiceInterruptionIntent(text: string, sameSpeaker: boolean) {
-  const address =
-    /^(?:(?:hey|hi|ねえ|ねぇ)[\s、,]*)?(?:(?:mini\s*)?sago\b|ミニサゴ|みにさご|サゴ|さご)[\s、,。:：]*/iu.exec(
-      text.trim(),
-    );
+  const address = ADDRESS.exec(text.trim());
   const addressed = Boolean(address);
   const request = address ? text.trim().slice(address[0].length) : text.trim();
   const stop =
@@ -37,12 +42,17 @@ type VoiceOutput = {
   pause: () => void;
   resume: () => void;
   clear: () => void;
-  write: (audio: Buffer, kind: VoiceAudioKind) => void;
+  write: (
+    audio: Buffer,
+    kind: VoiceAudioKind,
+    playback?: VoicePlayback,
+  ) => void;
   drain: () => Promise<void>;
 };
 
 const MAX_PENDING_UTTERANCES = 3;
 const MAX_PENDING_AGE_MS = 15_000;
+const FOLLOW_UP_MS = 15_000;
 type PendingUtterance = {
   userId: string;
   audio: Buffer;
@@ -50,11 +60,16 @@ type PendingUtterance = {
   queuedAt: number;
   done: () => void;
 };
+type Turn = { userId: string; controller: AbortController };
 
 export class VoiceConversation {
-  private readonly speakers = new Set<string>();
+  private readonly speakers = new Map<string, string | undefined>();
   private readonly history: VoiceChatTurn[] = [];
-  private active?: { userId: string };
+  private readonly lifetime = new AbortController();
+  private active?: Turn;
+  // Replacement work waits for cancellation acknowledgement, without blocking STT.
+  private answering: Promise<void> = Promise.resolve();
+  private engaged?: { userId: string; until: number };
   private transcribing = false;
   private readonly pending: PendingUtterance[] = [];
   private gapTimer?: ReturnType<typeof setTimeout>;
@@ -63,17 +78,18 @@ export class VoiceConversation {
 
   constructor(
     private readonly options: {
-      transcribe: (audio: Buffer) => Promise<string>;
+      transcribe: (audio: Buffer, signal?: AbortSignal) => Promise<string>;
       respond: (input: VoiceReplyInput) => Promise<VoiceChatResponse | null>;
       output: VoiceOutput;
       gapMs?: number;
+      transcriptionTimeoutMs?: number;
     },
   ) {}
 
   speechStarted(userId: string) {
     if (this.closed) return;
     clearTimeout(this.gapTimer);
-    this.speakers.add(userId);
+    this.speakers.set(userId, this.active?.userId);
     this.quiet = false;
     this.options.output.pause();
   }
@@ -84,8 +100,18 @@ export class VoiceConversation {
     clearTimeout(this.gapTimer);
     this.gapTimer = setTimeout(() => {
       this.quiet = true;
-      this.options.output.resume();
+      this.resumeIfResolved();
     }, this.options.gapMs ?? 700);
+  }
+
+  private resumeIfResolved() {
+    if (
+      !this.closed &&
+      this.quiet &&
+      !this.transcribing &&
+      !this.pending.length
+    )
+      this.options.output.resume();
   }
 
   utterance(userId: string, audio: Buffer) {
@@ -96,7 +122,9 @@ export class VoiceConversation {
       this.pending.push({
         userId,
         audio,
-        interruptedUserId: this.active?.userId,
+        interruptedUserId: this.speakers.has(userId)
+          ? this.speakers.get(userId)
+          : this.active?.userId,
         queuedAt: Date.now(),
         done,
       });
@@ -114,13 +142,18 @@ export class VoiceConversation {
           if (Date.now() - pending.queuedAt <= MAX_PENDING_AGE_MS)
             await this.transcribe(pending);
         } catch (error) {
-          console.warn("Could not transcribe Discord voice:", error);
+          if (!this.closed)
+            console.warn(
+              "Could not transcribe Discord voice:",
+              error instanceof Error ? error.message : error,
+            );
         } finally {
           pending.done();
         }
       }
     } finally {
       this.transcribing = false;
+      this.resumeIfResolved();
     }
   }
 
@@ -128,66 +161,132 @@ export class VoiceConversation {
     userId,
     audio,
     interruptedUserId,
+    queuedAt,
   }: PendingUtterance) {
-    const transcript = (await this.options.transcribe(audio)).trim();
+    const signal = AbortSignal.any([
+      this.lifetime.signal,
+      AbortSignal.timeout(
+        Math.max(
+          1,
+          Math.min(
+            this.options.transcriptionTimeoutMs ?? 8_000,
+            MAX_PENDING_AGE_MS - (Date.now() - queuedAt),
+          ),
+        ),
+      ),
+    ]);
+    let abort!: () => void;
+    const aborted = new Promise<never>((_, reject) => {
+      abort = () => reject(signal.reason);
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+    });
+    const transcript = (
+      await Promise.race([
+        this.options.transcribe(audio, signal),
+        aborted,
+      ]).finally(() => signal.removeEventListener("abort", abort))
+    ).trim();
     if (!transcript || this.closed) return;
+    const addressed = ADDRESS.test(transcript);
     if (interruptedUserId !== undefined || this.active) {
       const intent = voiceInterruptionIntent(
         transcript,
-        (this.active?.userId ?? interruptedUserId) === userId,
+        (interruptedUserId ?? this.active?.userId) === userId,
       );
       if (intent === "keep") return;
-      // Transcriptions are processed in capture order, including corrections.
-      this.active = undefined;
-      this.options.output.clear();
-      if (intent === "stop") return;
+      this.cancelTurn();
+      if (intent === "stop") {
+        this.engaged = undefined;
+        return;
+      }
+    } else {
+      const followUp =
+        this.engaged?.userId === userId && queuedAt <= this.engaged.until;
+      if (!addressed && !followUp) return;
+      if (voiceInterruptionIntent(transcript, Boolean(followUp)) === "stop") {
+        this.engaged = undefined;
+        return;
+      }
     }
-    const turn = { userId };
+    const turn: Turn = { userId, controller: new AbortController() };
     this.active = turn;
-    const history = [...this.history];
-    this.history.push({
-      role: "user",
-      author: userId,
-      content: transcript,
-    });
     const isCurrent = () => !this.closed && this.active === turn;
-    void (async () => {
+    const previous = this.answering;
+    this.answering = (async () => {
       try {
-        const response = await this.options.respond({
+        await previous;
+        if (!isCurrent()) return;
+        const history = [...this.history];
+        this.history.push({
+          role: "user",
+          author: userId,
+          content: transcript,
+        });
+        await this.options.respond({
           userId,
           transcript,
           history,
+          signal: turn.controller.signal,
           isCurrent,
-          onAudio: (audio, kind = "reply") => {
-            if (!isCurrent() || (kind === "feedback" && !this.quiet)) return;
-            this.options.output.write(audio, kind);
+          onAudio: (audio, kind = "reply", text) => {
+            if (
+              !isCurrent() ||
+              (kind === "feedback" && (!this.quiet || this.transcribing))
+            )
+              return;
+            this.options.output.write(
+              audio,
+              kind,
+              text
+                ? {
+                    finished: (interrupted) => {
+                      this.history.push({
+                        role: "assistant",
+                        author: "MiniSago",
+                        content: interrupted
+                          ? `[Playback interrupted during this sentence; only part may have been heard] ${text}`
+                          : text,
+                      });
+                      this.trimHistory();
+                    },
+                  }
+                : undefined,
+            );
             if (kind === "feedback") return this.options.output.drain();
           },
         });
         if (!isCurrent()) return;
         await this.options.output.drain();
-        if (isCurrent() && response) {
-          this.history.push({
-            role: "assistant",
-            author: "MiniSago",
-            content: response.reply,
-          });
-        }
+        if (isCurrent())
+          this.engaged = { userId, until: Date.now() + FOLLOW_UP_MS };
       } catch (error) {
-        console.warn("Could not answer in Discord voice:", error);
+        if (!turn.controller.signal.aborted)
+          console.warn("Could not answer in Discord voice:", error);
       } finally {
         if (isCurrent()) this.active = undefined;
-        this.history.splice(0, Math.max(0, this.history.length - 12));
+        this.trimHistory();
       }
     })();
   }
 
+  private trimHistory() {
+    this.history.splice(0, Math.max(0, this.history.length - 12));
+  }
+
+  private cancelTurn() {
+    const turn = this.active;
+    this.active = undefined;
+    turn?.controller.abort();
+    this.options.output.clear();
+  }
+
   destroy() {
     this.closed = true;
-    this.active = undefined;
+    this.lifetime.abort();
+    this.cancelTurn();
     for (const pending of this.pending.splice(0)) pending.done();
     clearTimeout(this.gapTimer);
     this.speakers.clear();
-    this.options.output.clear();
   }
 }

@@ -52,21 +52,35 @@ can begin before the full reply is ready. The voice credit is
 where the owner may add emoji. Manage Expressions is needed where the owner may
 rename emoji.
 
-MiniSago prewarms a slow `うーん…` thinking cue when the gateway starts. After
-accepting a transcript, she plays it and waits two seconds after playback ends
-before repeating while the answer is still processing. Speech suppresses the
-cue, and a ready answer cuts it off.
+Address MiniSago with “Sago” or “さご” to begin a voice conversation. After an
+answer finishes, that speaker can follow up without repeating the name for
+15 seconds. Other participants can address MiniSago to take over; idle side
+conversation does not automatically trigger an answer.
 
-Speech pauses a pending answer without discarding it. Playback resumes after
-everyone is quiet. Direct calls to Sago or explicit corrections and stop
-commands from the current speaker can replace or stop the answer. The bot
-transcribes one utterance at a time, keeps at most three pending utterances,
-and drops the oldest on overflow. Pending audio older than 15 seconds is
-discarded before transcription to avoid answering stale conversation.
+MiniSago prewarms a slow `うーん…` thinking cue when the gateway starts. It plays
+at most once, after two seconds of processing. Speech suppresses the cue, and a
+ready answer cuts it off.
 
-The bot runs WebRTC voice activity detection on decoded audio before it
-interrupts playback or calls Whisper. It confirms sustained speech, ignores
-short noise, and ends an utterance after detected voice gives way to silence.
+Speech pauses a pending answer. Playback resumes only after everyone is quiet
+and pending transcription has been resolved. Direct calls to Sago or explicit
+corrections and stop commands from the current speaker replace or stop the
+answer. Replacing a turn aborts its synthesis and cancels its worker job; the
+replacement waits for cancellation acknowledgement (or the bridge's existing
+10-second cancellation timeout). Successive corrections supersede intermediate
+answers that have not started. Played sentences are kept in context; an
+interrupted sentence is marked as potentially only partly heard.
+
+The bot transcribes one utterance at a time, keeps at most three pending
+utterances, and drops the oldest on overflow. Pending audio older than 15 seconds
+is discarded. Recognition has an eight-second deadline, also bounded by that
+15-second audio age limit, so a stalled recognizer cannot leave playback paused
+indefinitely. Leaving the channel aborts recognition and answer work.
+
+WebRTC voice activity detection confirms 100 ms of consecutive voiced audio
+before pausing playback and submitting short commands. Briefer bursts are
+ignored. Utterances end after 700 ms of silence. The shorter start threshold
+should be checked with real microphones for false interruptions before tuning
+endpointing further.
 
 ## Gateway ownership
 

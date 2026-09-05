@@ -29,7 +29,7 @@ type VoiceChatSessionOptions = {
   channelId: string;
   adapterCreator: DiscordGatewayAdapterCreator;
   getBotUserId: () => string | null;
-  transcribe: (audio: Buffer) => Promise<string>;
+  transcribe: (audio: Buffer, signal?: AbortSignal) => Promise<string>;
   respond: (
     input: VoiceReplyInput & { guildId: string; channelId: string },
   ) => Promise<VoiceChatResponse | null>;

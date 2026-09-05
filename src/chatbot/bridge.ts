@@ -83,7 +83,11 @@ export type MacAgentJobResult =
 export type DispatchResult =
   | { status: "offline" }
   | { status: "busy" }
-  | { status: "accepted"; result: Promise<MacAgentJobResult> };
+  | {
+      status: "accepted";
+      result: Promise<MacAgentJobResult>;
+      cancel: () => boolean;
+    };
 
 export type WorkerSelectionResult =
   | { status: "offline" }
@@ -498,6 +502,7 @@ export class MacAgentBridge {
       const pendingJob = this.pendingJobs.get(message.jobId);
       if (
         pendingJob?.workerId === worker.id &&
+        !pendingJob.stopping &&
         typeof message.delta === "string" &&
         message.delta.length > 0 &&
         message.delta.length <= CHATBOT_REPLY_MAX_CHARACTERS &&
@@ -658,10 +663,14 @@ export class MacAgentBridge {
     });
 
     send(worker.socket, { type: "job", job });
-    return { status: "accepted", result };
+    return {
+      status: "accepted",
+      result,
+      cancel: () => this.stopJob(job.id, workflowId),
+    };
   }
 
-  private stopJob(jobId: string, workflowId: string) {
+  private stopJob(jobId: string, workflowId?: string) {
     const pendingJob = this.pendingJobs.get(jobId);
     if (!pendingJob || pendingJob.workflowId !== workflowId) return false;
     if (pendingJob.stopping) return true;

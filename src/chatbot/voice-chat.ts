@@ -35,30 +35,39 @@ export function startThinkingFeedback(options: {
     if (!active()) return;
     try {
       const audio = await options.getAudio();
-      if (!active()) return;
-      await options.play(audio);
+      if (active()) await options.play(audio);
     } catch (error) {
       console.warn("Could not play thinking feedback:", error);
     }
-    if (active())
-      timer = setTimeout(() => {
-        void play();
-      }, options.gapMs ?? THINKING_GAP_MS);
   };
-  void play();
+  timer = setTimeout(() => {
+    void play();
+  }, options.gapMs ?? THINKING_GAP_MS);
   return () => {
     stopped = true;
     clearTimeout(timer);
   };
 }
 
-async function playFeedback(text: string, onAudio: (audio: Buffer) => void) {
+async function playFeedback(text: string, input: VoiceReplyInput) {
+  if (!input.isCurrent()) return;
+  let abort!: () => void;
+  const cancelled = new Promise<undefined>((resolve) => {
+    abort = () => resolve(undefined);
+    input.signal.addEventListener("abort", abort, { once: true });
+    if (input.signal.aborted) abort();
+  });
   try {
-    onAudio(await feedbackSpeech.get(text));
+    // Cached feedback is shared; stop waiting without aborting another turn's cache fill.
+    const audio = await Promise.race([feedbackSpeech.get(text), cancelled]);
+    if (audio && input.isCurrent()) input.onAudio(audio);
   } catch (error) {
-    console.warn(
-      `Could not play voice feedback: ${error instanceof Error ? error.message : "unknown error"}`,
-    );
+    if (!input.signal.aborted)
+      console.warn(
+        `Could not play voice feedback: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+  } finally {
+    input.signal.removeEventListener("abort", abort);
   }
 }
 
@@ -177,16 +186,26 @@ export async function respondToVoiceChat(
     streamReply: true,
   };
 
+  let cancel: (() => boolean) | undefined;
+  const abort = () => {
+    stopFeedback();
+    cancel?.();
+  };
+  input.signal.addEventListener("abort", abort, { once: true });
+  let speech = Promise.resolve();
   try {
+    if (!input.isCurrent()) return null;
     let streamedReply = "";
-    let speech = Promise.resolve();
     const sentences = new VoiceSentenceBuffer((sentence) => {
       speech = speech.then(async () => {
         if (!input.isCurrent()) return;
-        const audio = await synthesizeSpeech(sentence);
+        const audio = await synthesizeSpeech(sentence, {
+          signal: input.signal,
+        });
         stopFeedback();
-        if (input.isCurrent()) input.onAudio(audio);
+        if (input.isCurrent()) input.onAudio(audio, "reply", sentence);
       });
+      void speech.catch(() => undefined);
     });
     const dispatch = macAgentBridge.dispatch(job, ["chat"], (delta) => {
       if (!input.isCurrent()) return;
@@ -195,9 +214,11 @@ export async function respondToVoiceChat(
     });
     if (dispatch.status !== "accepted") {
       stopFeedback();
-      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+      await playFeedback(FAILURE_FEEDBACK, input);
       return null;
     }
+    cancel = dispatch.cancel;
+    if (input.signal.aborted) abort();
     const result = await dispatch.result;
     if (!input.isCurrent()) {
       await speech.catch(() => undefined);
@@ -206,7 +227,7 @@ export async function respondToVoiceChat(
     if (!result.ok) {
       stopFeedback();
       await speech.catch(() => undefined);
-      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+      await playFeedback(FAILURE_FEEDBACK, input);
       return null;
     }
 
@@ -214,7 +235,7 @@ export async function respondToVoiceChat(
     if (!reply) {
       stopFeedback();
       await speech.catch(() => undefined);
-      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+      await playFeedback(FAILURE_FEEDBACK, input);
       return null;
     }
     if (!streamedReply) {
@@ -231,13 +252,16 @@ export async function respondToVoiceChat(
     };
   } catch (error) {
     stopFeedback();
-    await playFeedback(FAILURE_FEEDBACK, input.onAudio);
+    if (input.signal.aborted) return null;
+    await playFeedback(FAILURE_FEEDBACK, input);
     console.warn(
       `Could not prepare Discord voice reply: ${error instanceof Error ? error.message : "unknown error"}`,
     );
     return null;
   } finally {
     stopFeedback();
+    input.signal.removeEventListener("abort", abort);
+    await speech.catch(() => undefined);
     mcpSession.revoke();
   }
 }

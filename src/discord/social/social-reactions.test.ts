@@ -92,6 +92,7 @@ function harness(output: string, policy = TEST_POLICY) {
       return {
         status: "accepted",
         result: Promise.resolve({ ok: true, content: output }),
+        cancel: () => true,
       };
     },
     log: (event) => logs.push(event),

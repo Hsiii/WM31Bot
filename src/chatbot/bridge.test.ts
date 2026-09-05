@@ -673,3 +673,64 @@ describe("Mac agent bridge", () => {
     workflow.workflow.release();
   });
 });
+
+test("direct voice dispatch cancels once and retains capacity until acknowledgement", async () => {
+  useWorker();
+  const bridge = new MacAgentBridge();
+  const { socket, sent } = connectWorker(bridge);
+  const job: ChatbotJob = {
+    id: "voice-one",
+    mcpAccessToken: "voice-test-token",
+    executionRoute: "chat",
+    purpose: "answer",
+    requesterUserId: "user",
+    channelId: "voice",
+    requestMessageId: "message",
+    request: "hello",
+    messages: [],
+    streamReply: true,
+  };
+  const deltas: string[] = [];
+  const dispatch = bridge.dispatch(job, ["chat"], (delta) =>
+    deltas.push(delta),
+  );
+  if (dispatch.status !== "accepted") throw new Error("Expected dispatch");
+  expect(dispatch.cancel()).toBe(true);
+  expect(dispatch.cancel()).toBe(true);
+  expect(
+    sent
+      .map((value) => JSON.parse(value))
+      .filter((value) => value.type === "cancel"),
+  ).toEqual([{ type: "cancel", jobId: job.id }]);
+  bridge.message(
+    socket,
+    JSON.stringify({ type: "answer_delta", jobId: job.id, delta: "stale" }),
+  );
+  expect(deltas).toEqual([]);
+  expect(bridge.dispatch({ ...job, id: "voice-two" }).status).toBe("busy");
+  bridge.message(
+    socket,
+    JSON.stringify({
+      type: "result",
+      jobId: job.id,
+      ok: false,
+      error: "cancelled",
+      failureKind: "internal",
+      stopped: true,
+    }),
+  );
+  expect(await dispatch.result).toMatchObject({ ok: false, stopped: true });
+  expect(dispatch.cancel()).toBe(false);
+  const next = bridge.dispatch({ ...job, id: "voice-two" });
+  expect(next.status).toBe("accepted");
+  bridge.message(
+    socket,
+    JSON.stringify({
+      type: "result",
+      jobId: "voice-two",
+      ok: true,
+      content: "hello",
+    }),
+  );
+  if (next.status === "accepted") await next.result;
+});

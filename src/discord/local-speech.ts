@@ -38,7 +38,9 @@ async function run(
   args: string[],
   input?: Buffer,
   timeoutMs = SPEECH_COMMAND_TIMEOUT_MS,
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted();
   const child = Bun.spawn([command, ...args], {
     stdin: input ? "pipe" : "ignore",
     stdout: "pipe",
@@ -58,6 +60,8 @@ async function run(
       reject(new Error(`${command} timed out`));
     }, timeoutMs);
   });
+  const abort = () => child.kill();
+  signal?.addEventListener("abort", abort, { once: true });
   const [stdout, stderr, exitCode] = await Promise.race([
     Promise.all([
       new Response(child.stdout).arrayBuffer(),
@@ -65,7 +69,11 @@ async function run(
       child.exited,
     ]),
     timeout,
-  ]).finally(() => clearTimeout(timer));
+  ]).finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  });
+  signal?.throwIfAborted();
   if (exitCode !== 0) {
     throw new Error(
       stderr.trim().split("\n").at(-1) || `${command} exited with ${exitCode}`,
@@ -91,10 +99,17 @@ function voicevoxSynthesisUrl() {
   return url;
 }
 
-async function voicevoxRequest(url: URL, options: RequestInit) {
+async function voicevoxRequest(
+  url: URL,
+  options: RequestInit,
+  signal?: AbortSignal,
+) {
   const response = await fetch(url, {
     ...options,
-    signal: AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS),
+    signal: AbortSignal.any([
+      AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS),
+      ...(signal ? [signal] : []),
+    ]),
   });
   if (!response.ok) {
     throw new Error(
@@ -104,7 +119,7 @@ async function voicevoxRequest(url: URL, options: RequestInit) {
   return response;
 }
 
-export async function transcribeSpeech(audio: Buffer) {
+export async function transcribeSpeech(audio: Buffer, signal?: AbortSignal) {
   const directory = await mkdtemp(join(tmpdir(), "minisago-voice-"));
   const wavPath = join(directory, "utterance.wav");
 
@@ -127,6 +142,8 @@ export async function transcribeSpeech(audio: Buffer) {
         wavPath,
       ],
       audio,
+      SPEECH_COMMAND_TIMEOUT_MS,
+      signal,
     );
     const form = new FormData();
     form.append("file", Bun.file(wavPath), "utterance.wav");
@@ -135,7 +152,10 @@ export async function transcribeSpeech(audio: Buffer) {
     const response = await fetch(whisperInferenceUrl(), {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS),
+      signal: AbortSignal.any([
+        AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS),
+        ...(signal ? [signal] : []),
+      ]),
     });
     if (!response.ok) {
       throw new Error(
@@ -154,17 +174,25 @@ export async function transcribeSpeech(audio: Buffer) {
 
 export async function synthesizeSpeech(
   text: string,
-  options: { speedScale?: number } = {},
+  options: { speedScale?: number; signal?: AbortSignal } = {},
 ) {
-  const query = (await voicevoxRequest(voicevoxAudioQueryUrl(text), {
-    method: "POST",
-  }).then((response) => response.json())) as Record<string, unknown>;
+  const query = (await voicevoxRequest(
+    voicevoxAudioQueryUrl(text),
+    {
+      method: "POST",
+    },
+    options.signal,
+  ).then((response) => response.json())) as Record<string, unknown>;
   if (options.speedScale !== undefined) query.speedScale = options.speedScale;
-  const wavResponse = await voicevoxRequest(voicevoxSynthesisUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(query),
-  });
+  const wavResponse = await voicevoxRequest(
+    voicevoxSynthesisUrl(),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(query),
+    },
+    options.signal,
+  );
   const wav = Buffer.from(new Uint8Array(await wavResponse.arrayBuffer()));
   return run(
     "ffmpeg",
@@ -184,5 +212,7 @@ export async function synthesizeSpeech(
       "pipe:1",
     ],
     wav,
+    SPEECH_COMMAND_TIMEOUT_MS,
+    options.signal,
   );
 }

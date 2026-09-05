@@ -4,6 +4,7 @@ import {
   voiceInterruptionIntent,
   type VoiceReplyInput,
   type VoiceChatResponse,
+  type VoicePlayback,
 } from "./voice-conversation";
 
 function deferred<T>() {
@@ -14,20 +15,32 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function setup() {
+function setup(
+  options: {
+    transcribe?: (audio: Buffer, signal?: AbortSignal) => Promise<string>;
+    timeout?: number;
+    acknowledgeCancel?: boolean;
+  } = {},
+) {
   const requests: {
     input: VoiceReplyInput;
     result: ReturnType<typeof deferred<VoiceChatResponse | null>>;
   }[] = [];
   const audio: string[] = [];
-  let paused = false;
-  let clears = 0;
+  const clips: VoicePlayback[] = [];
+  let paused = false,
+    clears = 0;
   const conversation = new VoiceConversation({
-    gapMs: 5,
-    transcribe: async (buffer) => buffer.toString(),
+    gapMs: 0,
+    transcriptionTimeoutMs: options.timeout,
+    transcribe: options.transcribe ?? (async (buffer) => buffer.toString()),
     respond: (input) => {
       const result = deferred<VoiceChatResponse | null>();
       requests.push({ input, result });
+      if (options.acknowledgeCancel !== false)
+        input.signal.addEventListener("abort", () => result.resolve(null), {
+          once: true,
+        });
       return result.promise;
     },
     output: {
@@ -39,9 +52,11 @@ function setup() {
       },
       clear: () => {
         clears++;
+        for (const clip of clips.splice(0)) clip.finished(true);
       },
-      write: (buffer) => {
+      write: (buffer, _kind, playback) => {
         audio.push(buffer.toString());
+        if (playback) clips.push(playback);
       },
       drain: async () => {},
     },
@@ -50,6 +65,7 @@ function setup() {
     conversation,
     requests,
     audio,
+    clips,
     get paused() {
       return paused;
     },
@@ -58,141 +74,204 @@ function setup() {
     },
   };
 }
+const tick = () => Bun.sleep(5);
+async function say(
+  state: ReturnType<typeof setup>,
+  user: string,
+  text: string,
+) {
+  await state.conversation.utterance(user, Buffer.from(text));
+  await tick();
+}
 
-test("accepts successive corrections in capture order", async () => {
-  const { conversation, requests } = setup();
-  await conversation.utterance("alice", Buffer.from("Tell me about cats"));
-  await Promise.all([
-    conversation.utterance("alice", Buffer.from("Actually, dogs")),
-    conversation.utterance("alice", Buffer.from("Actually, birds")),
-  ]);
-  expect(requests.map(({ input }) => input.transcript)).toEqual([
-    "Tell me about cats",
-    "Actually, dogs",
+test("idle chatter is ignored; addressing opens a speaker-scoped follow-up window", async () => {
+  const s = setup();
+  await say(s, "alice", "Did you see that, Bob?");
+  expect(s.requests).toHaveLength(0);
+  await say(s, "alice", "Sago, hello");
+  expect(s.requests).toHaveLength(1);
+  s.requests[0]!.result.resolve(null);
+  await tick();
+  await say(s, "bob", "Tell me more");
+  expect(s.requests).toHaveLength(1);
+  await say(s, "alice", "Tell me more");
+  expect(s.requests).toHaveLength(2);
+  s.conversation.destroy();
+});
+
+test("follow-up engagement expires", async () => {
+  const clock = spyOn(Date, "now").mockReturnValue(0);
+  const s = setup();
+  try {
+    await say(s, "alice", "Sago, hello");
+    s.requests[0]!.result.resolve(null);
+    await tick();
+    clock.mockReturnValue(16_000);
+    await say(s, "alice", "another question");
+    expect(s.requests).toHaveLength(1);
+  } finally {
+    clock.mockRestore();
+    s.conversation.destroy();
+  }
+});
+
+test("correction cancels immediately but waits for worker acknowledgement before replacement", async () => {
+  const s = setup({ acknowledgeCancel: false });
+  await say(s, "alice", "Sago, cats");
+  await say(s, "alice", "Actually, dogs");
+  expect(s.requests[0]!.input.signal.aborted).toBe(true);
+  expect(s.requests[0]!.input.isCurrent()).toBe(false);
+  expect(s.requests).toHaveLength(1);
+  await say(s, "alice", "Actually, birds");
+  s.requests[0]!.result.resolve(null);
+  await tick();
+  expect(s.requests.map((r) => r.input.transcript)).toEqual([
+    "Sago, cats",
     "Actually, birds",
   ]);
-  expect(requests.map(({ input }) => input.isCurrent())).toEqual([
-    false,
-    false,
-    true,
-  ]);
-  conversation.destroy();
-  for (const request of requests) request.result.resolve(null);
+  s.requests[0]!.input.onAudio(Buffer.from("stale"));
+  expect(s.audio).toEqual([]);
+  s.conversation.destroy();
+  s.requests[1]!.result.resolve(null);
+});
+
+test("playback stays paused until delayed stop transcription is resolved", async () => {
+  const stop = deferred<string>();
+  const s = setup({
+    transcribe: async (audio) =>
+      audio.toString() === "stop" ? stop.promise : audio.toString(),
+  });
+  await say(s, "alice", "Sago, story");
+  s.conversation.speechStarted("alice");
+  const pending = s.conversation.utterance("alice", Buffer.from("stop"));
+  s.conversation.speechEnded("alice");
+  await tick();
+  expect(s.paused).toBe(true);
+  expect(s.clears).toBe(0);
+  stop.resolve("stop");
+  await pending;
+  await tick();
+  expect(s.clears).toBe(1);
+  expect(s.requests[0]!.input.signal.aborted).toBe(true);
+  expect(s.requests).toHaveLength(1);
+  s.conversation.destroy();
+});
+
+test("recognition timeout resumes playback and ignores a late result", async () => {
+  const late = deferred<string>();
+  const s = setup({
+    timeout: 5,
+    transcribe: async (audio) =>
+      audio.toString() === "late" ? late.promise : audio.toString(),
+  });
+  await say(s, "alice", "Sago, story");
+  s.conversation.speechStarted("alice");
+  const pending = s.conversation.utterance("alice", Buffer.from("late"));
+  s.conversation.speechEnded("alice");
+  await pending;
+  await tick();
+  expect(s.paused).toBe(false);
+  late.resolve("stop");
+  await tick();
+  expect(s.requests[0]!.input.signal.aborted).toBe(false);
+  s.conversation.destroy();
+});
+
+test("side chatter preserves the answer and waits for all speakers", async () => {
+  const s = setup();
+  await say(s, "alice", "Sago, story");
+  s.conversation.speechStarted("bob");
+  s.conversation.speechStarted("carol");
+  await say(s, "bob", "Did you see that?");
+  s.requests[0]!.input.onAudio(Buffer.from("filler"), "feedback");
+  expect(s.audio).toEqual([]);
+  s.conversation.speechEnded("bob");
+  await tick();
+  expect(s.paused).toBe(true);
+  s.conversation.speechEnded("carol");
+  await tick();
+  expect(s.paused).toBe(false);
+  expect(s.requests).toHaveLength(1);
+  expect(s.clears).toBe(0);
+  s.conversation.destroy();
+});
+
+test("chatter captured during an answer stays chatter after that answer finishes", async () => {
+  const late = deferred<string>();
+  const s = setup({
+    transcribe: async (audio) =>
+      audio.toString() === "late" ? late.promise : audio.toString(),
+  });
+  await say(s, "alice", "Sago, hello");
+  const pending = s.conversation.utterance("bob", Buffer.from("late"));
+  s.requests[0]!.result.resolve(null);
+  await tick();
+  late.resolve("some unrelated chat");
+  await pending;
+  expect(s.requests).toHaveLength(1);
+  s.conversation.destroy();
+});
+
+test("history contains played sentences and marks interrupted audio, not unheard generated replies", async () => {
+  const s = setup();
+  await say(s, "alice", "Sago, cats");
+  s.requests[0]!.input.onAudio(Buffer.from("one"), "reply", "First sentence.");
+  s.clips.shift()!.finished(false);
+  s.requests[0]!.input.onAudio(Buffer.from("two"), "reply", "Second sentence.");
+  await say(s, "alice", "Actually, dogs");
+  const history = s.requests[1]!.input.history;
+  expect(history[1]?.content).toBe("First sentence.");
+  expect(history[2]?.content).toContain("Playback interrupted");
+  expect(history[2]?.content).toContain("Second sentence.");
+  s.conversation.destroy();
+});
+
+test("closing cancels transcription and cannot start a late answer", async () => {
+  const late = deferred<string>();
+  let signal: AbortSignal | undefined;
+  const s = setup({
+    transcribe: async (_audio, value) => {
+      signal = value;
+      return late.promise;
+    },
+  });
+  const pending = s.conversation.utterance("alice", Buffer.from("question"));
+  s.conversation.destroy();
+  await pending;
+  expect(signal?.aborted).toBe(true);
+  late.resolve("Sago, hello");
+  await tick();
+  expect(s.requests).toHaveLength(0);
 });
 
 test("bounds queued audio and drops expired pending utterances", async () => {
   const first = deferred<string>();
   const transcribed: string[] = [];
   const clock = spyOn(Date, "now").mockReturnValue(0);
-  const conversation = new VoiceConversation({
+  const s = setup({
     transcribe: async (audio) => {
       transcribed.push(audio.toString());
       return transcribed.length === 1 ? first.promise : "";
     },
-    respond: async () => null,
-    output: {
-      pause() {},
-      resume() {},
-      clear() {},
-      write() {},
-      drain: async () => {},
-    },
   });
   try {
-    const running = conversation.utterance("alice", Buffer.from("running"));
-    const dropped = conversation.utterance("bob", Buffer.from("oldest"));
-    const expired = conversation.utterance("bob", Buffer.from("expired"));
+    const running = s.conversation.utterance("alice", Buffer.from("running"));
+    const dropped = s.conversation.utterance("bob", Buffer.from("oldest"));
+    const expired = s.conversation.utterance("bob", Buffer.from("expired"));
     clock.mockReturnValue(16_000);
-    const recent = conversation.utterance("bob", Buffer.from("recent"));
-    const newest = conversation.utterance("alice", Buffer.from("newest"));
+    const recent = s.conversation.utterance("bob", Buffer.from("recent"));
+    const newest = s.conversation.utterance("alice", Buffer.from("newest"));
     await dropped;
-    expect(transcribed).toEqual(["running"]);
     first.resolve("");
     await Promise.all([running, expired, recent, newest]);
     expect(transcribed).toEqual(["running", "recent", "newest"]);
   } finally {
-    conversation.destroy();
+    s.conversation.destroy();
     clock.mockRestore();
   }
 });
 
-test("chatter pauses output without restarting work; all speakers must finish", async () => {
-  const state = setup();
-  const { conversation, requests, audio } = state;
-  await conversation.utterance("alice", Buffer.from("Tell me a story"));
-  conversation.speechStarted("bob");
-  conversation.speechStarted("carol");
-  await conversation.utterance("bob", Buffer.from("Did you see that?"));
-  requests[0]!.input.onAudio(Buffer.from("filler"), "feedback");
-  requests[0]!.input.onAudio(Buffer.from("answer"));
-  expect(audio).toEqual(["answer"]);
-  expect(requests).toHaveLength(1);
-  expect(requests[0]!.input.isCurrent()).toBe(true);
-  expect(state.clears).toBe(0);
-  conversation.speechEnded("bob");
-  await Bun.sleep(10);
-  expect(state.paused).toBe(true);
-  conversation.speechEnded("carol");
-  await Bun.sleep(10);
-  expect(state.paused).toBe(false);
-  conversation.destroy();
-  requests[0]!.result.resolve(null);
-});
-
-test("an explicit correction replaces output and excludes stale replies from history", async () => {
-  const state = setup();
-  const { conversation, requests } = state;
-  await conversation.utterance("alice", Buffer.from("Tell me about cats"));
-  await conversation.utterance("alice", Buffer.from("Actually, I meant dogs"));
-  expect(requests).toHaveLength(2);
-  expect(state.clears).toBe(1);
-  expect(requests[0]!.input.isCurrent()).toBe(false);
-  requests[0]!.input.onAudio(Buffer.from("stale answer"));
-  requests[0]!.result.resolve({ transcript: "cats", reply: "stale" });
-  requests[1]!.result.resolve({ transcript: "dogs", reply: "dogs answer" });
-  await Bun.sleep(0);
-  await conversation.utterance("alice", Buffer.from("Thank you"));
-  expect(requests[2]!.input.history.map((turn) => turn.content)).toEqual([
-    "Tell me about cats",
-    "Actually, I meant dogs",
-    "dogs answer",
-  ]);
-  expect(state.audio).toEqual([]);
-  conversation.destroy();
-  requests[2]!.result.resolve(null);
-});
-
-test("chatter captured during playback stays chatter even if transcription is delayed", async () => {
-  const transcript = deferred<string>();
-  const answer = deferred<VoiceChatResponse | null>();
-  let calls = 0;
-  let transcriptions = 0;
-  const conversation = new VoiceConversation({
-    transcribe: async () =>
-      ++transcriptions === 1 ? "question" : transcript.promise,
-    respond: async () => {
-      calls++;
-      return answer.promise;
-    },
-    output: {
-      pause() {},
-      resume() {},
-      clear() {},
-      write() {},
-      drain: async () => {},
-    },
-  });
-  await conversation.utterance("alice", Buffer.from("first"));
-  const pending = conversation.utterance("bob", Buffer.from("second"));
-  answer.resolve({ transcript: "question", reply: "answer" });
-  await Bun.sleep(0);
-  transcript.resolve("some unrelated chat");
-  await pending;
-  expect(calls).toBe(1);
-  conversation.destroy();
-});
-
-test("only explicit addressing or the current speaker's correction replaces a turn", () => {
+test("only addressing or the current speaker's correction replaces a turn", () => {
   expect(voiceInterruptionIntent("Sago, what about tomorrow?", false)).toBe(
     "replace",
   );
@@ -205,62 +284,34 @@ test("only explicit addressing or the current speaker's correction replaces a tu
   expect(voiceInterruptionIntent("I was talking about Sago", false)).toBe(
     "keep",
   );
-  expect(voiceInterruptionIntent("that's funny", true)).toBe("keep");
 });
 
-test("closing while transcription is pending cannot start another answer", async () => {
-  const transcript = deferred<string>();
-  let calls = 0;
-  const conversation = new VoiceConversation({
-    transcribe: () => transcript.promise,
-    respond: async () => {
-      calls++;
-      return null;
-    },
-    output: {
-      pause() {},
-      resume() {},
-      clear() {},
-      write() {},
-      drain: async () => {},
-    },
-  });
-  const pending = conversation.utterance("alice", Buffer.from("question"));
-  await Bun.sleep(0);
-  conversation.destroy();
-  transcript.resolve("hello");
-  await pending;
-  expect(calls).toBe(0);
-});
-
-test("a finished answer stays current while waiting to be heard", async () => {
+test("a generated answer remains current until playback finishes and can still be stopped", async () => {
   const playback = deferred<void>();
-  let calls = 0;
-  let current: (() => boolean) | undefined;
+  let current: VoiceReplyInput | undefined;
   const conversation = new VoiceConversation({
     transcribe: async (audio) => audio.toString(),
     respond: async (input) => {
-      calls++;
-      current = input.isCurrent;
-      input.onAudio(Buffer.from("ready answer"));
-      return { transcript: input.transcript, reply: "ready answer" };
+      current = input;
+      input.onAudio(Buffer.from("answer"), "reply", "Answer.");
+      return { transcript: input.transcript, reply: "Answer." };
     },
     output: {
       pause() {},
       resume() {},
-      clear() {},
       write() {},
+      clear() {
+        playback.resolve();
+      },
       drain: () => playback.promise,
     },
   });
-  await conversation.utterance("alice", Buffer.from("question"));
-  conversation.speechStarted("bob");
-  await conversation.utterance("bob", Buffer.from("unrelated chat"));
-  expect(current?.()).toBe(true);
-  expect(calls).toBe(1);
+  await conversation.utterance("alice", Buffer.from("Sago, question"));
+  await tick();
+  expect(current?.isCurrent()).toBe(true);
   await conversation.utterance("alice", Buffer.from("stop"));
-  expect(current?.()).toBe(false);
-  expect(calls).toBe(1);
-  playback.resolve();
+  await tick();
+  expect(current?.signal.aborted).toBe(true);
+  expect(current?.isCurrent()).toBe(false);
   conversation.destroy();
 });
