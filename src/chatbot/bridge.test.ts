@@ -185,10 +185,23 @@ describe("Mac agent bridge", () => {
       messages: [],
     };
 
-    const dispatch = bridge.dispatch(job);
+    const deltas: string[] = [];
+    const dispatch = bridge.dispatch(job, ["chat"], (delta) =>
+      deltas.push(delta),
+    );
     expect(dispatch.status).toBe("accepted");
     expect(bridge.dispatch({ ...job, id: "job-2" }).status).toBe("busy");
     expect(JSON.parse(sent.at(-1)!)).toEqual({ type: "job", job });
+
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "answer_delta",
+        jobId: job.id,
+        delta: "最初の文。",
+      }),
+    );
+    expect(deltas).toEqual(["最初の文。"]);
 
     bridge.message(
       socket,

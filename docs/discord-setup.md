@@ -22,7 +22,7 @@ Configure workers separately using [Workers](workers.md).
 
 ## Permissions
 
-The synchronized permission bitfield is `9124122291264`:
+The synchronized permission bitfield is `9124124388416`:
 
 - Add Reactions
 - View Channels
@@ -31,6 +31,7 @@ The synchronized permission bitfield is `9124122291264`:
 - Embed Links
 - Read Message History
 - Connect
+- Speak
 - Manage Webhooks
 - Manage Expressions
 - Manage Threads
@@ -42,10 +43,30 @@ Manage Messages pins PR review requests and lets MiniSago replace original
 Instagram and X messages after their proxy succeeds. Embed Links and Manage
 Webhooks let those replacements retain the sender's display name and avatar
 while showing the improved social embed. Thread permissions support review
-discussions. Add Reactions supports answer and ambient reactions. Connect lets
-the host-bound MCP tools join and leave voice channels. Create Expressions is
-needed in every destination guild where the owner may add emoji. Manage
-Expressions is needed where the owner may rename emoji.
+discussions. Add Reactions supports answer and ambient reactions. Connect and
+Speak let MiniSago join a member's voice channel and answer aloud. A private,
+persistent Whisper service transcribes speech. The configured Codex worker
+streams complete Japanese sentences to a private VOICEVOX engine, so playback
+can begin before the full reply is ready. The voice credit is
+`VOICEVOX:猫使ビィ`. Create Expressions is needed in every destination guild
+where the owner may add emoji. Manage Expressions is needed where the owner may
+rename emoji.
+
+MiniSago prewarms a slow `うーん…` thinking cue when the gateway starts. After
+accepting a transcript, she plays it and waits two seconds after playback ends
+before repeating while the answer is still processing. Speech suppresses the
+cue, and a ready answer cuts it off.
+
+Speech pauses a pending answer without discarding it. Playback resumes after
+everyone is quiet. Direct calls to Sago or explicit corrections and stop
+commands from the current speaker can replace or stop the answer. The bot
+transcribes one utterance at a time, keeps at most three pending utterances,
+and drops the oldest on overflow. Pending audio older than 15 seconds is
+discarded before transcription to avoid answering stale conversation.
+
+The bot runs WebRTC voice activity detection on decoded audio before it
+interrupts playback or calls Whisper. It confirms sustained speech, ignores
+short noise, and ends an utterance after detected voice gives way to silence.
 
 ## Gateway ownership
 

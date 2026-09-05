@@ -13,8 +13,8 @@ export function buildVoiceStateUpdate(
     d: {
       guild_id: guildId,
       channel_id: channelId,
-      self_mute: true,
-      self_deaf: true,
+      self_mute: false,
+      self_deaf: false,
     },
   };
 }

@@ -6,6 +6,7 @@
 .next
 .vercel
 node_modules
+**/node_modules
 workspace
 npm-debug.log*
 *.tsbuildinfo

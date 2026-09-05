@@ -11,6 +11,10 @@ import {
   ChatbotConversationTracker,
   handleChatbotMention,
 } from "../chatbot/chatbot";
+import {
+  prewarmVoiceChatSpeech,
+  respondToVoiceChat,
+} from "../chatbot/voice-chat";
 import { createDiscordRequest, type DiscordRequest } from "./api/request";
 import {
   createEphemeralInteractionResponder,
@@ -20,6 +24,7 @@ import {
   type DiscordApplicationCommandInteraction,
 } from "./interactions";
 import { ChannelQuietTracker } from "./channel-quiet";
+import { transcribeSpeech } from "./local-speech";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
@@ -43,6 +48,8 @@ import {
   type LeaveVoiceChannelResult,
   type VoiceGateway,
 } from "./api/voice";
+import { DiscordVoiceChat, type DiscordVoiceChatOptions } from "./voice-chat";
+import type { DiscordGatewayAdapterLibraryMethods } from "@discordjs/voice";
 import { getFeatureAvailabilityStore } from "./feature-availability";
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -77,6 +84,10 @@ type GatewayReady = {
 type GatewayGuildCreate = {
   id: string;
   voice_states?: DiscordVoiceState[];
+};
+
+type DiscordVoiceServerUpdate = {
+  guild_id: string;
 };
 
 type DiscordUser = {
@@ -228,6 +239,11 @@ class InstagramGatewayClient implements VoiceGateway {
   private socket: WebSocket | null = null;
   private stopped = false;
   private botUserId: string | null = null;
+  private voiceChat: DiscordVoiceChat;
+  private voiceAdapters = new Map<
+    string,
+    DiscordGatewayAdapterLibraryMethods
+  >();
   private reactionBroker: DiscordReactionBroker;
   private voiceStates = new VoiceStateTracker();
   private socialWebhookDestinations = new Map<
@@ -245,6 +261,23 @@ class InstagramGatewayClient implements VoiceGateway {
       policy: config.ambientReactionPolicy,
       reactionBroker: this.reactionBroker,
     });
+    const voiceOptions: DiscordVoiceChatOptions = {
+      adapterCreator: (guildId) => (methods) => {
+        this.voiceAdapters.set(guildId, methods);
+        return {
+          sendPayload: (payload) => this.sendVoicePayload(payload),
+          destroy: () => {
+            if (this.voiceAdapters.get(guildId) === methods) {
+              this.voiceAdapters.delete(guildId);
+            }
+          },
+        };
+      },
+      getBotUserId: () => this.botUserId,
+      transcribe: transcribeSpeech,
+      respond: respondToVoiceChat,
+    };
+    this.voiceChat = new DiscordVoiceChat(voiceOptions);
   }
 
   connect() {
@@ -255,6 +288,7 @@ class InstagramGatewayClient implements VoiceGateway {
     this.stopped = true;
     this.clearHeartbeat();
     this.ambientReactions.stop();
+    this.voiceChat.destroy();
     this.socket?.close(1000, "MiniSago shutdown");
     registerVoiceGateway(null);
   }
@@ -263,20 +297,24 @@ class InstagramGatewayClient implements VoiceGateway {
     guildId: string,
     userId: string,
   ): JoinVoiceChannelResult {
+    if (this.socket?.readyState !== WebSocket.OPEN || !this.botUserId) {
+      return { status: "gateway_unavailable" };
+    }
+
     const channelId = this.voiceStates.getChannelId(guildId, userId);
 
     if (!channelId) {
       return { status: "member_not_in_voice" };
     }
 
-    if (!this.updateVoiceState(guildId, channelId)) {
-      return { status: "gateway_unavailable" };
-    }
-
-    return { status: "joined", channelId };
+    return this.voiceChat.join(guildId, channelId);
   }
 
   leaveVoiceChannel(guildId: string): LeaveVoiceChannelResult {
+    if (this.voiceChat.leave(guildId)) {
+      return { status: "left" };
+    }
+
     if (!this.updateVoiceState(guildId, null)) {
       return { status: "gateway_unavailable" };
     }
@@ -367,7 +405,21 @@ class InstagramGatewayClient implements VoiceGateway {
     }
 
     if (payload.t === "VOICE_STATE_UPDATE") {
-      this.voiceStates.observe(payload.d as DiscordVoiceState);
+      const voiceState = payload.d as DiscordVoiceState;
+      this.voiceStates.observe(voiceState);
+      if (voiceState.user_id === this.botUserId && voiceState.guild_id) {
+        this.voiceAdapters
+          .get(voiceState.guild_id)
+          ?.onVoiceStateUpdate(payload.d as never);
+      }
+      return;
+    }
+
+    if (payload.t === "VOICE_SERVER_UPDATE") {
+      const voiceServer = payload.d as DiscordVoiceServerUpdate;
+      this.voiceAdapters
+        .get(voiceServer.guild_id)
+        ?.onVoiceServerUpdate(payload.d as never);
       return;
     }
 
@@ -535,6 +587,15 @@ class InstagramGatewayClient implements VoiceGateway {
     }
 
     this.socket.send(JSON.stringify(payload));
+  }
+
+  private sendVoicePayload(payload: unknown) {
+    if (this.socket?.readyState !== WebSocket.OPEN || !this.botUserId) {
+      return false;
+    }
+
+    this.socket.send(JSON.stringify(payload));
+    return true;
   }
 
   private updateVoiceState(guildId: string, channelId: string | null) {
@@ -860,6 +921,7 @@ export function startInstagramGateway() {
   const client = new InstagramGatewayClient(config);
   registerVoiceGateway(client);
   client.connect();
+  void prewarmVoiceChatSpeech();
 
   return client;
 }

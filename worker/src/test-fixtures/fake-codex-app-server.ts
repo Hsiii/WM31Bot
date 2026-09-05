@@ -48,6 +48,39 @@ async function handle(line: string) {
         },
       },
     });
+    if (message.params?.outputSchema) {
+      for (const delta of ['{"reply":"最初の文。', '次の文。"}']) {
+        send({
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "thread-native",
+            turnId: "turn-native",
+            itemId: "message-stream",
+            delta,
+          },
+        });
+      }
+      send({
+        method: "item/completed",
+        params: {
+          threadId: "thread-native",
+          turnId: "turn-native",
+          item: {
+            id: "message-stream",
+            type: "agentMessage",
+            phase: "final_answer",
+            text: '{"reply":"最初の文。次の文。"}',
+          },
+        },
+      });
+      send({
+        method: "turn/completed",
+        params: {
+          threadId: "thread-native",
+          turn: { id: "turn-native", status: "completed", items: [] },
+        },
+      });
+    }
   } else if (message.method === "turn/steer") {
     send({ id: message.id, result: { turnId: "turn-native" } });
     send({

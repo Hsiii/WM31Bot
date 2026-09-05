@@ -420,6 +420,9 @@ export class MacAgentClient {
                   phase = progress.phase;
                   this.send({ type: "progress", jobId: job.id, progress });
                 },
+                onReplyDelta: (delta) => {
+                  this.send({ type: "answer_delta", jobId: job.id, delta });
+                },
                 signal: controller.signal,
               });
               this.traceStore.finish(
