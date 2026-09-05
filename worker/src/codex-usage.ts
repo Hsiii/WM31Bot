@@ -6,10 +6,6 @@ import { codexEnvironment } from "./codex";
 
 const USAGE_READ_TIMEOUT_MS = 5_000;
 
-export function codexUsageEnvironment(codexHome: string, codexPath: string) {
-  return codexEnvironment(codexHome, codexPath);
-}
-
 function percentage(value: unknown) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(100, Math.max(0, value))
@@ -81,7 +77,7 @@ export async function readCodexUsage(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
-    env: codexUsageEnvironment(options.codexHome, options.codexPath),
+    env: codexEnvironment(options.codexHome, options.codexPath),
   });
   const reader = child.stdout.getReader();
   const decoder = new TextDecoder();
