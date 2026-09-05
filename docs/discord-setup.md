@@ -52,11 +52,17 @@ can begin before the full reply is ready. The voice credit is
 where the owner may add emoji. Manage Expressions is needed where the owner may
 rename emoji.
 
-MiniSago prewarms short VOICEVOX feedback when the gateway starts. She says
-`うん` when an utterance ends, then starts using short fillers after 1.5
-seconds. She picks a different filler every 2.5 to 4 seconds until the reply is
-ready. She also speaks when the attempt fails. Members can interrupt her by
-speaking.
+MiniSago prewarms a slow `うーん…` thinking cue when the gateway starts. After
+accepting a transcript, she plays it and waits two seconds after playback ends
+before repeating while the answer is still processing. Speech suppresses the
+cue, and a ready answer cuts it off.
+
+Speech pauses a pending answer without discarding it. Playback resumes after
+everyone is quiet. Direct calls to Sago or explicit corrections and stop
+commands from the current speaker can replace or stop the answer. The bot
+transcribes one utterance at a time, keeps at most three pending utterances,
+and drops the oldest on overflow. Pending audio older than 15 seconds is
+discarded before transcription to avoid answering stale conversation.
 
 The bot runs WebRTC voice activity detection on decoded audio before it
 interrupts playback or calls Whisper. It confirms sustained speech, ignores

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test, spyOn } from "bun:test";
 import {
   VoiceConversation,
   voiceInterruptionIntent,
@@ -58,6 +58,63 @@ function setup() {
     },
   };
 }
+
+test("accepts successive corrections in capture order", async () => {
+  const { conversation, requests } = setup();
+  await conversation.utterance("alice", Buffer.from("Tell me about cats"));
+  await Promise.all([
+    conversation.utterance("alice", Buffer.from("Actually, dogs")),
+    conversation.utterance("alice", Buffer.from("Actually, birds")),
+  ]);
+  expect(requests.map(({ input }) => input.transcript)).toEqual([
+    "Tell me about cats",
+    "Actually, dogs",
+    "Actually, birds",
+  ]);
+  expect(requests.map(({ input }) => input.isCurrent())).toEqual([
+    false,
+    false,
+    true,
+  ]);
+  conversation.destroy();
+  for (const request of requests) request.result.resolve(null);
+});
+
+test("bounds queued audio and drops expired pending utterances", async () => {
+  const first = deferred<string>();
+  const transcribed: string[] = [];
+  const clock = spyOn(Date, "now").mockReturnValue(0);
+  const conversation = new VoiceConversation({
+    transcribe: async (audio) => {
+      transcribed.push(audio.toString());
+      return transcribed.length === 1 ? first.promise : "";
+    },
+    respond: async () => null,
+    output: {
+      pause() {},
+      resume() {},
+      clear() {},
+      write() {},
+      drain: async () => {},
+    },
+  });
+  try {
+    const running = conversation.utterance("alice", Buffer.from("running"));
+    const dropped = conversation.utterance("bob", Buffer.from("oldest"));
+    const expired = conversation.utterance("bob", Buffer.from("expired"));
+    clock.mockReturnValue(16_000);
+    const recent = conversation.utterance("bob", Buffer.from("recent"));
+    const newest = conversation.utterance("alice", Buffer.from("newest"));
+    await dropped;
+    expect(transcribed).toEqual(["running"]);
+    first.resolve("");
+    await Promise.all([running, expired, recent, newest]);
+    expect(transcribed).toEqual(["running", "recent", "newest"]);
+  } finally {
+    conversation.destroy();
+    clock.mockRestore();
+  }
+});
 
 test("chatter pauses output without restarting work; all speakers must finish", async () => {
   const state = setup();

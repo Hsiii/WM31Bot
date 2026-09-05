@@ -41,11 +41,22 @@ type VoiceOutput = {
   drain: () => Promise<void>;
 };
 
+const MAX_PENDING_UTTERANCES = 3;
+const MAX_PENDING_AGE_MS = 15_000;
+type PendingUtterance = {
+  userId: string;
+  audio: Buffer;
+  interruptedUserId?: string;
+  queuedAt: number;
+  done: () => void;
+};
+
 export class VoiceConversation {
   private readonly speakers = new Set<string>();
   private readonly history: VoiceChatTurn[] = [];
   private active?: { userId: string };
-  private transcription = Promise.resolve();
+  private transcribing = false;
+  private readonly pending: PendingUtterance[] = [];
   private gapTimer?: ReturnType<typeof setTimeout>;
   private quiet = true;
   private closed = false;
@@ -78,73 +89,103 @@ export class VoiceConversation {
   }
 
   utterance(userId: string, audio: Buffer) {
-    const interrupted = this.active;
-    this.transcription = this.transcription
-      .then(async () => {
-        if (this.closed) return;
-        const transcript = (await this.options.transcribe(audio)).trim();
-        if (!transcript || this.closed) return;
-        if (interrupted || this.active) {
-          const intent = voiceInterruptionIntent(
-            transcript,
-            (interrupted ?? this.active)?.userId === userId,
-          );
-          if (intent === "keep") return;
-          // A delayed transcript must not replace a newer accepted request.
-          if (interrupted && this.active && interrupted !== this.active) return;
-          this.active = undefined;
-          this.options.output.clear();
-          if (intent === "stop") return;
+    if (this.closed) return Promise.resolve();
+    return new Promise<void>((done) => {
+      if (this.pending.length >= MAX_PENDING_UTTERANCES)
+        this.pending.shift()!.done();
+      this.pending.push({
+        userId,
+        audio,
+        interruptedUserId: this.active?.userId,
+        queuedAt: Date.now(),
+        done,
+      });
+      void this.processPending();
+    });
+  }
+
+  private async processPending() {
+    if (this.transcribing) return;
+    this.transcribing = true;
+    try {
+      while (!this.closed && this.pending.length) {
+        const pending = this.pending.shift()!;
+        try {
+          if (Date.now() - pending.queuedAt <= MAX_PENDING_AGE_MS)
+            await this.transcribe(pending);
+        } catch (error) {
+          console.warn("Could not transcribe Discord voice:", error);
+        } finally {
+          pending.done();
         }
-        const turn = { userId };
-        this.active = turn;
-        const history = [...this.history];
-        this.history.push({
-          role: "user",
-          author: userId,
-          content: transcript,
-        });
-        const isCurrent = () => !this.closed && this.active === turn;
-        void (async () => {
-          try {
-            const response = await this.options.respond({
-              userId,
-              transcript,
-              history,
-              isCurrent,
-              onAudio: (audio, kind = "reply") => {
-                if (!isCurrent() || (kind === "feedback" && !this.quiet))
-                  return;
-                this.options.output.write(audio, kind);
-                if (kind === "feedback") return this.options.output.drain();
-              },
-            });
-            if (!isCurrent()) return;
-            await this.options.output.drain();
-            if (isCurrent() && response) {
-              this.history.push({
-                role: "assistant",
-                author: "MiniSago",
-                content: response.reply,
-              });
-            }
-          } catch (error) {
-            console.warn("Could not answer in Discord voice:", error);
-          } finally {
-            if (isCurrent()) this.active = undefined;
-            this.history.splice(0, Math.max(0, this.history.length - 12));
-          }
-        })();
-      })
-      .catch((error) =>
-        console.warn("Could not transcribe Discord voice:", error),
+      }
+    } finally {
+      this.transcribing = false;
+    }
+  }
+
+  private async transcribe({
+    userId,
+    audio,
+    interruptedUserId,
+  }: PendingUtterance) {
+    const transcript = (await this.options.transcribe(audio)).trim();
+    if (!transcript || this.closed) return;
+    if (interruptedUserId !== undefined || this.active) {
+      const intent = voiceInterruptionIntent(
+        transcript,
+        (this.active?.userId ?? interruptedUserId) === userId,
       );
-    return this.transcription;
+      if (intent === "keep") return;
+      // Transcriptions are processed in capture order, including corrections.
+      this.active = undefined;
+      this.options.output.clear();
+      if (intent === "stop") return;
+    }
+    const turn = { userId };
+    this.active = turn;
+    const history = [...this.history];
+    this.history.push({
+      role: "user",
+      author: userId,
+      content: transcript,
+    });
+    const isCurrent = () => !this.closed && this.active === turn;
+    void (async () => {
+      try {
+        const response = await this.options.respond({
+          userId,
+          transcript,
+          history,
+          isCurrent,
+          onAudio: (audio, kind = "reply") => {
+            if (!isCurrent() || (kind === "feedback" && !this.quiet)) return;
+            this.options.output.write(audio, kind);
+            if (kind === "feedback") return this.options.output.drain();
+          },
+        });
+        if (!isCurrent()) return;
+        await this.options.output.drain();
+        if (isCurrent() && response) {
+          this.history.push({
+            role: "assistant",
+            author: "MiniSago",
+            content: response.reply,
+          });
+        }
+      } catch (error) {
+        console.warn("Could not answer in Discord voice:", error);
+      } finally {
+        if (isCurrent()) this.active = undefined;
+        this.history.splice(0, Math.max(0, this.history.length - 12));
+      }
+    })();
   }
 
   destroy() {
     this.closed = true;
     this.active = undefined;
+    for (const pending of this.pending.splice(0)) pending.done();
     clearTimeout(this.gapTimer);
     this.speakers.clear();
     this.options.output.clear();
