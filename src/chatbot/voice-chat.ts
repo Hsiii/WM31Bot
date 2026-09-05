@@ -14,38 +14,42 @@ import type {
 import { macAgentBridge } from "./bridge";
 import { registerChatbotMcpSession } from "./mcp";
 
-const FILLER_FEEDBACK_DELAY_MS = 1_500;
-const MIN_FOLLOWUP_FILLER_DELAY_MS = 2_500;
-const MAX_FOLLOWUP_FILLER_DELAY_MS = 4_000;
-const HEARD_FEEDBACK = "うん。";
+export const THINKING_FEEDBACK = "うーん…。";
+export const THINKING_GAP_MS = 2_000;
 const FAILURE_FEEDBACK = "ごめん、うまくいかなかった。もう一度お願い。";
-export const VOICE_FILLERS = [
-  "えっとね。",
-  "んーと。",
-  "うーん。",
-  "そうだなあ。",
-  "ちょっと待ってね。",
-] as const;
-const feedbackSpeech = new SpeechCache(synthesizeSpeech);
-const feedbackLines = [
-  HEARD_FEEDBACK,
-  ...VOICE_FILLERS,
-  FAILURE_FEEDBACK,
-] as const;
+const feedbackSpeech = new SpeechCache((text) =>
+  synthesizeSpeech(text, text === THINKING_FEEDBACK ? { speedScale: 0.8 } : {}),
+);
+const feedbackLines = [THINKING_FEEDBACK, FAILURE_FEEDBACK] as const;
 
-export function nextVoiceFillerDelay(random = Math.random) {
-  return (
-    MIN_FOLLOWUP_FILLER_DELAY_MS +
-    Math.floor(
-      random() *
-        (MAX_FOLLOWUP_FILLER_DELAY_MS - MIN_FOLLOWUP_FILLER_DELAY_MS + 1),
-    )
-  );
-}
-
-export function selectVoiceFiller(previous?: string, random = Math.random) {
-  const choices = VOICE_FILLERS.filter((filler) => filler !== previous);
-  return choices[Math.floor(random() * choices.length)] ?? VOICE_FILLERS[0];
+export function startThinkingFeedback(options: {
+  getAudio: () => Promise<Buffer>;
+  play: (audio: Buffer) => void | Promise<void>;
+  isCurrent: () => boolean;
+  gapMs?: number;
+}) {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const active = () => !stopped && options.isCurrent();
+  const play = async () => {
+    if (!active()) return;
+    try {
+      const audio = await options.getAudio();
+      if (!active()) return;
+      await options.play(audio);
+    } catch (error) {
+      console.warn("Could not play thinking feedback:", error);
+    }
+    if (active())
+      timer = setTimeout(() => {
+        void play();
+      }, options.gapMs ?? THINKING_GAP_MS);
+  };
+  void play();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
 }
 
 async function playFeedback(text: string, onAudio: (audio: Buffer) => void) {
@@ -124,29 +128,11 @@ export async function respondToVoiceChat(
 ): Promise<VoiceChatResponse | null> {
   if (!input.isCurrent()) return null;
   const { transcript } = input;
-  const feedbackAudio = (audio: Buffer) => {
-    if (input.isCurrent()) input.onAudio(audio, "feedback");
-  };
-  let feedbackPlayback = playFeedback(HEARD_FEEDBACK, feedbackAudio);
-  let feedbackStopped = false;
-  let previousFiller: string | undefined;
-  let fillerTimer: ReturnType<typeof setTimeout>;
-  const scheduleFiller = (delayMs: number) => {
-    fillerTimer = setTimeout(() => {
-      if (feedbackStopped || !input.isCurrent()) return;
-      const filler = selectVoiceFiller(previousFiller);
-      previousFiller = filler;
-      feedbackPlayback = feedbackPlayback.then(() =>
-        playFeedback(filler, feedbackAudio),
-      );
-      scheduleFiller(nextVoiceFillerDelay());
-    }, delayMs);
-  };
-  scheduleFiller(FILLER_FEEDBACK_DELAY_MS);
-  const stopFeedback = () => {
-    feedbackStopped = true;
-    clearTimeout(fillerTimer);
-  };
+  const stopFeedback = startThinkingFeedback({
+    getAudio: () => feedbackSpeech.get(THINKING_FEEDBACK),
+    play: (audio) => input.onAudio(audio, "feedback"),
+    isCurrent: input.isCurrent,
+  });
 
   const requestMessageId = randomUUID();
   const requestMessage: ChatbotMessage = {
@@ -199,7 +185,6 @@ export async function respondToVoiceChat(
         if (!input.isCurrent()) return;
         const audio = await synthesizeSpeech(sentence);
         stopFeedback();
-        await feedbackPlayback;
         if (input.isCurrent()) input.onAudio(audio);
       });
     });
@@ -210,7 +195,6 @@ export async function respondToVoiceChat(
     });
     if (dispatch.status !== "accepted") {
       stopFeedback();
-      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
@@ -222,7 +206,6 @@ export async function respondToVoiceChat(
     if (!result.ok) {
       stopFeedback();
       await speech.catch(() => undefined);
-      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
@@ -231,7 +214,6 @@ export async function respondToVoiceChat(
     if (!reply) {
       stopFeedback();
       await speech.catch(() => undefined);
-      await feedbackPlayback;
       await playFeedback(FAILURE_FEEDBACK, input.onAudio);
       return null;
     }
@@ -243,14 +225,12 @@ export async function respondToVoiceChat(
     sentences.flush();
     await speech;
     stopFeedback();
-    await feedbackPlayback;
     return {
       transcript,
       reply,
     };
   } catch (error) {
     stopFeedback();
-    await feedbackPlayback;
     await playFeedback(FAILURE_FEEDBACK, input.onAudio);
     console.warn(
       `Could not prepare Discord voice reply: ${error instanceof Error ? error.message : "unknown error"}`,

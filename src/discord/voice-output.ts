@@ -36,6 +36,9 @@ export class VoiceOutput {
     if (kind === "reply")
       this.queue = this.queue.filter((clip) => clip.kind !== "feedback");
     this.queue.push({ audio, kind });
+    if (kind === "reply" && this.current === "feedback") {
+      this.player.stop(true);
+    }
     this.playNext();
   }
 

@@ -11,7 +11,7 @@ export type VoiceReplyInput = {
   transcript: string;
   history: VoiceChatTurn[];
   isCurrent: () => boolean;
-  onAudio: (audio: Buffer, kind?: VoiceAudioKind) => void;
+  onAudio: (audio: Buffer, kind?: VoiceAudioKind) => void | Promise<void>;
 };
 
 export function voiceInterruptionIntent(text: string, sameSpeaker: boolean) {
@@ -116,6 +116,7 @@ export class VoiceConversation {
                 if (!isCurrent() || (kind === "feedback" && !this.quiet))
                   return;
                 this.options.output.write(audio, kind);
+                if (kind === "feedback") return this.options.output.drain();
               },
             });
             if (!isCurrent()) return;

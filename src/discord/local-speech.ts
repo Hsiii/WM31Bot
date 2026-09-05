@@ -152,14 +152,18 @@ export async function transcribeSpeech(audio: Buffer) {
   }
 }
 
-export async function synthesizeSpeech(text: string) {
-  const query = await voicevoxRequest(voicevoxAudioQueryUrl(text), {
+export async function synthesizeSpeech(
+  text: string,
+  options: { speedScale?: number } = {},
+) {
+  const query = (await voicevoxRequest(voicevoxAudioQueryUrl(text), {
     method: "POST",
-  }).then((response) => response.text());
+  }).then((response) => response.json())) as Record<string, unknown>;
+  if (options.speedScale !== undefined) query.speedScale = options.speedScale;
   const wavResponse = await voicevoxRequest(voicevoxSynthesisUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: query,
+    body: JSON.stringify(query),
   });
   const wav = Buffer.from(new Uint8Array(await wavResponse.arrayBuffer()));
   return run(

@@ -68,3 +68,12 @@ test("clear releases a paused answer and its drain waiter", async () => {
   output.resume();
   expect(player.plays).toBe(0);
 });
+
+test("a ready answer cuts off thinking feedback immediately", () => {
+  const { player, output } = setup();
+  output.write(Buffer.alloc(3840), "feedback");
+  expect(player.plays).toBe(1);
+  output.write(Buffer.alloc(3840), "reply");
+  expect(player.plays).toBe(2);
+  output.clear();
+});

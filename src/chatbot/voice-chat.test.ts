@@ -1,22 +1,56 @@
 import { expect, test } from "bun:test";
 
 import {
-  nextVoiceFillerDelay,
-  selectVoiceFiller,
+  startThinkingFeedback,
+  THINKING_GAP_MS,
   VoiceSentenceBuffer,
-  VOICE_FILLERS,
 } from "./voice-chat";
 
-test("spaces random voice fillers without immediate repeats", () => {
-  expect(nextVoiceFillerDelay(() => 0)).toBe(2_500);
-  expect(nextVoiceFillerDelay(() => 0.999_999)).toBe(4_000);
+test("repeats thinking feedback only after playback ends and a gap", async () => {
+  expect(THINKING_GAP_MS).toBe(2_000);
+  let plays = 0;
+  let finish!: () => void;
+  const stop = startThinkingFeedback({
+    getAudio: async () => Buffer.alloc(1),
+    play: () => {
+      plays++;
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    },
+    isCurrent: () => true,
+    gapMs: 20,
+  });
+  await Bun.sleep(30);
+  expect(plays).toBe(1);
+  finish();
+  await Bun.sleep(5);
+  expect(plays).toBe(1);
+  await Bun.sleep(30);
+  expect(plays).toBe(2);
+  stop();
+  finish();
+  await Bun.sleep(30);
+  expect(plays).toBe(2);
+});
 
-  const first = selectVoiceFiller(undefined, () => 0);
-  const second = selectVoiceFiller(first, () => 0);
-
-  expect(VOICE_FILLERS).toContain(first);
-  expect(VOICE_FILLERS).toContain(second);
-  expect(second).not.toBe(first);
+test("answer readiness suppresses feedback still being synthesized", async () => {
+  let resolve!: (audio: Buffer) => void;
+  let plays = 0;
+  const stop = startThinkingFeedback({
+    getAudio: () =>
+      new Promise<Buffer>((done) => {
+        resolve = done;
+      }),
+    play: () => {
+      plays++;
+    },
+    isCurrent: () => true,
+  });
+  stop();
+  resolve(Buffer.alloc(1));
+  await Bun.sleep(0);
+  expect(plays).toBe(0);
 });
 
 test("emits complete spoken sentences as reply text arrives", () => {
