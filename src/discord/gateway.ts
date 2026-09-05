@@ -24,6 +24,7 @@ import {
   type DiscordApplicationCommandInteraction,
 } from "./interactions";
 import { ChannelQuietTracker } from "./channel-quiet";
+import { transcribeSpeech } from "./local-speech";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
@@ -273,6 +274,7 @@ class InstagramGatewayClient implements VoiceGateway {
         };
       },
       getBotUserId: () => this.botUserId,
+      transcribe: transcribeSpeech,
       respond: respondToVoiceChat,
     };
     this.voiceChat = new DiscordVoiceChat(voiceOptions);

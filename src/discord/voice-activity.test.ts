@@ -47,10 +47,14 @@ test("confirms sustained speech and ends on detected silence", () => {
 });
 
 test("drops a segment without enough voiced audio", () => {
+  let ends = 0;
   const utterances: Buffer[] = [];
   const gate = new VoiceActivityGate({
     maxUtteranceBytes: 100_000,
     onSpeechStart: () => undefined,
+    onSpeechEnd: () => {
+      ends++;
+    },
     onUtterance: (audio) => utterances.push(audio),
   });
 
@@ -58,4 +62,7 @@ test("drops a segment without enough voiced audio", () => {
   for (let index = 0; index < 35; index += 1) gate.push(frame(0), false);
 
   expect(utterances).toEqual([]);
+  expect(ends).toBe(1);
+  gate.flush();
+  expect(ends).toBe(1);
 });

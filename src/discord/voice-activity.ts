@@ -21,6 +21,7 @@ export class VoiceActivityGate {
     private readonly options: {
       maxUtteranceBytes: number;
       onSpeechStart: () => void;
+      onSpeechEnd?: () => void;
       onUtterance: (audio: Buffer) => void;
     },
   ) {}
@@ -76,6 +77,7 @@ export class VoiceActivityGate {
         : null;
     this.reset();
     if (audio?.length) this.options.onUtterance(audio);
+    this.options.onSpeechEnd?.();
   }
 
   private reset() {

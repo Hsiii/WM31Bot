@@ -5,16 +5,15 @@ import type {
   ChatbotMessage,
 } from "../../contracts/worker-contract";
 import { parseChatbotAnswerDecision } from "../../contracts/answer-contract";
-import {
-  SpeechCache,
-  synthesizeSpeech,
-  transcribeSpeech,
-} from "../discord/local-speech";
-import type { VoiceChatResponse, VoiceChatTurn } from "../discord/voice-chat";
+import { SpeechCache, synthesizeSpeech } from "../discord/local-speech";
+import type {
+  VoiceChatResponse,
+  VoiceChatTurn,
+  VoiceReplyInput,
+} from "../discord/voice-conversation";
 import { macAgentBridge } from "./bridge";
 import { registerChatbotMcpSession } from "./mcp";
 
-const MIN_UTTERANCE_BYTES = 12_000;
 const FILLER_FEEDBACK_DELAY_MS = 1_500;
 const MIN_FOLLOWUP_FILLER_DELAY_MS = 2_500;
 const MAX_FOLLOWUP_FILLER_DELAY_MS = 4_000;
@@ -117,27 +116,28 @@ function contextMessages(
   }));
 }
 
-export async function respondToVoiceChat(input: {
-  guildId: string;
-  channelId: string;
-  userId: string;
-  audio: Buffer;
-  history: VoiceChatTurn[];
-  onAudio: (audio: Buffer) => void;
-}): Promise<VoiceChatResponse | null> {
-  if (input.audio.length < MIN_UTTERANCE_BYTES) return null;
-
-  let feedbackPlayback = playFeedback(HEARD_FEEDBACK, input.onAudio);
+export async function respondToVoiceChat(
+  input: VoiceReplyInput & {
+    guildId: string;
+    channelId: string;
+  },
+): Promise<VoiceChatResponse | null> {
+  if (!input.isCurrent()) return null;
+  const { transcript } = input;
+  const feedbackAudio = (audio: Buffer) => {
+    if (input.isCurrent()) input.onAudio(audio, "feedback");
+  };
+  let feedbackPlayback = playFeedback(HEARD_FEEDBACK, feedbackAudio);
   let feedbackStopped = false;
   let previousFiller: string | undefined;
   let fillerTimer: ReturnType<typeof setTimeout>;
   const scheduleFiller = (delayMs: number) => {
     fillerTimer = setTimeout(() => {
-      if (feedbackStopped) return;
+      if (feedbackStopped || !input.isCurrent()) return;
       const filler = selectVoiceFiller(previousFiller);
       previousFiller = filler;
       feedbackPlayback = feedbackPlayback.then(() =>
-        playFeedback(filler, input.onAudio),
+        playFeedback(filler, feedbackAudio),
       );
       scheduleFiller(nextVoiceFillerDelay());
     }, delayMs);
@@ -147,25 +147,6 @@ export async function respondToVoiceChat(input: {
     feedbackStopped = true;
     clearTimeout(fillerTimer);
   };
-
-  let transcript: string;
-  try {
-    transcript = await transcribeSpeech(input.audio);
-    if (!transcript) {
-      stopFeedback();
-      await feedbackPlayback;
-      await playFeedback(FAILURE_FEEDBACK, input.onAudio);
-      return null;
-    }
-  } catch (error) {
-    stopFeedback();
-    await feedbackPlayback;
-    await playFeedback(FAILURE_FEEDBACK, input.onAudio);
-    console.warn(
-      `Could not transcribe Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
-    );
-    return null;
-  }
 
   const requestMessageId = randomUUID();
   const requestMessage: ChatbotMessage = {
@@ -215,13 +196,15 @@ export async function respondToVoiceChat(input: {
     let speech = Promise.resolve();
     const sentences = new VoiceSentenceBuffer((sentence) => {
       speech = speech.then(async () => {
+        if (!input.isCurrent()) return;
         const audio = await synthesizeSpeech(sentence);
         stopFeedback();
         await feedbackPlayback;
-        input.onAudio(audio);
+        if (input.isCurrent()) input.onAudio(audio);
       });
     });
     const dispatch = macAgentBridge.dispatch(job, ["chat"], (delta) => {
+      if (!input.isCurrent()) return;
       streamedReply += delta;
       sentences.push(delta);
     });
@@ -232,6 +215,10 @@ export async function respondToVoiceChat(input: {
       return null;
     }
     const result = await dispatch.result;
+    if (!input.isCurrent()) {
+      await speech.catch(() => undefined);
+      return null;
+    }
     if (!result.ok) {
       stopFeedback();
       await speech.catch(() => undefined);

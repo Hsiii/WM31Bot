@@ -1,12 +1,8 @@
-import { PassThrough } from "node:stream";
-
 import {
   createAudioPlayer,
-  createAudioResource,
   EndBehaviorType,
   joinVoiceChannel,
   NoSubscriberBehavior,
-  StreamType,
   type DiscordGatewayAdapterCreator,
   type VoiceConnection,
 } from "@discordjs/voice";
@@ -14,38 +10,29 @@ import buildVAD, { VADEvent, VADMode, type VAD } from "@ozymandiasthegreat/vad";
 import prism from "prism-media";
 
 import { VoiceActivityGate } from "./voice-activity";
+import {
+  VoiceConversation,
+  type VoiceReplyInput,
+  type VoiceChatResponse,
+} from "./voice-conversation";
+import { VoiceOutput } from "./voice-output";
+export type { VoiceChatTurn, VoiceChatResponse } from "./voice-conversation";
 
 const DISCORD_SAMPLE_RATE = 48_000;
 const OPUS_FRAME_SIZE = 960;
 const OPUS_FRAME_BYTES = OPUS_FRAME_SIZE * 2 * 2;
 const MAX_UTTERANCE_BYTES = 60 * 24_000 * 2;
-const MAX_HISTORY_TURNS = 12;
 const vadClass = buildVAD();
-
-export type VoiceChatTurn = {
-  role: "user" | "assistant";
-  author: string;
-  content: string;
-};
-
-export type VoiceChatResponse = {
-  transcript: string;
-  reply: string;
-};
 
 type VoiceChatSessionOptions = {
   guildId: string;
   channelId: string;
   adapterCreator: DiscordGatewayAdapterCreator;
   getBotUserId: () => string | null;
-  respond: (input: {
-    guildId: string;
-    channelId: string;
-    userId: string;
-    audio: Buffer;
-    history: VoiceChatTurn[];
-    onAudio: (audio: Buffer) => void;
-  }) => Promise<VoiceChatResponse | null>;
+  transcribe: (audio: Buffer) => Promise<string>;
+  respond: (
+    input: VoiceReplyInput & { guildId: string; channelId: string },
+  ) => Promise<VoiceChatResponse | null>;
 };
 
 export function discordPcmToSpeechPcm(input: Buffer) {
@@ -88,12 +75,23 @@ class VoiceChatSession {
     behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
   });
   private readonly listeningTo = new Set<string>();
-  private readonly history: VoiceChatTurn[] = [];
-  private cancelActiveAudio?: () => void;
-  private responseQueue = Promise.resolve();
+  private readonly conversation: VoiceConversation;
+  private readonly stopListeners = new Set<() => void>();
   private closed = false;
 
   constructor(private readonly options: VoiceChatSessionOptions) {
+    this.conversation = new VoiceConversation({
+      transcribe: options.transcribe,
+      respond: (input) =>
+        options.respond({
+          ...input,
+          guildId: options.guildId,
+          channelId: options.channelId,
+        }),
+      output: new VoiceOutput(this.player),
+      // The VAD gate and packet inactivity timer already wait for 700 ms of silence.
+      gapMs: 0,
+    });
     this.connection = joinVoiceChannel({
       guildId: options.guildId,
       channelId: options.channelId,
@@ -116,8 +114,8 @@ class VoiceChatSession {
   destroy() {
     if (this.closed) return;
     this.closed = true;
-    this.cancelActiveAudio?.();
-    this.player.stop(true);
+    this.conversation.destroy();
+    for (const stop of this.stopListeners) stop();
     this.connection.destroy();
   }
 
@@ -143,13 +141,14 @@ class VoiceChatSession {
     const vad: VAD = new VAD(VADMode.VERY_AGGRESSIVE, DISCORD_SAMPLE_RATE);
     const gate = new VoiceActivityGate({
       maxUtteranceBytes: MAX_UTTERANCE_BYTES,
-      onSpeechStart: () => {
-        this.cancelActiveAudio?.();
-        this.player.stop(true);
+      onSpeechStart: () => this.conversation.speechStarted(userId),
+      onSpeechEnd: () => this.conversation.speechEnded(userId),
+      onUtterance: (audio) => {
+        void this.conversation.utterance(userId, audio);
       },
-      onUtterance: (audio) => this.enqueueResponse(userId, audio),
     });
     let decoded = Buffer.alloc(0);
+    let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
     const opus = this.connection.receiver.subscribe(userId, {
       end: {
         behavior: EndBehaviorType.AfterInactivity,
@@ -164,6 +163,8 @@ class VoiceChatSession {
 
     opus.pipe(decoder);
     decoder.on("data", (chunk: Buffer) => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => gate.flush(), 700);
       decoded = Buffer.concat([decoded, chunk]);
       while (decoded.length >= OPUS_FRAME_BYTES) {
         const frame = decoded.subarray(0, OPUS_FRAME_BYTES);
@@ -180,72 +181,26 @@ class VoiceChatSession {
 
     const finish = () => {
       if (!this.listeningTo.delete(userId)) return;
+      clearTimeout(inactivityTimer);
       gate.flush();
       vad.destroy();
+      this.stopListeners.delete(stop);
     };
+    const stop = () => {
+      finish();
+      opus.destroy();
+      decoder.destroy();
+    };
+    this.stopListeners.add(stop);
     opus.once("close", finish);
     opus.once("end", finish);
-  }
-
-  private enqueueResponse(userId: string, audio: Buffer) {
-    this.responseQueue = this.responseQueue
-      .then(() => this.respond(userId, audio))
-      .catch((error) => {
-        console.warn(
-          `Could not answer in Discord voice: ${error instanceof Error ? error.message : "unknown error"}`,
-        );
-      });
-  }
-
-  private async respond(userId: string, audio: Buffer) {
-    if (this.closed) return;
-    let output: PassThrough | undefined;
-    let cancelled = false;
-    const cancelAudio = () => {
-      cancelled = true;
-      output?.end();
-    };
-    this.cancelActiveAudio = cancelAudio;
-    const response = await this.options
-      .respond({
-        guildId: this.options.guildId,
-        channelId: this.options.channelId,
-        userId,
-        audio,
-        history: [...this.history],
-        onAudio: (chunk) => {
-          if (cancelled || this.closed) return;
-          if (!output) {
-            output = new PassThrough();
-            this.player.play(
-              createAudioResource(output, { inputType: StreamType.Raw }),
-            );
-          }
-          output.write(chunk);
-        },
-      })
-      .finally(() => {
-        output?.end();
-        if (this.cancelActiveAudio === cancelAudio) {
-          this.cancelActiveAudio = undefined;
-        }
-      });
-    if (!response || this.closed) return;
-
-    this.history.push(
-      { role: "user", author: userId, content: response.transcript },
-      { role: "assistant", author: "MiniSago", content: response.reply },
-    );
-    this.history.splice(
-      0,
-      Math.max(0, this.history.length - MAX_HISTORY_TURNS),
-    );
   }
 }
 
 export type DiscordVoiceChatOptions = {
   adapterCreator: (guildId: string) => DiscordGatewayAdapterCreator;
   getBotUserId: () => string | null;
+  transcribe: VoiceChatSessionOptions["transcribe"];
   respond: VoiceChatSessionOptions["respond"];
 };
 
@@ -263,6 +218,7 @@ export class DiscordVoiceChat {
         channelId,
         adapterCreator: this.options.adapterCreator(guildId),
         getBotUserId: this.options.getBotUserId,
+        transcribe: this.options.transcribe,
         respond: this.options.respond,
       }),
     );
