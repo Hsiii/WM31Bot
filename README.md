@@ -35,3 +35,12 @@ Start with [Discord setup](docs/discord-setup.md) and
 - [Configuration](docs/configuration.md)
 - [Security](docs/security.md)
 - [Operations](docs/operations.md)
+
+## Voice credits
+
+MiniSago's voice chat uses **VOICEVOX:猫使ビィ**.
+See the [VOICEVOX terms](https://voicevox.hiroshiba.jp/term/) and
+[猫使 voice library terms](https://nekotukarb.wixsite.com/nekonohako/利用規約).
+
+When hosting the bot, link this credits section from its Discord profile so
+listeners can find the attribution.
