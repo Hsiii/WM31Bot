@@ -247,6 +247,7 @@ export async function respondToVoiceChat(
         firstDelta = false;
       }
       streamedReply += delta;
+      trace?.("codex.output", { text: streamedReply });
       sentences.push(delta);
     });
     if (dispatch.status !== "accepted") {
@@ -264,7 +265,9 @@ export async function respondToVoiceChat(
         ? (parseChatbotAnswerDecision(result.content).reply ?? undefined)
         : undefined,
       detail: result.ok
-        ? "Structured reply received"
+        ? parseChatbotAnswerDecision(result.content).reply
+          ? "Reply accepted"
+          : "No accepted reply: empty or rejected by answer validation"
         : input.signal.aborted
           ? "cancelled"
           : result.failureKind,

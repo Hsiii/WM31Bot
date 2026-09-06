@@ -234,7 +234,9 @@ function turns() {
         outcome,
         at: queued.at,
         transcript: first("whisper.finish")?.text,
-        answer: first("codex.finish")?.text,
+        answer:
+          first("codex.finish")?.text ||
+          group.events.findLast((event) => event.type === "codex.output")?.text,
         firstAudio: audio ? audio.at - queued.at : undefined,
         userId: queued.userId,
       };
@@ -347,7 +349,7 @@ function render() {
       (g) => $("filter").value === "all" || g.outcome === $("filter").value,
     )
     .slice(0, 30);
-  if (!groups.some((group) => group.id === selectedTurn))
+  if ($("follow").checked || !groups.some((group) => group.id === selectedTurn))
     selectedTurn = groups[0]?.id ?? "";
   $("turns").replaceChildren(
     ...filtered.map((group) => {
@@ -371,6 +373,7 @@ function render() {
         ),
       );
       button.addEventListener("click", () => {
+        $("follow").checked = false;
         selectedTurn = group.id;
         render();
       });
@@ -432,11 +435,26 @@ function inspect(group) {
       .map((event) => event.text)
       .join(" ") ||
       undefined) ??
-    (group?.outcome === "ignore"
-      ? "No model request. See the host routing decision below."
-      : group?.outcome === "error"
-        ? "This turn failed. See the event log."
-        : "Waiting for a model reply.");
+    (group?.first("codex.finish")
+      ? group.first("codex.finish").detail
+      : group?.outcome === "ignore"
+        ? "No model request. See the host routing decision below."
+        : group?.outcome === "error"
+          ? "This turn failed. See the event log."
+          : "Waiting for a model reply.");
+  $("answer-status").textContent = !group
+    ? ""
+    : group.first("codex.finish")
+      ? group.first("codex.finish").text
+        ? "Final"
+        : "No accepted reply"
+      : group.first("turn.cancel")
+        ? "Interrupted · partial output"
+        : group.first("codex.error")
+          ? "Failed · partial output"
+          : group.answer
+            ? "Streaming"
+            : "";
   $("decision").textContent = group?.decision ?? "No decision yet.";
   const events = group?.events ?? [];
   $("event-count").textContent = events.length;

@@ -214,3 +214,21 @@ test("tuned capture timing applies to the next utterance, not in-flight speech",
   for (let i = 0; i < 30; i++) gate.push(Buffer.alloc(960), false);
   expect(utterances).toBe(2);
 });
+
+test("streaming output survives cancellation without flooding the event buffer", () => {
+  const state = new VoiceDebugState(() => true);
+  const { trace } = state.session("guild", "voice");
+  trace("utterance.queued", { turnId: "turn" });
+  for (let i = 1; i <= 1000; i++)
+    trace("codex.output", { turnId: "turn", text: `partial ${i}` });
+  trace("turn.cancel", { turnId: "turn", detail: "interrupted" });
+  const events = state.snapshot().events;
+  expect(events.filter((event) => event.type === "codex.output")).toHaveLength(
+    1,
+  );
+  expect(events.find((event) => event.type === "codex.output")?.text).toBe(
+    "partial 1000",
+  );
+  expect(events.some((event) => event.type === "utterance.queued")).toBe(true);
+  expect(events.at(-1)?.type).toBe("turn.cancel");
+});

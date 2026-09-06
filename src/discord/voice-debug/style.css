@@ -954,3 +954,102 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+
+/* Keep the selected turn and its output ahead of supporting diagnostics. */
+.topbar {
+  height: 48px;
+  padding: 0 20px;
+}
+main {
+  padding: 16px 20px;
+}
+.heading-actions {
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.heading-actions label {
+  margin-left: auto;
+  color: var(--muted);
+}
+.metrics {
+  margin-bottom: 12px;
+}
+.metrics article {
+  padding: 10px 16px;
+}
+.metric {
+  display: inline-block;
+  font: 16px var(--mono);
+  margin: 4px 0 0 12px;
+}
+.metric-note {
+  display: none;
+}
+.main-grid {
+  gap: 12px;
+}
+.observations {
+  gap: 12px;
+}
+.panel-heading {
+  min-height: 44px;
+  padding: 8px 16px;
+}
+.inspector,
+.tuning form {
+  padding: 16px;
+}
+.transcript {
+  margin-top: 6px;
+}
+#answer-status {
+  margin-left: 8px;
+}
+.decision-line {
+  padding: 8px 12px;
+  margin: 12px 0;
+}
+.decision-line p {
+  margin-top: 4px;
+}
+.pipeline {
+  padding: 12px 16px;
+}
+.stage p {
+  margin-top: 6px;
+}
+.table-scroll {
+  max-height: 260px;
+}
+.turns td {
+  padding: 8px 16px;
+}
+.tuning-intro {
+  margin-bottom: 12px;
+}
+.control {
+  margin-bottom: 16px;
+}
+.empty {
+  padding: 16px;
+}
+.empty h3 {
+  margin: 0 0 4px;
+}
+footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 800px) {
+  main {
+    padding: 12px;
+  }
+  .heading-actions {
+    flex-wrap: wrap;
+  }
+  .heading-actions label {
+    margin-left: 0;
+  }
+}

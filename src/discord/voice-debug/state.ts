@@ -38,6 +38,7 @@ export type VoiceEventType =
   | "turn.finish"
   | "turn.error"
   | "codex.start"
+  | "codex.output"
   | "codex.first_delta"
   | "codex.finish"
   | "codex.error"
@@ -192,6 +193,17 @@ export class VoiceDebugState {
       }
     }
     if (!this.enabled()) return;
+    // Keep one cumulative output per turn, so token streams cannot evict traces.
+    if (type === "codex.output") {
+      this.events = this.events.filter(
+        (event) =>
+          !(
+            event.sessionId === sessionId &&
+            event.turnId === details.turnId &&
+            event.type === type
+          ),
+      );
+    }
     this.events.push({
       ...details,
       text: details.text?.slice(0, 4000),

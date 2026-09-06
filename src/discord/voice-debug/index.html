@@ -9,32 +9,21 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/voice-debug" aria-label="MiniSago voice dashboard"
-        ><span class="mark">◢</span> MiniSago</a
-      ><span class="slash">/</span><span class="workspace">Voice lab</span
-      ><span class="tag">CANARY</span>
+      <strong>Voice debug</strong>
       <div class="top-actions">
         <span id="connection" class="connection"><i></i> Connecting</span
         ><button id="demo-toggle" class="text-button">View demo</button
         ><button id="logout" class="text-button" hidden>Sign out</button>
       </div>
     </header>
-    <nav class="tabs" aria-label="Dashboard sections">
-      <span class="active">Observability</span
-      ><a href="#tuning">Configuration</a
-      ><span class="nav-note">Whisper → Codex → VOICEVOX</span>
-    </nav>
     <main>
-      <div class="page-heading">
-        <div>
-          <div class="eyebrow">REALTIME DIAGNOSTICS</div>
-          <h1>Inside the conversation<span class="heading-dot">.</span></h1>
-          <p>See what she heard, why she responded, and where the time went.</p>
-        </div>
-        <div class="heading-actions">
-          <button id="pause">Pause updates</button
-          ><button id="export">↓ Export trace</button>
-        </div>
+      <div class="heading-actions">
+        <button id="pause">Pause updates</button
+        ><button id="export">Export trace</button>
+        <label
+          ><input id="follow" type="checkbox" checked /> Follow latest
+          turn</label
+        >
       </div>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="login-panel" class="login-panel" hidden>
@@ -93,6 +82,51 @@
       </section>
       <div class="main-grid">
         <div class="observations">
+          <section class="panel detail-panel">
+            <div class="panel-heading">
+              <div class="detail-title">
+                <h2>Turn inspector</h2>
+                <span id="selected-id" class="mono muted"
+                  >No turn selected</span
+                >
+              </div>
+              <span id="selected-status" class="tag">—</span>
+            </div>
+            <div class="inspector">
+              <div class="transcript-grid">
+                <div>
+                  <span class="field-label">WHISPER HEARD</span>
+                  <p id="transcript" class="transcript">
+                    Select a turn to inspect its transcript.
+                  </p>
+                </div>
+                <div>
+                  <span class="field-label">CODEX OUTPUT</span>
+                  <span id="answer-status" class="muted"></span>
+                  <p id="answer" class="transcript">
+                    The generated reply appears here.
+                  </p>
+                </div>
+              </div>
+              <div class="decision-line">
+                <div>
+                  <span class="field-label">HOST DECISION</span>
+                  <p id="decision">No decision yet.</p>
+                </div>
+              </div>
+              <div class="waterfall-heading">
+                <h3>Timing breakdown</h3>
+                <span class="muted">Wall-clock spans · stages may overlap</span>
+              </div>
+              <div id="waterfall" class="waterfall"></div>
+              <details class="events-details">
+                <summary>
+                  Event log <span id="event-count" class="count">0</span>
+                </summary>
+                <ol id="event-log" class="event-log"></ol>
+              </details>
+            </div>
+          </section>
           <section class="panel pipeline-panel">
             <div class="panel-heading">
               <h2>Live pipeline</h2>
@@ -109,9 +143,7 @@
           </section>
           <section class="panel turns-panel">
             <div class="panel-heading">
-              <h2>
-                Conversation traces <span id="turn-count" class="count">0</span>
-              </h2>
+              <h2>Turns <span id="turn-count" class="count">0</span></h2>
               <div class="filter-wrap">
                 <label class="sr-only" for="filter">Filter turns</label
                 ><select id="filter">
@@ -137,57 +169,11 @@
               </table>
             </div>
             <div id="empty" class="empty">
-              <span class="empty-icon">⌁</span>
               <h3>Waiting for the first word</h3>
               <p>
                 Ask MiniSago to join a voice channel.<br />Captured speech and
                 turn decisions will appear here.
               </p>
-            </div>
-          </section>
-          <section class="panel detail-panel">
-            <div class="panel-heading">
-              <div class="detail-title">
-                <h2>Turn inspector</h2>
-                <span id="selected-id" class="mono muted"
-                  >No turn selected</span
-                >
-              </div>
-              <span id="selected-status" class="tag">—</span>
-            </div>
-            <div class="inspector">
-              <div class="transcript-grid">
-                <div>
-                  <span class="field-label">WHISPER HEARD</span>
-                  <p id="transcript" class="transcript">
-                    Select a turn to inspect its transcript.
-                  </p>
-                </div>
-                <div>
-                  <span class="field-label">CODEX REPLIED</span>
-                  <p id="answer" class="transcript">
-                    The generated reply appears here.
-                  </p>
-                </div>
-              </div>
-              <div class="decision-line">
-                <span class="decision-icon">↳</span>
-                <div>
-                  <span class="field-label">HOST ROUTING DECISION</span>
-                  <p id="decision">No decision yet.</p>
-                </div>
-              </div>
-              <div class="waterfall-heading">
-                <h3>Timing breakdown</h3>
-                <span class="muted">Wall-clock spans · stages may overlap</span>
-              </div>
-              <div id="waterfall" class="waterfall"></div>
-              <details class="events-details" open>
-                <summary>
-                  Event log <span id="event-count" class="count">0</span>
-                </summary>
-                <ol id="event-log" class="event-log"></ol>
-              </details>
             </div>
           </section>
         </div>
@@ -216,28 +202,10 @@
               No pending changes
             </p>
           </form>
-          <div class="tuning-foot">
-            <span class="field-label">CURRENT POLICY</span>
-            <p>
-              Idle speech starts an answer. During an answer, direct requests
-              and speaker corrections can take over.
-            </p>
-            <p>
-              Queue: 3 utterances<br />Audio expiry: 15 seconds<br />Reply: up
-              to 2 Japanese sentences
-            </p>
-            <span class="field-label">ABOUT THIS VIEW</span>
-            <p>
-              Decisions show the host rule and observed model output, not
-              private model reasoning. Settings and traces reset when the bot
-              restarts.
-            </p>
-          </div>
         </aside>
       </div>
       <footer>
-        <span><span class="footer-dot"></span> MiniSago Voice Lab</span
-        ><span id="last-update">Waiting for connection</span>
+        <span id="last-update">Waiting for connection</span>
       </footer>
     </main>
   </body>
