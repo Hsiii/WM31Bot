@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const defaults = {
   speechStartMs: 100,
   silenceMs: 700,
-  transcriptionTimeoutMs: 8000,
+  transcriptionTimeoutMs: 30000,
   feedbackDelayMs: 2000,
   feedbackEnabled: true,
   speechSpeed: 1,

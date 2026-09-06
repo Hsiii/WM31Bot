@@ -15,7 +15,7 @@ export type VoiceSettings = z.infer<typeof voiceSettingsSchema>;
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   speechStartMs: 100,
   silenceMs: 700,
-  transcriptionTimeoutMs: 8000,
+  transcriptionTimeoutMs: 30000,
   feedbackDelayMs: 2000,
   feedbackEnabled: true,
   speechSpeed: 1,
