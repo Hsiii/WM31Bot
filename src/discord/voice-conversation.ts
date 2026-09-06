@@ -147,6 +147,7 @@ export class VoiceConversation {
       this.options.trace?.("utterance.queued", {
         turnId,
         userId,
+        pcm: audio,
         audioMs: audio.length / 48,
         queueDepth: this.pending.length + 1,
       });
@@ -219,6 +220,10 @@ export class VoiceConversation {
       queueDepth: this.pending.length,
     });
     const settings = this.options.getSettings?.();
+    trace("turn.settings", {
+      payload: settings,
+      detail: "Recognition and reply settings",
+    });
     const signal = AbortSignal.any([
       this.lifetime.signal,
       AbortSignal.timeout(

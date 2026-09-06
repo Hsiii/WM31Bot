@@ -191,6 +191,17 @@ export async function respondToVoiceChat(
     streamReply: true,
   };
 
+  trace?.("codex.context", {
+    payload: {
+      request: job.requestMessage,
+      history: messages,
+      capabilities: job.capabilities,
+      executionRoute: job.executionRoute,
+      streamReply: job.streamReply,
+    },
+    detail:
+      "Voice job context; worker system instructions are applied separately",
+  });
   let cancel: (() => boolean) | undefined;
   const abort = () => {
     stopFeedback();

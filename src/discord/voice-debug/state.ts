@@ -37,6 +37,8 @@ export type VoiceEventType =
   | "turn.cancel"
   | "turn.finish"
   | "turn.error"
+  | "turn.settings"
+  | "codex.context"
   | "codex.start"
   | "codex.output"
   | "codex.first_delta"
@@ -53,6 +55,8 @@ export type VoiceEventType =
   | "audio.clear"
   | "settings.updated";
 export type VoiceEventDetails = {
+  pcm?: Buffer;
+  payload?: unknown;
   turnId?: string;
   userId?: string;
   text?: string;
@@ -89,6 +93,7 @@ const RETENTION_MS = 30 * 60_000;
 const MAX_EVENTS = 800;
 
 export class VoiceDebugState {
+  private audio = new Map<string, { at: number; wav: Buffer }>();
   private settings = { ...DEFAULT_VOICE_SETTINGS };
   private revision = 0;
   private sequence = 0;
@@ -204,8 +209,35 @@ export class VoiceDebugState {
           ),
       );
     }
+    const { pcm, ...safeDetails } = details;
+    if (pcm && details.turnId) {
+      const wav = Buffer.alloc(44 + pcm.length);
+      wav.write("RIFF");
+      wav.writeUInt32LE(36 + pcm.length, 4);
+      wav.write("WAVEfmt ", 8);
+      wav.writeUInt32LE(16, 16);
+      wav.writeUInt16LE(1, 20);
+      wav.writeUInt16LE(1, 22);
+      wav.writeUInt32LE(24000, 24);
+      wav.writeUInt32LE(48000, 28);
+      wav.writeUInt16LE(2, 32);
+      wav.writeUInt16LE(16, 34);
+      wav.write("data", 36);
+      wav.writeUInt32LE(pcm.length, 40);
+      pcm.copy(wav, 44);
+      this.audio.set(sessionId + "/" + details.turnId, { at: Date.now(), wav });
+      let size = [...this.audio.values()].reduce(
+        (sum, item) => sum + item.wav.length,
+        0,
+      );
+      while (size > 24 * 1024 * 1024) {
+        const key = this.audio.keys().next().value!;
+        size -= this.audio.get(key)!.wav.length;
+        this.audio.delete(key);
+      }
+    }
     this.events.push({
-      ...details,
+      ...safeDetails,
       text: details.text?.slice(0, 4000),
       detail: details.detail?.slice(0, 500),
       id: ++this.sequence,
@@ -217,6 +249,8 @@ export class VoiceDebugState {
   }
   private prune() {
     const cutoff = Date.now() - RETENTION_MS;
+    for (const [key, item] of this.audio)
+      if (item.at < cutoff) this.audio.delete(key);
     this.events = this.events
       .filter((event) => event.at >= cutoff)
       .slice(-MAX_EVENTS);
@@ -236,7 +270,12 @@ export class VoiceDebugState {
       events: this.events,
     };
   }
+  getAudio(sessionId: string, turnId: string) {
+    this.prune();
+    return this.audio.get(sessionId + "/" + turnId)?.wav;
+  }
   clear() {
+    this.audio.clear();
     this.events = [];
   }
 }

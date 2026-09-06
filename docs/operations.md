@@ -237,3 +237,11 @@ login without changing normal `~/.codex` or `~/.config/gh` state.
 For a full deployment removal, stop core and worker containers, remove the
 GitHub webhook, then deliberately archive or delete persistent state and
 credentials according to the operator's retention requirements.
+
+### Browser voice tests
+
+After signing in, choose **New browser test**, then **Record a turn** and **Send recording**. The browser sends mono 24 kHz PCM to the same Whisper/Codex/TTS pipeline and plays stereo 48 kHz output locally. Recordings stop at 30 seconds. This is manual turn submission, not Discord VAD; speech detection and silence controls are hidden in browser mode. Starting another recording cancels the preceding answer.
+
+Each authenticated login owns an isolated browser conversation, history, settings, trace buffer, and output queue. It does not join Discord or use Discord playback. It shares the deployed Whisper, worker, and TTS service capacity. New browser test resets its conversation; Return to Discord traces closes it. Logout and login expiry destroy it. Tabs sharing the same login also share its test session.
+
+Turn details include recognition/reply settings, the voice job context (excluding access tokens; worker system instructions are separate), captured audio, generated text, TTS text, and browser playback acknowledgements. Audio is authenticated, memory-only, bounded to 24 MB per diagnostic state and 30 minutes, and cleared by Clear events. Audio is fetched on demand, not included in JSON trace exports.

@@ -244,6 +244,16 @@ function turns() {
     .sort((a, b) => b.at - a.at);
 }
 function render() {
+  $("record").hidden = data.mode !== "browser";
+  $("empty").querySelector("p").textContent =
+    data.mode === "browser"
+      ? "Record a turn above. Audio and replies stay in this browser test."
+      : "Join a voice channel to inspect Discord turns, or start a browser test.";
+  for (const name of ["speechStartMs", "silenceMs"])
+    $("setting-" + name).closest(".control").hidden = data.mode === "browser";
+  $("browser-exit").hidden = data.mode !== "browser";
+  $("browser-new").disabled = !authorized || demo;
+
   const focusedTurn = document.activeElement?.dataset?.turnId;
   const options = data.sessions
     .map((session) => `${session.id}:${session.closedAt ?? ""}`)
@@ -286,7 +296,9 @@ function render() {
   $("playback-status").textContent = `Playback ${session?.playback ?? "idle"}`;
   $("stop").disabled = !session?.activeTurn;
   const groups = turns();
-  const latest = groups[0];
+  const latest = $("follow").checked
+    ? groups[0]
+    : (groups.find((g) => g.id === selectedTurn) ?? groups[0]);
   for (const [id, value] of [
     ["first", latest?.firstAudio],
     ["stt", latest?.first("whisper.finish")?.durationMs],
@@ -457,6 +469,59 @@ function inspect(group) {
             : "";
   $("decision").textContent = group?.decision ?? "No decision yet.";
   const events = group?.events ?? [];
+  const last = (type) => events.findLast((event) => event.type === type);
+  const failure = events.findLast(
+    (event) =>
+      event.type.endsWith(".error") ||
+      event.type === "turn.cancel" ||
+      event.type === "utterance.dropped",
+  );
+  const playback = events.filter(
+    (event) => event.kind === "reply" && event.type.startsWith("audio."),
+  );
+  const stage = failure
+    ? `${failure.type}: ${failure.detail ?? "failed"}`
+    : playback.at(-1)
+      ? `${playback.at(-1).type}: ${playback.at(-1).detail ?? "playing"}`
+      : last("tts.start")
+        ? "Synthesizing reply"
+        : last("codex.finish")
+          ? "Codex finished; no reply audio yet"
+          : last("codex.start")
+            ? "Waiting for Codex"
+            : last("decision")
+              ? last("decision").detail
+              : last("whisper.start")
+                ? "Transcribing"
+                : "Queued for recognition";
+  $("turn-summary").textContent = group
+    ? `${time(group.at)} · speaker ${group.userId ?? "unknown"} · ${stage}`
+    : "Waiting for speech";
+  $("spoken").textContent =
+    events
+      .filter((event) => event.type === "tts.start")
+      .map((event) => event.text)
+      .join("\n") || "No text sent to speech synthesis";
+  $("context").textContent = last("codex.context")
+    ? JSON.stringify(last("codex.context").payload, null, 2)
+    : "No Codex context recorded for this turn";
+  $("turn-settings").textContent = last("turn.settings")
+    ? JSON.stringify(last("turn.settings").payload, null, 2)
+    : "No settings recorded for this turn";
+  const audioKey = group && !demo ? `${selectedSession}/${group.id}` : "";
+  if ($("capture-audio").dataset.key !== audioKey) {
+    $("capture-audio").dataset.key = audioKey;
+    $("capture-audio").pause();
+    if (audioKey)
+      $("capture-audio").src =
+        `/api/voice-debug/audio?session=${encodeURIComponent(selectedSession)}&turn=${encodeURIComponent(group.id)}`;
+    else $("capture-audio").removeAttribute("src");
+    $("capture-audio").load();
+    $("audio-note").textContent = group
+      ? `${ms(group.first("utterance.queued")?.audioMs)} ms captured · retained up to 30 minutes / 24 MB total`
+      : "No capture selected";
+  }
+
   $("event-count").textContent = events.length;
   const origin = events[0]?.at ?? 0;
   $("event-log").replaceChildren(
@@ -560,7 +625,7 @@ async function poll() {
     authorized = true;
     $("login-panel").hidden = true;
     $("logout").hidden = false;
-    connection("Live", true);
+    connection(data.mode === "browser" ? "Browser test" : "Discord", true);
     if (!dirty) notice("");
     render();
   } catch (error) {
@@ -782,6 +847,10 @@ function sampleData() {
     events,
   };
 }
+$("capture-audio").addEventListener("error", () => {
+  $("audio-note").textContent =
+    "Audio unavailable: expired, cleared, or recorded before this update.";
+});
 buildControls();
 if (demo) {
   data = sampleData();
@@ -797,3 +866,174 @@ if (demo) {
   poll();
   setInterval(poll, 1000);
 }
+
+let recordingEpoch = 0;
+let micStream,
+  recorder,
+  recordingTimer,
+  playingSource,
+  browserAudio,
+  playbackId = "",
+  playbackBusy = false;
+function stopLocalAudio() {
+  if (playingSource) {
+    playingSource.onended = null;
+    playingSource.stop();
+    playingSource = null;
+  }
+  playbackId = "";
+}
+$("browser-new").onclick = async () => {
+  try {
+    recordingEpoch++;
+    if (recorder?.state === "recording") recorder.stop();
+    stopLocalAudio();
+    await api("browser", "POST", {});
+    selectedSession = selectedTurn = "";
+    settingsReady = false;
+    dirty = false;
+    await poll();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("browser-exit").onclick = async () => {
+  try {
+    recordingEpoch++;
+    if (recorder?.state === "recording") recorder.stop();
+    stopLocalAudio();
+    await api("browser", "DELETE");
+    selectedSession = selectedTurn = "";
+    settingsReady = false;
+    dirty = false;
+    await poll();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("record").onclick = async () => {
+  if (recorder?.state === "recording") {
+    recorder.stop();
+    return;
+  }
+  try {
+    browserAudio ??= new AudioContext();
+    await browserAudio.resume();
+    stopLocalAudio();
+    await api("stop", "POST", { sessionId: selectedSession });
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+    const epoch = recordingEpoch;
+    const chunks = [];
+    recorder = new MediaRecorder(micStream);
+    recorder.ondataavailable = (event) => chunks.push(event.data);
+    recorder.onstop = async () => {
+      clearTimeout(recordingTimer);
+      micStream.getTracks().forEach((track) => track.stop());
+      if (epoch !== recordingEpoch) return;
+      $("record").textContent = "Record a turn";
+      $("record-status").textContent = "Transcribing…";
+      try {
+        const decoded = await browserAudio.decodeAudioData(
+          await new Blob(chunks).arrayBuffer(),
+        );
+        const offline = new OfflineAudioContext(
+          1,
+          Math.min(720000, Math.ceil(decoded.duration * 24000)),
+          24000,
+        );
+        const source = offline.createBufferSource();
+        source.buffer = decoded;
+        source.connect(offline.destination);
+        source.start();
+        const rendered = await offline.startRendering();
+        const samples = rendered.getChannelData(0);
+        const pcm = new ArrayBuffer(samples.length * 2);
+        const view = new DataView(pcm);
+        samples.forEach((sample, index) =>
+          view.setInt16(
+            index * 2,
+            Math.max(-1, Math.min(1, sample)) * 32767,
+            true,
+          ),
+        );
+        if (epoch !== recordingEpoch) return;
+        const response = await fetch("/api/voice-debug/capture", {
+          method: "POST",
+          body: pcm,
+        });
+        if (!response.ok) throw new Error((await response.json()).error);
+        $("record-status").textContent = "Turn submitted. Reply plays here.";
+      } catch (error) {
+        notice(error.message, true);
+      }
+    };
+    recorder.start();
+    $("record").textContent = "Send recording";
+    $("record-status").textContent =
+      "Recording · stop to submit · 30 seconds maximum";
+    recordingTimer = setTimeout(
+      () => recorder?.state === "recording" && recorder.stop(),
+      30000,
+    );
+  } catch (error) {
+    micStream?.getTracks().forEach((track) => track.stop());
+    notice(error.message, true);
+  }
+};
+setInterval(async () => {
+  if (
+    data.mode !== "browser" ||
+    playbackBusy ||
+    recorder?.state === "recording"
+  )
+    return;
+  playbackBusy = true;
+  try {
+    const clip = await api("playback");
+    if (!clip) {
+      stopLocalAudio();
+      return;
+    }
+    if (clip.id === playbackId) return;
+    stopLocalAudio();
+    playbackId = clip.id;
+    browserAudio ??= new AudioContext();
+    await browserAudio.resume();
+    if (browserAudio.state !== "running") {
+      playbackId = "";
+      $("record-status").textContent =
+        "Click Record a turn to enable audio playback.";
+      return;
+    }
+    const bytes = Uint8Array.from(atob(clip.pcm), (c) => c.charCodeAt(0));
+    const view = new DataView(bytes.buffer);
+    const buffer = browserAudio.createBuffer(2, bytes.length / 4, 48000);
+    for (let channel = 0; channel < 2; channel++) {
+      const samples = buffer.getChannelData(channel);
+      for (let i = 0; i < samples.length; i++)
+        samples[i] = view.getInt16(i * 4 + channel * 2, true) / 32768;
+    }
+    playingSource = browserAudio.createBufferSource();
+    playingSource.buffer = buffer;
+    playingSource.connect(browserAudio.destination);
+    playingSource.onended = () => {
+      playingSource = null;
+      void api("playback", "POST", { id: clip.id, phase: "end" }).catch(
+        (error) => notice(error.message, true),
+      );
+    };
+    await api("playback", "POST", { id: clip.id, phase: "start" });
+    playingSource.start();
+  } catch (error) {
+    notice(error.message, true);
+    if (playbackId)
+      await api("playback", "POST", { id: playbackId, phase: "error" }).catch(
+        () => {},
+      );
+    stopLocalAudio();
+  } finally {
+    playbackBusy = false;
+  }
+}, 500);

@@ -1053,3 +1053,40 @@ footer {
     margin-left: 0;
   }
 }
+.turn-summary {
+  font: 12px var(--mono);
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
+}
+.evidence {
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.evidence p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+.evidence summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+.evidence pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 300px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--soft);
+  font: 11px/1.6 var(--mono);
+}
+.evidence audio {
+  width: 100%;
+}
+.browser-test {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 12px;
+}

@@ -1,3 +1,4 @@
+import { createBrowserSession } from "./browser-session";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
@@ -12,10 +13,11 @@ const publicFiles: Record<string, [string, string]> = {
   "/voice-debug/style.css": ["style.css", "text/css; charset=utf-8"],
 };
 export function createVoiceDebugHandler(
-  state: VoiceDebugState = voiceDebug,
+  discordState: VoiceDebugState = voiceDebug,
   token: () => string | undefined = () =>
     process.env.MINISAGO_VOICE_DEBUG_TOKEN?.trim(),
 ) {
+  const browsers = new Map<string, ReturnType<typeof createBrowserSession>>();
   const sessions = new Map<string, number>();
   const failures = new Map<string, { count: number; until: number }>();
   return async (request: Request): Promise<Response> => {
@@ -61,7 +63,12 @@ export function createVoiceDebugHandler(
         return json({ error: "Invalid origin" }, 403);
     }
     const now = Date.now();
-    for (const [id, expiry] of sessions) if (expiry <= now) sessions.delete(id);
+    for (const [id, expiry] of sessions)
+      if (expiry <= now) {
+        browsers.get(id)?.close();
+        browsers.delete(id);
+        sessions.delete(id);
+      }
     for (const [id, value] of failures)
       if (value.until <= now) failures.delete(id);
     const input = async () => {
@@ -110,7 +117,12 @@ export function createVoiceDebugHandler(
           return json({ error: "Incorrect access token" }, 401);
         }
         failures.delete("login");
-        if (sessions.size >= 16) sessions.delete(sessions.keys().next().value!);
+        if (sessions.size >= 16) {
+          const oldest = sessions.keys().next().value!;
+          browsers.get(oldest)?.close();
+          browsers.delete(oldest);
+          sessions.delete(oldest);
+        }
         const id = randomBytes(32).toString("hex");
         sessions.set(id, now + TTL);
         return json({ ok: true }, 200, {
@@ -126,10 +138,89 @@ export function createVoiceDebugHandler(
       if (!cookie || !sessions.has(cookie))
         return json({ error: "Sign in to view live voice diagnostics" }, 401);
       if (
+        url.pathname === "/api/voice-debug/browser" &&
+        request.method === "POST"
+      ) {
+        const { transcribeSpeech } = await import("../local-speech");
+        const { respondToVoiceChat } = await import("../../chatbot/voice-chat");
+        browsers.get(cookie)?.close();
+        browsers.set(
+          cookie,
+          createBrowserSession({
+            transcribe: transcribeSpeech,
+            respond: respondToVoiceChat,
+          }),
+        );
+        return json({ ok: true });
+      }
+      if (
+        url.pathname === "/api/voice-debug/browser" &&
+        request.method === "DELETE"
+      ) {
+        browsers.get(cookie)?.close();
+        browsers.delete(cookie);
+        return json({ ok: true });
+      }
+      const browser = browsers.get(cookie);
+      const state = browser?.state ?? discordState;
+      if (
+        url.pathname === "/api/voice-debug/capture" &&
+        request.method === "POST" &&
+        browser
+      ) {
+        const reader = request.body?.getReader();
+        if (!reader) return json({ error: "Missing audio" }, 400);
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.length;
+          if (size > 48000 * 30) {
+            await reader.cancel();
+            return json({ error: "Maximum recording is 30 seconds" }, 413);
+          }
+          chunks.push(value);
+        }
+        if (!size || size % 2) return json({ error: "Invalid PCM audio" }, 400);
+        browser.capture(Buffer.concat(chunks));
+        return json({ ok: true });
+      }
+      if (url.pathname === "/api/voice-debug/playback" && browser) {
+        if (request.method === "GET") return json(browser.clip());
+        if (request.method === "POST") {
+          const value = z
+            .object({
+              id: z.string().uuid(),
+              phase: z.enum(["start", "end", "error"]),
+            })
+            .parse(await input());
+          browser.acknowledge(value.id, value.phase);
+          return json({ ok: true });
+        }
+      }
+      if (
+        url.pathname === "/api/voice-debug/audio" &&
+        request.method === "GET"
+      ) {
+        const audio = state.getAudio(
+          url.searchParams.get("session") ?? "",
+          url.searchParams.get("turn") ?? "",
+        );
+        return audio
+          ? new Response(new Uint8Array(audio), {
+              headers: { ...headers, "Content-Type": "audio/wav" },
+            })
+          : json({ error: "Audio expired or not captured" }, 404);
+      }
+      if (
         url.pathname === "/api/voice-debug/snapshot" &&
         request.method === "GET"
       )
-        return json(state.snapshot());
+        return json({
+          ...state.snapshot(),
+          mode: browser ? "browser" : "discord",
+        });
       if (
         url.pathname === "/api/voice-debug/settings" &&
         request.method === "PATCH"
@@ -171,6 +262,8 @@ export function createVoiceDebugHandler(
         url.pathname === "/api/voice-debug/logout" &&
         request.method === "POST"
       ) {
+        browsers.get(cookie)?.close();
+        browsers.delete(cookie);
         sessions.delete(cookie);
         return json({ ok: true }, 200, {
           "Set-Cookie": `${cookieName}=; HttpOnly; SameSite=Strict; Path=/api/voice-debug; Max-Age=0`,

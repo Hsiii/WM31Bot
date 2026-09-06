@@ -232,3 +232,59 @@ test("streaming output survives cancellation without flooding the event buffer",
   expect(events.some((event) => event.type === "utterance.queued")).toBe(true);
   expect(events.at(-1)?.type).toBe("turn.cancel");
 });
+
+test("captured audio requires auth, has a WAV header, and is removed on clear", async () => {
+  const { state, handle } = setup();
+  const session = state.session("guild", "voice");
+  session.trace("utterance.queued", { turnId: "turn", pcm: Buffer.alloc(480) });
+  expect(state.snapshot().events.some((event) => "pcm" in event)).toBe(false);
+  const path = `audio?session=${session.id}&turn=turn`;
+  expect((await handle(request(path))).status).toBe(401);
+  const cookie = await login(handle);
+  const response = await handle(request(path, "GET", undefined, cookie));
+  const wav = Buffer.from(await response.arrayBuffer());
+  expect(wav.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(wav.readUInt32LE(24)).toBe(24000);
+  expect(wav.length).toBe(524);
+  state.clear();
+  expect((await handle(request(path, "GET", undefined, cookie))).status).toBe(
+    404,
+  );
+});
+
+test("browser conversation keeps settings isolated and waits for actual playback", async () => {
+  const { createBrowserSession } = await import("./browser-session");
+  const browser = createBrowserSession({
+    transcribe: async () => "hello",
+    respond: async (input) => {
+      input.onAudio(Buffer.alloc(1920), "reply", "こんにちは。");
+      return { transcript: "hello", reply: "こんにちは。" };
+    },
+  });
+  const discord = new VoiceDebugState(() => true);
+  browser.state.updateSettings(
+    { ...DEFAULT_VOICE_SETTINGS, speechSpeed: 1.2 },
+    0,
+  );
+  expect(discord.getSettings().speechSpeed).toBe(1);
+  browser.capture(Buffer.alloc(480));
+  for (let i = 0; i < 20 && !browser.clip(); i++)
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  const clip = browser.clip()!;
+  expect(clip).toBeTruthy();
+  expect(
+    browser.state
+      .snapshot()
+      .events.some((event) => event.type === "audio.start"),
+  ).toBe(false);
+  browser.acknowledge(clip.id, "start");
+  browser.acknowledge(clip.id, "end");
+  expect(browser.clip()).toBeNull();
+  expect(
+    browser.state
+      .snapshot()
+      .events.find((event) => event.type === "audio.finish")?.detail,
+  ).toBe("played");
+  expect(discord.snapshot().sessions).toHaveLength(0);
+  browser.close();
+});

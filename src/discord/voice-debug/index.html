@@ -25,6 +25,14 @@
           turn</label
         >
       </div>
+      <section class="browser-test panel">
+        <button id="browser-new">New browser test</button
+        ><button id="browser-exit" hidden>Return to Discord traces</button>
+        <button id="record" hidden>Record a turn</button
+        ><span id="record-status" class="muted"
+          >Browser tests have separate history and settings.</span
+        >
+      </section>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="login-panel" class="login-panel" hidden>
         <div>
@@ -93,6 +101,7 @@
               <span id="selected-status" class="tag">—</span>
             </div>
             <div class="inspector">
+              <p id="turn-summary" class="turn-summary"></p>
               <div class="transcript-grid">
                 <div>
                   <span class="field-label">WHISPER HEARD</span>
@@ -113,6 +122,27 @@
                   <span class="field-label">HOST DECISION</span>
                   <p id="decision">No decision yet.</p>
                 </div>
+              </div>
+              <div class="evidence">
+                <span class="field-label">TTS / PLAYBACK</span>
+                <p id="spoken"></p>
+                <details>
+                  <summary>Captured audio</summary>
+                  <audio id="capture-audio" controls preload="none"></audio>
+                  <p id="audio-note" class="muted"></p>
+                </details>
+                <details>
+                  <summary>Context sent to Codex</summary>
+                  <p class="muted">
+                    Voice job input. Worker system instructions are applied
+                    separately.
+                  </p>
+                  <pre id="context"></pre>
+                </details>
+                <details>
+                  <summary>Settings used for recognition and reply</summary>
+                  <pre id="turn-settings"></pre>
+                </details>
               </div>
               <div class="waterfall-heading">
                 <h3>Timing breakdown</h3>
