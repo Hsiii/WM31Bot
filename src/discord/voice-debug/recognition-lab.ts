@@ -28,6 +28,7 @@ type Run = {
   id: string;
   settings: z.infer<typeof profileSchema>;
   status: string;
+  startedAt?: number;
   result?: Awaited<ReturnType<typeof recognizeSpeech>>;
   error?: string;
 };
@@ -125,6 +126,7 @@ export class RecognitionLab {
         try {
           for (const run of runs) {
             run.status = "running";
+            run.startedAt = Date.now();
             await this.save(record);
             try {
               run.result = await this.recognize(

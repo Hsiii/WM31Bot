@@ -55,6 +55,8 @@ const fields = [
     "VOICEVOX speed for the next answer.",
   ],
 ];
+let viewMode = "recognition";
+let captureBusy = false;
 let demo = new URLSearchParams(location.search).has("demo");
 let data = {
   now: Date.now(),
@@ -244,16 +246,16 @@ function turns() {
     .sort((a, b) => b.at - a.at);
 }
 function render() {
-  $("recognition-lab").hidden = !authorized || demo;
-  $("record").hidden = data.mode !== "browser";
+  renderMode();
+
   $("empty").querySelector("p").textContent =
     data.mode === "browser"
       ? "Record a turn above. Audio and replies stay in this browser test."
       : "Join a voice channel to inspect Discord turns, or start a browser test.";
   for (const name of ["speechStartMs", "silenceMs"])
     $("setting-" + name).closest(".control").hidden = data.mode === "browser";
-  $("browser-exit").hidden = data.mode !== "browser";
-  $("browser-new").disabled = !authorized || demo;
+  $("browser-exit").hidden = true;
+  $("browser-new").disabled = !authorized || demo || captureBusy;
 
   const focusedTurn = document.activeElement?.dataset?.turnId;
   const options = data.sessions
@@ -629,7 +631,7 @@ async function poll() {
     authorized = true;
     $("login-panel").hidden = true;
     $("logout").hidden = false;
-    connection(data.mode === "browser" ? "Browser test" : "Discord", true);
+    connection("Connected", true);
 
     render();
   } catch (error) {
@@ -753,6 +755,10 @@ $("export").addEventListener("click", () => {
 });
 $("logout").addEventListener("click", async () => {
   try {
+    recordingEpoch++;
+    if (recorder?.state === "recording") recorder.stop();
+    micStream?.getTracks().forEach((track) => track.stop());
+    stopLocalAudio();
     await api("logout", "POST");
     location.reload();
   } catch (error) {
@@ -857,6 +863,7 @@ $("capture-audio").addEventListener("error", () => {
 });
 buildControls();
 if (demo) {
+  viewMode = "discord";
   data = sampleData();
   $("demo-toggle").textContent = "Connect live";
   notice(
@@ -875,6 +882,7 @@ let recordingEpoch = 0;
 let micStream,
   recorder,
   recordingTimer,
+  recordingClock,
   playingSource,
   browserAudio,
   playbackId = "",
@@ -893,6 +901,8 @@ $("browser-new").onclick = async () => {
     if (recorder?.state === "recording") recorder.stop();
     stopLocalAudio();
     await api("browser", "POST", {});
+    paused = false;
+    $("pause").textContent = "Pause updates";
     selectedSession = selectedTurn = "";
     settingsReady = false;
     dirty = false;
@@ -921,8 +931,22 @@ $("record").onclick = async () => {
     return;
   }
   try {
+    if (captureBusy) return;
+    if (viewMode === "recognition") readProfiles();
+    captureBusy = true;
+    renderMode();
+    notice("");
+    $("record-status").textContent = "Opening microphone…";
     browserAudio ??= new AudioContext();
     await browserAudio.resume();
+    if (data.mode !== "browser") {
+      await api("browser", "POST", {});
+      data = await api("snapshot");
+      selectedSession = data.sessions.at(-1)?.id ?? "";
+      settingsReady = false;
+      dirty = false;
+      render();
+    }
     stopLocalAudio();
     await api("stop", "POST", { sessionId: selectedSession });
     micStream = await navigator.mediaDevices.getUserMedia({
@@ -934,10 +958,18 @@ $("record").onclick = async () => {
     recorder.ondataavailable = (event) => chunks.push(event.data);
     recorder.onstop = async () => {
       clearTimeout(recordingTimer);
+      clearInterval(recordingClock);
+      $("cancel-recording").hidden = true;
+      $("record").disabled = true;
       micStream.getTracks().forEach((track) => track.stop());
-      if (epoch !== recordingEpoch) return;
-      $("record").textContent = "Record a turn";
-      $("record-status").textContent = "Transcribing…";
+      if (epoch !== recordingEpoch) {
+        captureBusy = false;
+        renderMode();
+        return;
+      }
+      $("record").textContent =
+        viewMode === "recognition" ? "Record new test" : "Record a turn";
+      $("record-status").textContent = "Saving recording…";
       try {
         const decoded = await browserAudio.decodeAudioData(
           await new Blob(chunks).arrayBuffer(),
@@ -973,8 +1005,7 @@ $("record").onclick = async () => {
         );
         if (!response.ok) throw new Error((await response.json()).error);
         const saved = await response.json();
-        labSelected = saved.recordingId;
-        await loadRecordings();
+        await loadRecordings(saved.recordingId);
         if ($("compare-only").checked) {
           await runComparison(saved.recordingId);
           $("record-status").textContent =
@@ -982,10 +1013,22 @@ $("record").onclick = async () => {
         } else $("record-status").textContent = "Saved. Reply plays here.";
       } catch (error) {
         notice(error.message, true);
+        $("record-status").textContent =
+          "Recording could not be saved. Try again.";
+      } finally {
+        captureBusy = false;
+        renderMode();
       }
     };
     recorder.start();
-    $("record").textContent = "Send recording";
+    $("record").disabled = false;
+    $("cancel-recording").hidden = false;
+    const captureStarted = Date.now();
+    recordingClock = setInterval(() => {
+      $("record-status").textContent =
+        `Recording ${Math.floor((Date.now() - captureStarted) / 1000)} / 30 seconds`;
+    }, 250);
+    $("record").textContent = "Stop & submit";
     $("record-status").textContent =
       "Recording · stop to submit · 30 seconds maximum";
     recordingTimer = setTimeout(
@@ -994,7 +1037,16 @@ $("record").onclick = async () => {
     );
   } catch (error) {
     micStream?.getTracks().forEach((track) => track.stop());
-    notice(error.message, true);
+    captureBusy = false;
+    renderMode();
+    notice(
+      error.name === "NotAllowedError"
+        ? "Microphone access was denied. Allow it in your browser and try again."
+        : error.message,
+      true,
+    );
+    $("record-status").textContent =
+      "Microphone unavailable. You can still compare saved recordings.";
   }
 };
 setInterval(async () => {
@@ -1069,6 +1121,10 @@ const profileDefaults = {
 };
 for (let i = 0; i < 2; i++) {
   const box = element("fieldset");
+  const advanced = element("details");
+  advanced.append(
+    element("summary", "", "Advanced decoding & speech detection"),
+  );
   box.append(element("legend", "", `Profile ${i + 1}`));
   for (const [key, value] of Object.entries({
     ...profileDefaults,
@@ -1094,7 +1150,13 @@ for (let i = 0; i < 2; i++) {
     input.dataset.key = key;
     if (key === "language")
       for (const language of ["auto", "zh", "ja", "en"]) {
-        const option = element("option", "", language);
+        const option = element(
+          "option",
+          "",
+          { auto: "Auto-detect", zh: "Chinese", ja: "Japanese", en: "English" }[
+            language
+          ],
+        );
         option.value = language;
         input.append(option);
       }
@@ -1108,12 +1170,39 @@ for (let i = 0; i < 2; i++) {
         input.step =
           key === "temperature" || key === "vadThreshold" ? "0.1" : "1";
     }
+    const bounds = {
+      beamSize: [1, 5],
+      temperature: [0, 1],
+      vadThreshold: [0.1, 0.9],
+      minSpeechMs: [50, 1000],
+      silenceMs: [100, 2000],
+      paddingMs: [0, 1000],
+    }[key];
+    if (bounds) {
+      input.min = bounds[0];
+      input.max = bounds[1];
+      input.required = true;
+    }
+    if (key === "prompt") input.maxLength = 500;
     label.append(input);
-    box.append(label);
+    (key === "language" || key === "beamSize" || key === "prompt"
+      ? box
+      : advanced
+    ).append(label);
   }
+  box.append(advanced);
   $("profiles").append(box);
 }
 function readProfiles() {
+  for (const input of document.querySelectorAll("[data-profile]"))
+    if (!input.checkValidity()) {
+      input.closest("details")?.setAttribute("open", "");
+      document.querySelector(".profile-settings").open = true;
+      input.reportValidity();
+      throw new Error(
+        `Check Profile ${Number(input.dataset.profile) + 1}: ${input.validationMessage}`,
+      );
+    }
   return [0, 1].map((i) =>
     Object.fromEntries(
       [...document.querySelectorAll(`[data-profile="${i}"]`)].map((input) => [
@@ -1127,12 +1216,20 @@ function readProfiles() {
     ),
   );
 }
-async function loadRecordings() {
-  if (!authorized || demo || labBusy) return;
+async function loadRecordings(selectId) {
+  if (!authorized || demo) return;
+  if (labBusy) {
+    if (selectId) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return loadRecordings(selectId);
+    }
+    return;
+  }
   labBusy = true;
   try {
     const result = await api("recordings");
     labRecords = result.recordings;
+    if (selectId) labSelected = selectId;
     if (!labRecords.some((r) => r.id === labSelected))
       labSelected = labRecords[0]?.id ?? "";
     const selection = $("saved-recording");
@@ -1142,7 +1239,7 @@ async function loadRecordings() {
           const option = element(
             "option",
             "",
-            `${new Date(r.at).toLocaleString()} · ${ms(r.audioMs)} ms`,
+            `${new Date(r.at).toLocaleString()} · ${(r.audioMs / 1000).toFixed(1)} s`,
           );
           option.value = r.id;
           return option;
@@ -1159,13 +1256,16 @@ async function loadRecordings() {
   }
 }
 function renderRecording() {
+  $("recording-count").textContent = labRecords.length;
   const record = labRecords.find((r) => r.id === labSelected);
+  $("recording-empty").hidden = Boolean(record);
+  $("recording-workspace").hidden = !record;
   $("run-comparison").disabled =
     !record ||
     labRecords.some((r) =>
       r.runs.some((run) => ["running", "queued"].includes(run.status)),
     );
-  $("delete-recording").disabled = !record;
+  $("delete-recording").disabled = $("run-comparison").disabled;
   if ($("saved-audio").dataset.id !== labSelected) {
     $("saved-audio").dataset.id = labSelected;
     $("saved-audio").pause();
@@ -1175,56 +1275,93 @@ function renderRecording() {
     $("saved-audio").load();
     $("expected").value = record?.expected ?? "";
   }
+
+  const pending =
+    record?.runs.filter((run) => ["running", "queued"].includes(run.status))
+      .length ?? 0;
+  const activeRun = record?.runs.find((run) => run.status === "running");
+  const elapsed = activeRun?.startedAt
+    ? ` · ${Math.floor((Date.now() - activeRun.startedAt) / 1000)} s elapsed`
+    : "";
+  $("lab-status").textContent = pending
+    ? `Comparing · ${pending} profile${pending === 1 ? "" : "s"} remaining${elapsed}. Usually 1–2 minutes total.`
+    : $("run-comparison").disabled && record
+      ? "Another recording is being compared. You can edit profiles while waiting."
+      : record?.runs
+            .slice(-2)
+            .some((run) => ["error", "interrupted"].includes(run.status))
+        ? "A profile failed. Review the error below, then compare again."
+        : record?.runs.length
+          ? "Comparison complete · results saved"
+          : "Ready to compare with the profiles above";
+  const resultsKey = JSON.stringify(record);
+  if ($("comparison-results").dataset.key === resultsKey) return;
+  $("comparison-results").dataset.key = resultsKey;
   $("comparison-results").replaceChildren(
-    ...(record?.runs ?? [])
-      .slice()
-      .reverse()
-      .map((run) => {
-        const row = element("article", "comparison");
-        const result = run.result;
-        row.append(
-          element(
-            "strong",
-            "",
-            `${run.status} · ${run.settings.language} · beam ${run.settings.beamSize} · VAD ${run.settings.vad ? "on" : "off"}`,
-          ),
-        );
+    ...(record?.runs ?? []).map((run, index) => {
+      const row = element("article", "comparison");
+      const result = run.result;
+      row.append(
+        element(
+          "span",
+          "muted",
+          `${run.settings.language} · beam ${run.settings.beamSize} · speech detection ${run.settings.vad ? "on" : "off"}`,
+        ),
+      );
+      row.append(
+        element(
+          "strong",
+          "",
+          `Profile ${(index % 2) + 1} · ${run.status === "complete" ? "Complete" : run.status === "running" ? "Recognizing…" : run.status === "queued" ? "Waiting for the other profile" : run.status}`,
+        ),
+      );
+      row.append(
+        element(
+          "p",
+          "",
+          result
+            ? result.text || "No speech recognized"
+            : (run.error ?? "Waiting for recognition"),
+        ),
+      );
+      if (result)
         row.append(
           element(
             "p",
-            "",
-            result
-              ? result.text || "No speech recognized"
-              : (run.error ?? "Waiting for recognition"),
+            "muted",
+            `${(result.durationMs / 1000).toFixed(1)} s · ${result.diagnostics.language ?? "Language unavailable"}`,
           ),
         );
-        if (result)
-          row.append(
-            element(
-              "p",
-              "muted",
-              `${ms(result.durationMs)} ms · language ${result.diagnostics.language ?? "unknown"} · detected ${result.diagnostics.detected_language ?? "unavailable"} (${result.diagnostics.detected_language_probability === undefined ? "unavailable" : result.diagnostics.detected_language_probability.toFixed(3)})`,
-            ),
-          );
-        if (record.expected)
-          row.append(element("p", "muted", `Expected: ${record.expected}`));
-        const details = element("details");
-        details.append(
-          element("summary", "", "Settings and segment diagnostics"),
-          element(
-            "pre",
-            "",
-            JSON.stringify(
-              { settings: run.settings, diagnostics: result?.diagnostics },
-              null,
-              2,
-            ),
+      if (record.expected)
+        row.append(element("p", "muted", `Expected: ${record.expected}`));
+      const details = element("details");
+      details.append(
+        element("summary", "", "Settings and segment diagnostics"),
+        element(
+          "pre",
+          "",
+          JSON.stringify(
+            { settings: run.settings, diagnostics: result?.diagnostics },
+            null,
+            2,
           ),
-        );
-        row.append(details);
-        return row;
-      }),
+        ),
+      );
+      row.append(details);
+      return row;
+    }),
   );
+  const cards = [...$("comparison-results").children];
+  if (cards.length > 2) {
+    const history = element("details", "comparison-history");
+    history.append(
+      element("summary", "", `Earlier results (${cards.length - 2})`),
+    );
+    const grid = element("div", "history-grid");
+    grid.append(...cards.slice(0, -2));
+    history.append(grid);
+    $("comparison-results").replaceChildren(...cards.slice(-2), history);
+  }
 }
 async function runComparison(recordingId = labSelected) {
   try {
@@ -1247,6 +1384,12 @@ $("saved-recording").onchange = () => {
   renderRecording();
 };
 $("delete-recording").onclick = async () => {
+  if (
+    !confirm(
+      "Delete this recording and all its comparison results? This cannot be undone.",
+    )
+  )
+    return;
   try {
     await api(`recording?id=${labSelected}`, "DELETE");
     labSelected = "";
@@ -1256,3 +1399,83 @@ $("delete-recording").onclick = async () => {
   }
 };
 setInterval(loadRecordings, 2000);
+
+function renderMode() {
+  const signedIn = authorized || demo;
+  $("mode-tabs").hidden = !signedIn;
+  $("recorder-panel").hidden = !signedIn || demo || viewMode === "discord";
+  $("recognition-lab").hidden = !signedIn || demo || viewMode !== "recognition";
+  for (const id of [
+    "trace-actions",
+    "session-bar",
+    "trace-metrics",
+    "trace-workspace",
+  ])
+    $(id).hidden = !signedIn || viewMode === "recognition";
+  if (
+    viewMode === "chat" &&
+    !data.events.some((event) => event.type === "utterance.queued")
+  ) {
+    $("trace-metrics").hidden = true;
+    $("trace-workspace").hidden = true;
+  }
+  $("compare-only").checked = viewMode === "recognition";
+  $("record").hidden = false;
+  $("record").disabled =
+    !signedIn || (captureBusy && recorder?.state !== "recording");
+  if (!captureBusy)
+    $("record").textContent =
+      viewMode === "recognition" ? "Record new test" : "Record a turn";
+  $("browser-new").hidden = viewMode !== "chat" || data.mode !== "browser";
+  $("record-heading").textContent =
+    viewMode === "recognition"
+      ? "Compare speech recognition"
+      : "Talk to MiniSago";
+  $("record-help").textContent =
+    viewMode === "recognition"
+      ? "Record once. Compare two profiles on the same audio."
+      : "A separate browser conversation. Replies play here.";
+  for (const button of document.querySelectorAll("[data-mode]")) {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.mode === viewMode),
+    );
+    button.disabled = captureBusy;
+  }
+}
+for (const button of document.querySelectorAll("[data-mode]"))
+  button.onclick = async () => {
+    if (captureBusy) return;
+    try {
+      if (button.dataset.mode === "discord" && data.mode === "browser") {
+        stopLocalAudio();
+        await api("browser", "DELETE");
+        data = await api("snapshot");
+        selectedSession = selectedTurn = "";
+        settingsReady = false;
+        dirty = false;
+      }
+      if (button.dataset.mode === "chat" && data.mode !== "browser" && !demo) {
+        await api("browser", "POST", {});
+        data = await api("snapshot");
+        selectedSession = selectedTurn = "";
+        settingsReady = false;
+        dirty = false;
+      }
+      viewMode = button.dataset.mode;
+      render();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  };
+$("cancel-recording").onclick = () => {
+  recordingEpoch++;
+  recorder?.stop();
+  micStream?.getTracks().forEach((track) => track.stop());
+  clearInterval(recordingClock);
+  clearTimeout(recordingTimer);
+  captureBusy = false;
+  $("cancel-recording").hidden = true;
+  $("record-status").textContent = "Recording discarded. Nothing was saved.";
+  renderMode();
+};

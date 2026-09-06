@@ -17,7 +17,15 @@
       </div>
     </header>
     <main>
-      <div class="heading-actions">
+      <nav id="mode-tabs" class="mode-tabs" aria-label="Debug mode" hidden>
+        <button data-mode="recognition" aria-pressed="true">
+          Recognition tests</button
+        ><button data-mode="chat" aria-pressed="false">Browser chat</button
+        ><button data-mode="discord" aria-pressed="false">
+          Discord traces
+        </button>
+      </nav>
+      <div class="heading-actions" id="trace-actions" hidden>
         <button id="pause">Pause updates</button
         ><button id="export">Export trace</button>
         <label
@@ -25,55 +33,93 @@
           turn</label
         >
       </div>
-      <section class="browser-test panel">
-        <button id="browser-new">New browser test</button
-        ><button id="browser-exit" hidden>Return to Discord traces</button>
-        <button id="record" hidden>Record a turn</button
-        ><span id="record-status" class="muted"
-          >Browser tests have separate history and settings.</span
-        >
-      </section>
-      <section id="recognition-lab" class="panel recognition-lab">
-        <div class="panel-heading">
-          <h2>Recognition tests · Whisper small + Silero</h2>
-          <label
-            ><input type="checkbox" id="compare-only" checked /> Compare
-            recordings without a Codex reply</label
-          >
-        </div>
-        <div class="inspector">
-          <p class="muted">
-            Every browser recording is saved until you delete it (100 maximum).
-            Profiles run sequentially on the same original audio. Scores are
-            diagnostics, not confidence percentages.
+      <section id="recorder-panel" class="browser-test panel" hidden>
+        <div>
+          <h2 id="record-heading">Compare speech recognition</h2>
+          <p id="record-help" class="muted">
+            Record once. Compare two profiles on the same audio.
           </p>
-          <div id="profiles" class="profiles"></div>
-          <label
-            >Saved recording
-            <select id="saved-recording">
-              <option value="">Record a turn first</option>
-            </select></label
-          >
-          <audio id="saved-audio" controls preload="none"></audio>
-          <label
-            >Expected transcript
-            <input
-              id="expected"
-              placeholder="Optional reference for comparison"
-          /></label>
-          <button id="run-comparison" disabled>Run both profiles</button
-          ><button id="delete-recording" disabled>Delete recording</button
-          ><span id="lab-status" role="status"></span>
-          <div id="comparison-results"></div>
+        </div>
+        <div class="record-actions">
+          <button id="record" class="primary">Record new test</button
+          ><button id="cancel-recording" hidden>Discard</button
+          ><button id="browser-new" class="text-button" hidden>
+            Reset conversation</button
+          ><button id="browser-exit" hidden>Return to Discord traces</button>
+        </div>
+        <p id="record-status" role="status" class="muted">
+          Up to 30 seconds. Microphone access is requested when you record.
+        </p>
+      </section>
+      <section id="recognition-lab" class="panel recognition-lab" hidden>
+        <div class="panel-heading">
+          <h2>Recordings <span id="recording-count" class="count">0</span></h2>
+          <details class="profile-settings">
+            <summary>Edit comparison profiles</summary>
+            <div id="profiles" class="profiles"></div>
+            <p class="muted">
+              Applied to your next comparison. Completed results retain their
+              original settings.
+            </p>
+          </details>
+        </div>
+        <input type="checkbox" id="compare-only" checked hidden />
+        <div class="inspector">
+          <div id="recording-empty" class="recording-empty">
+            <h3>No recordings yet</h3>
+            <p>
+              Record a test above. Your original audio and both transcripts will
+              appear here.
+            </p>
+            <p class="muted">
+              Whisper small · speech detection on · results usually take 1–2
+              minutes for both profiles on this server.
+            </p>
+          </div>
+          <div id="recording-workspace" hidden>
+            <div class="recording-toolbar">
+              <label
+                >Recording
+                <select
+                  id="saved-recording"
+                  aria-label="Saved recording"
+                ></select></label
+              ><button
+                id="delete-recording"
+                class="text-button danger"
+                disabled
+              >
+                Delete
+              </button>
+            </div>
+            <audio id="saved-audio" controls preload="none"></audio>
+            <details class="reference-details">
+              <summary>Add an expected transcript</summary>
+              <label for="expected" class="sr-only">Expected transcript</label
+              ><textarea
+                id="expected"
+                placeholder="What you actually said. Saved when you run a comparison."
+              ></textarea>
+            </details>
+            <div class="comparison-toolbar">
+              <button id="run-comparison" disabled>Compare again</button
+              ><span id="lab-status" role="status" aria-live="polite"></span>
+            </div>
+            <div id="comparison-results"></div>
+          </div>
+          <p class="storage-note muted">
+            Saved across sessions · 100 recordings maximum · delete recordings
+            to remove their audio and results.
+          </p>
         </div>
       </section>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="login-panel" class="login-panel" hidden>
         <div>
-          <h2>Connect to the live canary</h2>
+          <h2>Sign in to voice debug</h2>
           <p>
-            Enter the dedicated diagnostics token. Voice transcripts stay
-            private.
+            Use your diagnostics access token to record speech and compare
+            recognition.
           </p>
         </div>
         <form id="login-form">
@@ -84,11 +130,11 @@
             autocomplete="off"
             placeholder="Access token"
             required
-          /><button class="primary">Connect</button>
+          /><button class="primary">Sign in</button>
         </form>
         <p id="login-error" role="alert"></p>
       </section>
-      <div class="session-bar">
+      <div class="session-bar" id="session-bar" hidden>
         <div>
           <span class="field-label">CHANNEL</span
           ><select id="session" aria-label="Voice session">
@@ -100,7 +146,12 @@
           ><button id="clear" class="text-button">Clear events</button>
         </div>
       </div>
-      <section class="metrics" aria-label="Performance overview">
+      <section
+        id="trace-metrics"
+        hidden
+        class="metrics"
+        aria-label="Performance overview"
+      >
         <article>
           <span class="field-label">FIRST REPLY AUDIO</span>
           <div id="metric-first" class="metric">—<small>ms</small></div>
@@ -122,7 +173,7 @@
           <span class="metric-note">VOICEVOX + audio conversion</span>
         </article>
       </section>
-      <div class="main-grid">
+      <div class="main-grid" id="trace-workspace" hidden>
         <div class="observations">
           <section class="panel detail-panel">
             <div class="panel-heading">

@@ -50,6 +50,7 @@ test("recordings survive a new lab instance and profile runs use identical audio
     expect(seen).toEqual(["same audio", "same audio"]);
     const stored = (await new RecognitionLab(dir).list())[0]!;
     expect(stored.expected).toBe("hello");
+    expect(stored.runs[0]!.startedAt).toBeGreaterThan(0);
     expect(stored.runs).toHaveLength(2);
     expect(stored.runs[1]!.settings.beamSize).toBe(3);
     await lab.remove(record.id);
