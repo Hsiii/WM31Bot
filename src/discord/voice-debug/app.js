@@ -976,7 +976,7 @@ $("record").onclick = async () => {
         labSelected = saved.recordingId;
         await loadRecordings();
         if ($("compare-only").checked) {
-          await runComparison();
+          await runComparison(saved.recordingId);
           $("record-status").textContent =
             "Saved. Comparing recognition profiles.";
         } else $("record-status").textContent = "Saved. Reply plays here.";
@@ -1226,11 +1226,11 @@ function renderRecording() {
       }),
   );
 }
-async function runComparison() {
+async function runComparison(recordingId = labSelected) {
   try {
     $("lab-status").textContent = "Starting comparison…";
     await api("comparison", "POST", {
-      id: labSelected,
+      id: recordingId,
       profiles: readProfiles(),
       expected: $("expected").value,
     });
@@ -1241,7 +1241,7 @@ async function runComparison() {
     $("lab-status").textContent = error.message;
   }
 }
-$("run-comparison").onclick = runComparison;
+$("run-comparison").onclick = () => runComparison();
 $("saved-recording").onchange = () => {
   labSelected = $("saved-recording").value;
   renderRecording();

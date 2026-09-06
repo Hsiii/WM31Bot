@@ -133,8 +133,9 @@ check to avoid overwriting another tab's changes. Stop reply cancels the active
 answer. It does not disconnect the voice session.
 
 Transcripts and replies are held only in memory for 30 minutes, up to 800 events
-and 32 session summaries. No raw audio is retained by the dashboard. Clear events
-removes this buffer; exported JSON is a separate local copy containing transcript
+and 32 session summaries. Captured audio has a separate 24 MB memory bound. Browser
+test recordings and recognition results also persist in the test library described below.
+Clear events removes the transient buffer; exported JSON is a separate local copy containing transcript
 text. Authenticated clients poll once per second. Pausing updates affects only
 the dashboard, not the bot. `/voice-debug?demo=1` contains clearly labeled sample
 traces and local-only tuning, and does not contact the live diagnostics API.
