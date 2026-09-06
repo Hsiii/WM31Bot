@@ -52,7 +52,6 @@ type VoiceOutput = {
 
 const MAX_PENDING_UTTERANCES = 3;
 const MAX_PENDING_AGE_MS = 15_000;
-const FOLLOW_UP_MS = 15_000;
 type PendingUtterance = {
   userId: string;
   audio: Buffer;
@@ -69,7 +68,6 @@ export class VoiceConversation {
   private active?: Turn;
   // Replacement work waits for cancellation acknowledgement, without blocking STT.
   private answering: Promise<void> = Promise.resolve();
-  private engaged?: { userId: string; until: number };
   private transcribing = false;
   private readonly pending: PendingUtterance[] = [];
   private gapTimer?: ReturnType<typeof setTimeout>;
@@ -188,7 +186,6 @@ export class VoiceConversation {
       ]).finally(() => signal.removeEventListener("abort", abort))
     ).trim();
     if (!transcript || this.closed) return;
-    const addressed = ADDRESS.test(transcript);
     if (interruptedUserId !== undefined || this.active) {
       const intent = voiceInterruptionIntent(
         transcript,
@@ -196,18 +193,9 @@ export class VoiceConversation {
       );
       if (intent === "keep") return;
       this.cancelTurn();
-      if (intent === "stop") {
-        this.engaged = undefined;
-        return;
-      }
-    } else {
-      const followUp =
-        this.engaged?.userId === userId && queuedAt <= this.engaged.until;
-      if (!addressed && !followUp) return;
-      if (voiceInterruptionIntent(transcript, Boolean(followUp)) === "stop") {
-        this.engaged = undefined;
-        return;
-      }
+      if (intent === "stop") return;
+    } else if (voiceInterruptionIntent(transcript, true) === "stop") {
+      return;
     }
     const turn: Turn = { userId, controller: new AbortController() };
     this.active = turn;
@@ -258,8 +246,6 @@ export class VoiceConversation {
         });
         if (!isCurrent()) return;
         await this.options.output.drain();
-        if (isCurrent())
-          this.engaged = { userId, until: Date.now() + FOLLOW_UP_MS };
       } catch (error) {
         if (!turn.controller.signal.aborted)
           console.warn("Could not answer in Discord voice:", error);

@@ -84,31 +84,27 @@ async function say(
   await tick();
 }
 
-test("idle chatter is ignored; addressing opens a speaker-scoped follow-up window", async () => {
+test("answers idle speech without requiring a recognized name", async () => {
   const s = setup();
-  await say(s, "alice", "Did you see that, Bob?");
-  expect(s.requests).toHaveLength(0);
-  await say(s, "alice", "Sago, hello");
-  expect(s.requests).toHaveLength(1);
+  await say(s, "alice", "你聽得到嗎？");
+  expect(s.requests.map((r) => r.input.transcript)).toEqual(["你聽得到嗎？"]);
   s.requests[0]!.result.resolve(null);
   await tick();
-  await say(s, "bob", "Tell me more");
-  expect(s.requests).toHaveLength(1);
-  await say(s, "alice", "Tell me more");
+  await say(s, "bob", "Hello, can you hear us?");
   expect(s.requests).toHaveLength(2);
   s.conversation.destroy();
 });
 
-test("follow-up engagement expires", async () => {
+test("idle listening does not expire after an earlier answer", async () => {
   const clock = spyOn(Date, "now").mockReturnValue(0);
   const s = setup();
   try {
-    await say(s, "alice", "Sago, hello");
+    await say(s, "alice", "hello");
     s.requests[0]!.result.resolve(null);
     await tick();
-    clock.mockReturnValue(16_000);
+    clock.mockReturnValue(60_000);
     await say(s, "alice", "another question");
-    expect(s.requests).toHaveLength(1);
+    expect(s.requests).toHaveLength(2);
   } finally {
     clock.mockRestore();
     s.conversation.destroy();

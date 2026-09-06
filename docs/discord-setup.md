@@ -52,10 +52,10 @@ can begin before the full reply is ready. The voice credit is
 where the owner may add emoji. Manage Expressions is needed where the owner may
 rename emoji.
 
-Address MiniSago with “Sago” or “さご” to begin a voice conversation. After an
-answer finishes, that speaker can follow up without repeating the name for
-15 seconds. Other participants can address MiniSago to take over; idle side
-conversation does not automatically trigger an answer.
+Once MiniSago joins, she responds to speech whenever she is idle; no wake word
+or exact transcription of her name is required. While she is answering, direct
+calls to Sago and corrections from the current speaker can take over. Unrelated
+chatter pauses the answer without replacing it.
 
 MiniSago prewarms a slow `うーん…` thinking cue when the gateway starts. It plays
 at most once, after two seconds of processing. Speech suppresses the cue, and a
