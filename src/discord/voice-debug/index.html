@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Voice / MiniSago</title>
+    <link rel="stylesheet" href="/voice-debug/style.css" />
+    <script defer src="/voice-debug/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/voice-debug" aria-label="MiniSago voice dashboard"
+        ><span class="mark">◢</span> MiniSago</a
+      ><span class="slash">/</span><span class="workspace">Voice lab</span
+      ><span class="tag">CANARY</span>
+      <div class="top-actions">
+        <span id="connection" class="connection"><i></i> Connecting</span
+        ><button id="demo-toggle" class="text-button">View demo</button
+        ><button id="logout" class="text-button" hidden>Sign out</button>
+      </div>
+    </header>
+    <nav class="tabs" aria-label="Dashboard sections">
+      <span class="active">Observability</span
+      ><a href="#tuning">Configuration</a
+      ><span class="nav-note">Whisper → Codex → VOICEVOX</span>
+    </nav>
+    <main>
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">REALTIME DIAGNOSTICS</div>
+          <h1>Inside the conversation<span class="heading-dot">.</span></h1>
+          <p>See what she heard, why she responded, and where the time went.</p>
+        </div>
+        <div class="heading-actions">
+          <button id="pause">Pause updates</button
+          ><button id="export">↓ Export trace</button>
+        </div>
+      </div>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="login-panel" class="login-panel" hidden>
+        <div>
+          <h2>Connect to the live canary</h2>
+          <p>
+            Enter the dedicated diagnostics token. Voice transcripts stay
+            private.
+          </p>
+        </div>
+        <form id="login-form">
+          <label class="sr-only" for="token">Access token</label
+          ><input
+            type="password"
+            id="token"
+            autocomplete="off"
+            placeholder="Access token"
+            required
+          /><button class="primary">Connect</button>
+        </form>
+        <p id="login-error" role="alert"></p>
+      </section>
+      <div class="session-bar">
+        <div>
+          <span class="field-label">CHANNEL</span
+          ><select id="session" aria-label="Voice session">
+            <option value="">Waiting for a voice session</option></select
+          ><span id="session-status" class="tag">OFFLINE</span>
+        </div>
+        <div>
+          <span id="retention">Last 30 minutes · memory only</span
+          ><button id="clear" class="text-button">Clear events</button>
+        </div>
+      </div>
+      <section class="metrics" aria-label="Performance overview">
+        <article>
+          <span class="field-label">FIRST REPLY AUDIO</span>
+          <div id="metric-first" class="metric">—<small>ms</small></div>
+          <span class="metric-note">From captured utterance · latest turn</span>
+        </article>
+        <article>
+          <span class="field-label">WHISPER</span>
+          <div id="metric-stt" class="metric">—<small>ms</small></div>
+          <span class="metric-note">Audio conversion + recognition</span>
+        </article>
+        <article>
+          <span class="field-label">CODEX FIRST TEXT</span>
+          <div id="metric-codex" class="metric">—<small>ms</small></div>
+          <span class="metric-note">Dispatch → first reply delta</span>
+        </article>
+        <article>
+          <span class="field-label">FIRST SYNTHESIS</span>
+          <div id="metric-tts" class="metric">—<small>ms</small></div>
+          <span class="metric-note">VOICEVOX + audio conversion</span>
+        </article>
+      </section>
+      <div class="main-grid">
+        <div class="observations">
+          <section class="panel pipeline-panel">
+            <div class="panel-heading">
+              <h2>Live pipeline</h2>
+              <span id="speaker-status" class="muted">No active speakers</span>
+            </div>
+            <div id="pipeline" class="pipeline"></div>
+            <div class="pipeline-footer">
+              <span id="queue-status">0 utterances queued</span
+              ><span id="playback-status">Playback idle</span
+              ><button id="stop" class="text-button danger">
+                ■ Stop reply
+              </button>
+            </div>
+          </section>
+          <section class="panel turns-panel">
+            <div class="panel-heading">
+              <h2>
+                Conversation traces <span id="turn-count" class="count">0</span>
+              </h2>
+              <div class="filter-wrap">
+                <label class="sr-only" for="filter">Filter turns</label
+                ><select id="filter">
+                  <option value="all">All outcomes</option>
+                  <option value="answer">Answered</option>
+                  <option value="ignore">Ignored</option>
+                  <option value="cancel">Stopped / replaced</option>
+                  <option value="error">Errors</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="turns">
+                <thead>
+                  <tr>
+                    <th>Utterance / Whisper transcript</th>
+                    <th>Host decision</th>
+                    <th>First audio</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="turns"></tbody>
+              </table>
+            </div>
+            <div id="empty" class="empty">
+              <span class="empty-icon">⌁</span>
+              <h3>Waiting for the first word</h3>
+              <p>
+                Ask MiniSago to join a voice channel.<br />Captured speech and
+                turn decisions will appear here.
+              </p>
+            </div>
+          </section>
+          <section class="panel detail-panel">
+            <div class="panel-heading">
+              <div class="detail-title">
+                <h2>Turn inspector</h2>
+                <span id="selected-id" class="mono muted"
+                  >No turn selected</span
+                >
+              </div>
+              <span id="selected-status" class="tag">—</span>
+            </div>
+            <div class="inspector">
+              <div class="transcript-grid">
+                <div>
+                  <span class="field-label">WHISPER HEARD</span>
+                  <p id="transcript" class="transcript">
+                    Select a turn to inspect its transcript.
+                  </p>
+                </div>
+                <div>
+                  <span class="field-label">CODEX REPLIED</span>
+                  <p id="answer" class="transcript">
+                    The generated reply appears here.
+                  </p>
+                </div>
+              </div>
+              <div class="decision-line">
+                <span class="decision-icon">↳</span>
+                <div>
+                  <span class="field-label">HOST ROUTING DECISION</span>
+                  <p id="decision">No decision yet.</p>
+                </div>
+              </div>
+              <div class="waterfall-heading">
+                <h3>Timing breakdown</h3>
+                <span class="muted">Wall-clock spans · stages may overlap</span>
+              </div>
+              <div id="waterfall" class="waterfall"></div>
+              <details class="events-details" open>
+                <summary>
+                  Event log <span id="event-count" class="count">0</span>
+                </summary>
+                <ol id="event-log" class="event-log"></ol>
+              </details>
+            </div>
+          </section>
+        </div>
+        <aside id="tuning" class="panel tuning">
+          <div class="panel-heading">
+            <h2>Tuning</h2>
+            <span id="revision" class="tag">r0</span>
+          </div>
+          <form id="settings-form">
+            <p class="tuning-intro">
+              Adjust the next capture or answer. In-flight work keeps its
+              current settings.
+            </p>
+            <div id="controls"></div>
+            <label class="toggle-row"
+              ><span
+                ><strong>Thinking cue</strong
+                ><small>One acknowledgement while waiting</small></span
+              ><input type="checkbox" name="feedbackEnabled" role="switch"
+            /></label>
+            <div class="config-actions">
+              <button class="primary" id="apply">Apply changes</button
+              ><button type="button" id="reset">Reset defaults</button>
+            </div>
+            <p id="settings-status" class="settings-status" role="status">
+              No pending changes
+            </p>
+          </form>
+          <div class="tuning-foot">
+            <span class="field-label">CURRENT POLICY</span>
+            <p>
+              Idle speech starts an answer. During an answer, direct requests
+              and speaker corrections can take over.
+            </p>
+            <p>
+              Queue: 3 utterances<br />Audio expiry: 15 seconds<br />Reply: up
+              to 2 Japanese sentences
+            </p>
+            <span class="field-label">ABOUT THIS VIEW</span>
+            <p>
+              Decisions show the host rule and observed model output, not
+              private model reasoning. Settings and traces reset when the bot
+              restarts.
+            </p>
+          </div>
+        </aside>
+      </div>
+      <footer>
+        <span><span class="footer-dot"></span> MiniSago Voice Lab</span
+        ><span id="last-update">Waiting for connection</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,3 +1,4 @@
+import { handleVoiceDebugRequest } from "./discord/voice-debug/http";
 import type { Server } from "bun";
 
 import { getChatbotAccessConfig } from "./chatbot/access";
@@ -61,6 +62,13 @@ function buildHealthResponse() {
 
 function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
   const { pathname } = new URL(request.url);
+
+  if (
+    pathname === "/voice-debug" ||
+    pathname.startsWith("/voice-debug/") ||
+    pathname.startsWith("/api/voice-debug/")
+  )
+    return handleVoiceDebugRequest(request);
 
   if (request.method === "GET" && pathname === "/api/mac-agent/ws") {
     return macAgentBridge.handleUpgrade(request, server);

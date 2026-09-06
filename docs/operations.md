@@ -109,6 +109,36 @@ The Oracle container also exposes an internal `GET /health` endpoint on port
 `8081`. Its Docker health check verifies the bridge connection, Codex login,
 and Codex app-server sessions; the port is not published publicly.
 
+## Voice diagnostics dashboard
+
+Open `/voice-debug` on the bot's origin to inspect live voice sessions. Set a
+dedicated `MINISAGO_VOICE_DEBUG_TOKEN` (at least 32 random characters) in the
+core environment to enable capture and sign in. Do not reuse a Discord, worker,
+or Codex credential. The token is exchanged for a 12-hour HttpOnly, SameSite
+cookie; it is never put in a URL or browser storage. Production requires HTTPS.
+Without the token configured, the diagnostics API is disabled.
+
+The dashboard links each utterance to its Whisper transcript, the host's
+answer/ignore/replace/stop decision, Codex's first text and final reply,
+VOICEVOX synthesis, and playback. Timing bars show wall-clock durations and may
+overlap. Whisper and synthesis durations include audio conversion and network
+requests; Codex time includes worker dispatch and startup. The host rule is
+shown separately from model output; private model reasoning is not collected.
+
+Tuning controls update speech confirmation and end silence for the next speech
+segment, and recognition timeout, thinking feedback, and speech speed for the
+next recognized turn. Existing captures and answers keep their settings.
+Changes are process-local and reset on restart. Concurrent edits use a revision
+check to avoid overwriting another tab's changes. Stop reply cancels the active
+answer. It does not disconnect the voice session.
+
+Transcripts and replies are held only in memory for 30 minutes, up to 800 events
+and 32 session summaries. No raw audio is retained by the dashboard. Clear events
+removes this buffer; exported JSON is a separate local copy containing transcript
+text. Authenticated clients poll once per second. Pausing updates affects only
+the dashboard, not the bot. `/voice-debug?demo=1` contains clearly labeled sample
+traces and local-only tuning, and does not contact the live diagnostics API.
+
 ## Logs and traces
 
 Core logs cover Gateway lifecycle, monitors, webhooks, worker connections, and

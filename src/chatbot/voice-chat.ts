@@ -137,11 +137,16 @@ export async function respondToVoiceChat(
 ): Promise<VoiceChatResponse | null> {
   if (!input.isCurrent()) return null;
   const { transcript } = input;
-  const stopFeedback = startThinkingFeedback({
-    getAudio: () => feedbackSpeech.get(THINKING_FEEDBACK),
-    play: (audio) => input.onAudio(audio, "feedback"),
-    isCurrent: input.isCurrent,
-  });
+  const trace = input.trace;
+  const stopFeedback =
+    input.settings?.feedbackEnabled === false
+      ? () => {}
+      : startThinkingFeedback({
+          gapMs: input.settings?.feedbackDelayMs,
+          getAudio: () => feedbackSpeech.get(THINKING_FEEDBACK),
+          play: (audio) => input.onAudio(audio, "feedback"),
+          isCurrent: input.isCurrent,
+        });
 
   const requestMessageId = randomUUID();
   const requestMessage: ChatbotMessage = {
@@ -199,20 +204,53 @@ export async function respondToVoiceChat(
     const sentences = new VoiceSentenceBuffer((sentence) => {
       speech = speech.then(async () => {
         if (!input.isCurrent()) return;
-        const audio = await synthesizeSpeech(sentence, {
-          signal: input.signal,
-        });
+        const startedAt = performance.now();
+        trace?.("tts.start", { text: sentence });
+        let audio: Buffer;
+        try {
+          audio = await synthesizeSpeech(sentence, {
+            signal: input.signal,
+            speedScale: input.settings?.speechSpeed,
+          });
+          trace?.("tts.finish", {
+            text: sentence,
+            durationMs: performance.now() - startedAt,
+            audioMs: audio.length / 192,
+          });
+        } catch (error) {
+          trace?.("tts.error", {
+            durationMs: performance.now() - startedAt,
+            detail: input.signal.aborted
+              ? "cancelled"
+              : error instanceof Error
+                ? error.message
+                : "Synthesis failed",
+          });
+          throw error;
+        }
         stopFeedback();
         if (input.isCurrent()) input.onAudio(audio, "reply", sentence);
       });
       void speech.catch(() => undefined);
     });
+    const codexStartedAt = performance.now();
+    let firstDelta = true;
+    trace?.("codex.start", {
+      detail: "Chat worker · streamed Japanese reply · low reasoning",
+    });
     const dispatch = macAgentBridge.dispatch(job, ["chat"], (delta) => {
       if (!input.isCurrent()) return;
+      if (firstDelta) {
+        trace?.("codex.first_delta", {
+          durationMs: performance.now() - codexStartedAt,
+        });
+        firstDelta = false;
+      }
       streamedReply += delta;
       sentences.push(delta);
     });
     if (dispatch.status !== "accepted") {
+      trace?.("codex.error", { detail: dispatch.status });
       stopFeedback();
       await playFeedback(FAILURE_FEEDBACK, input);
       return null;
@@ -220,6 +258,17 @@ export async function respondToVoiceChat(
     cancel = dispatch.cancel;
     if (input.signal.aborted) abort();
     const result = await dispatch.result;
+    trace?.(result.ok ? "codex.finish" : "codex.error", {
+      durationMs: performance.now() - codexStartedAt,
+      text: result.ok
+        ? (parseChatbotAnswerDecision(result.content).reply ?? undefined)
+        : undefined,
+      detail: result.ok
+        ? "Structured reply received"
+        : input.signal.aborted
+          ? "cancelled"
+          : result.failureKind,
+    });
     if (!input.isCurrent()) {
       await speech.catch(() => undefined);
       return null;

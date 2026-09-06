@@ -1,3 +1,4 @@
+import type { VoiceTrace } from "./voice-debug/state";
 import { Readable } from "node:stream";
 import {
   AudioPlayerStatus,
@@ -12,6 +13,8 @@ type Clip = {
   kind: VoiceAudioKind;
   playback?: VoicePlayback;
   started?: boolean;
+  queuedAt?: number;
+  startedAt?: number;
 };
 
 export class VoiceOutput {
@@ -20,14 +23,26 @@ export class VoiceOutput {
   private paused = false;
   private waiters: (() => void)[] = [];
 
-  constructor(private readonly player: AudioPlayer) {
+  constructor(
+    private readonly player: AudioPlayer,
+    private readonly trace?: VoiceTrace,
+  ) {
     player.on(AudioPlayerStatus.Idle, () => {
       this.finish(false);
       this.playNext();
     });
     player.on(AudioPlayerStatus.Playing, () => {
       if (this.paused) player.pause(true);
-      else if (this.current) this.current.started = true;
+      else if (this.current && !this.current.started) {
+        this.current.started = true;
+        this.current.startedAt = performance.now();
+        (this.current.playback?.trace ?? this.trace)?.("audio.start", {
+          kind: this.current.kind,
+          durationMs:
+            performance.now() - (this.current.queuedAt ?? performance.now()),
+          audioMs: this.current.audio.length / 192,
+        });
+      }
     });
     player.on("error", (error) => {
       console.warn("Discord voice playback failed:", error);
@@ -43,13 +58,19 @@ export class VoiceOutput {
       return;
     if (kind === "reply")
       this.queue = this.queue.filter((clip) => clip.kind !== "feedback");
-    this.queue.push({ audio, kind, playback });
+    this.queue.push({ audio, kind, playback, queuedAt: performance.now() });
+    (playback?.trace ?? this.trace)?.("audio.queued", {
+      kind,
+      audioMs: audio.length / 192,
+    });
     if (kind === "reply" && this.current?.kind === "feedback")
       this.player.stop(true);
     this.playNext();
   }
 
   pause() {
+    if (!this.paused)
+      this.trace?.("audio.pause", { detail: "Speaker activity" });
     this.paused = true;
     this.queue = this.queue.filter((clip) => clip.kind !== "feedback");
     if (this.current?.kind === "feedback") this.player.stop(true);
@@ -57,6 +78,10 @@ export class VoiceOutput {
   }
 
   resume() {
+    if (this.paused)
+      this.trace?.("audio.resume", {
+        detail: this.current ? "playing" : "idle",
+      });
     this.paused = false;
     this.player.unpause();
     this.playNext();
@@ -65,10 +90,18 @@ export class VoiceOutput {
   private finish(interrupted: boolean) {
     const clip = this.current;
     this.current = undefined;
-    if (clip?.started) clip.playback?.finished(interrupted);
+    if (clip?.started) {
+      (clip.playback?.trace ?? this.trace)?.("audio.finish", {
+        kind: clip.kind,
+        detail: interrupted ? "interrupted" : "played",
+        durationMs: performance.now() - (clip.startedAt ?? performance.now()),
+      });
+      clip.playback?.finished(interrupted);
+    }
   }
 
   clear() {
+    this.trace?.("audio.clear");
     this.queue = [];
     this.finish(true);
     this.player.stop(true);

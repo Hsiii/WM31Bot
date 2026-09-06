@@ -16,6 +16,12 @@ export class VoiceActivityGate {
   private silentFrames = 0;
   private voicedFrames = 0;
   private utteranceBytes = 0;
+  private startFrames = START_VOICE_FRAMES;
+  private endFrames = END_SILENCE_FRAMES;
+
+  get silenceMs() {
+    return this.endFrames * 20;
+  }
 
   constructor(
     private readonly options: {
@@ -23,6 +29,7 @@ export class VoiceActivityGate {
       onSpeechStart: () => void;
       onSpeechEnd?: () => void;
       onUtterance: (audio: Buffer) => void;
+      getTiming?: () => { speechStartMs: number; silenceMs: number };
     },
   ) {}
 
@@ -38,7 +45,7 @@ export class VoiceActivityGate {
       }
 
       if (
-        this.silentFrames >= END_SILENCE_FRAMES ||
+        this.silentFrames >= this.endFrames ||
         this.utteranceBytes >= this.options.maxUtteranceBytes
       ) {
         this.finish();
@@ -46,10 +53,20 @@ export class VoiceActivityGate {
       return;
     }
 
+    if (!this.consecutiveVoiceFrames) {
+      const timing = this.options.getTiming?.();
+      this.startFrames = timing
+        ? Math.ceil(timing.speechStartMs / 20)
+        : START_VOICE_FRAMES;
+      this.endFrames = timing
+        ? Math.ceil(timing.silenceMs / 20)
+        : END_SILENCE_FRAMES;
+    }
     this.preroll.push({ audio, voice });
-    if (this.preroll.length > PREROLL_FRAMES) this.preroll.shift();
+    if (this.preroll.length > Math.max(PREROLL_FRAMES, this.startFrames))
+      this.preroll.shift();
     this.consecutiveVoiceFrames = voice ? this.consecutiveVoiceFrames + 1 : 0;
-    if (this.consecutiveVoiceFrames < START_VOICE_FRAMES) return;
+    if (this.consecutiveVoiceFrames < this.startFrames) return;
 
     this.utterance = this.preroll;
     this.preroll = [];
@@ -72,7 +89,7 @@ export class VoiceActivityGate {
     const trimFrames = Math.max(0, this.silentFrames - TRAILING_SILENCE_FRAMES);
     const kept = trimFrames ? utterance.slice(0, -trimFrames) : utterance;
     const audio =
-      this.voicedFrames >= MIN_VOICE_FRAMES
+      this.voicedFrames >= Math.min(MIN_VOICE_FRAMES, this.startFrames)
         ? Buffer.concat(kept.map((frame) => frame.audio))
         : null;
     this.reset();

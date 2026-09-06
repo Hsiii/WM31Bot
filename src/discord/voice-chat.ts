@@ -1,3 +1,4 @@
+import { voiceDebug } from "./voice-debug/state";
 import {
   createAudioPlayer,
   EndBehaviorType,
@@ -78,9 +79,14 @@ class VoiceChatSession {
   private readonly conversation: VoiceConversation;
   private readonly stopListeners = new Set<() => void>();
   private closed = false;
+  private trace: import("./voice-debug/state").VoiceTrace;
 
   constructor(private readonly options: VoiceChatSessionOptions) {
+    const diagnostic = voiceDebug.session(options.guildId, options.channelId);
+    this.trace = diagnostic.trace;
     this.conversation = new VoiceConversation({
+      trace: diagnostic.trace,
+      getSettings: () => voiceDebug.getSettings(),
       transcribe: options.transcribe,
       respond: (input) =>
         options.respond({
@@ -88,10 +94,11 @@ class VoiceChatSession {
           guildId: options.guildId,
           channelId: options.channelId,
         }),
-      output: new VoiceOutput(this.player),
+      output: new VoiceOutput(this.player, diagnostic.trace),
       // The VAD gate and packet inactivity timer already wait for 700 ms of silence.
       gapMs: 0,
     });
+    diagnostic.setStop(() => this.conversation.stop());
     this.connection = joinVoiceChannel({
       guildId: options.guildId,
       channelId: options.channelId,
@@ -100,6 +107,9 @@ class VoiceChatSession {
       selfMute: false,
     });
     this.connection.subscribe(this.player);
+    this.connection.on("stateChange", (_old, next) =>
+      diagnostic.trace("connection.state", { detail: next.status }),
+    );
 
     this.connection.receiver.speaking.on("start", (userId) => {
       if (userId !== this.options.getBotUserId()) {
@@ -117,6 +127,7 @@ class VoiceChatSession {
     this.conversation.destroy();
     for (const stop of this.stopListeners) stop();
     this.connection.destroy();
+    this.trace("session.close");
   }
 
   private async listen(userId: string) {
@@ -141,6 +152,7 @@ class VoiceChatSession {
     const vad: VAD = new VAD(VADMode.VERY_AGGRESSIVE, DISCORD_SAMPLE_RATE);
     const gate = new VoiceActivityGate({
       maxUtteranceBytes: MAX_UTTERANCE_BYTES,
+      getTiming: () => voiceDebug.getSettings(),
       onSpeechStart: () => this.conversation.speechStarted(userId),
       onSpeechEnd: () => this.conversation.speechEnded(userId),
       onUtterance: (audio) => {
@@ -164,7 +176,7 @@ class VoiceChatSession {
     opus.pipe(decoder);
     decoder.on("data", (chunk: Buffer) => {
       clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => gate.flush(), 700);
+
       decoded = Buffer.concat([decoded, chunk]);
       while (decoded.length >= OPUS_FRAME_BYTES) {
         const frame = decoded.subarray(0, OPUS_FRAME_BYTES);
@@ -174,6 +186,7 @@ class VoiceChatSession {
         const voice = vad.processFrame(samples) === VADEvent.VOICE;
         gate.push(discordPcmToSpeechPcm(frame), voice);
       }
+      inactivityTimer = setTimeout(() => gate.flush(), gate.silenceMs);
     });
     decoder.on("error", (error) => {
       console.warn(`Could not decode Discord voice audio: ${error.message}`);
