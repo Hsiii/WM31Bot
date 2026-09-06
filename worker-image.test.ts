@@ -85,7 +85,7 @@ test("hosted image includes Git for local server-memory history", () => {
 test("hosted image bundles local speech tools", () => {
   expect(hostedDockerfile).toContain("RUN apk add --no-cache ffmpeg libstdc++");
   expect(hostedDockerfile).toContain("/usr/local/bin/whisper-server");
-  expect(hostedDockerfile).toContain("/opt/minisago-models/ggml-base.bin");
+  expect(hostedDockerfile).toContain("/opt/minisago-models/ggml-small.bin");
   expect(hostedDockerfile).toContain("WHISPER_MODEL_SHA256");
 });
 

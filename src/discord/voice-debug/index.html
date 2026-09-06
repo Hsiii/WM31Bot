@@ -33,6 +33,40 @@
           >Browser tests have separate history and settings.</span
         >
       </section>
+      <section id="recognition-lab" class="panel recognition-lab">
+        <div class="panel-heading">
+          <h2>Recognition tests · Whisper small + Silero</h2>
+          <label
+            ><input type="checkbox" id="compare-only" checked /> Compare
+            recordings without a Codex reply</label
+          >
+        </div>
+        <div class="inspector">
+          <p class="muted">
+            Every browser recording is saved until you delete it (100 maximum).
+            Profiles run sequentially on the same original audio. Scores are
+            diagnostics, not confidence percentages.
+          </p>
+          <div id="profiles" class="profiles"></div>
+          <label
+            >Saved recording
+            <select id="saved-recording">
+              <option value="">Record a turn first</option>
+            </select></label
+          >
+          <audio id="saved-audio" controls preload="none"></audio>
+          <label
+            >Expected transcript
+            <input
+              id="expected"
+              placeholder="Optional reference for comparison"
+          /></label>
+          <button id="run-comparison">Run both profiles</button
+          ><button id="delete-recording">Delete recording</button
+          ><span id="lab-status" role="status"></span>
+          <div id="comparison-results"></div>
+        </div>
+      </section>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="login-panel" class="login-panel" hidden>
         <div>
@@ -124,6 +158,10 @@
                 </div>
               </div>
               <div class="evidence">
+                <details>
+                  <summary>Recognition diagnostics</summary>
+                  <pre id="recognition-diagnostics"></pre>
+                </details>
                 <span class="field-label">TTS / PLAYBACK</span>
                 <p id="spoken"></p>
                 <details>

@@ -1090,3 +1090,60 @@ footer {
   padding: 10px;
   margin-bottom: 12px;
 }
+.recognition-lab {
+  margin-bottom: 16px;
+}
+.profiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+.profiles fieldset {
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.profiles label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.profiles input:not([type="checkbox"]),
+.profiles select {
+  width: 130px;
+  height: 30px;
+  padding: 4px;
+  border: 1px solid var(--line);
+}
+#saved-audio {
+  display: block;
+  margin: 12px 0;
+}
+#expected {
+  margin: 8px;
+  padding: 8px;
+  width: min(350px, 80%);
+}
+.comparison {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.comparison p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+.comparison pre {
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .profiles {
+    grid-template-columns: 1fr;
+  }
+}

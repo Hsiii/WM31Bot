@@ -9,12 +9,20 @@ import {
 import { VoiceDebugState } from "./state";
 
 export function createBrowserSession(deps: {
-  transcribe: (audio: Buffer, signal?: AbortSignal) => Promise<string>;
+  transcribe: (
+    audio: Buffer,
+    signal?: AbortSignal,
+    trace?: import("./state").VoiceTrace,
+  ) => Promise<string>;
   respond: (
     input: VoiceReplyInput & { guildId: string; channelId: string },
   ) => Promise<VoiceChatResponse | null>;
 }) {
   const state = new VoiceDebugState(() => true);
+  state.updateSettings(
+    { ...state.getSettings(), transcriptionTimeoutMs: 30000 },
+    0,
+  );
   const session = state.session("browser", "Browser microphone");
   type Clip = {
     id: string;
@@ -58,6 +66,7 @@ export function createBrowserSession(deps: {
     transcribe: deps.transcribe,
     respond: (input) =>
       deps.respond({ ...input, guildId: "browser", channelId: session.id }),
+    pendingAgeMs: 120000,
     output,
     trace: session.trace,
     getSettings: () => state.getSettings(),

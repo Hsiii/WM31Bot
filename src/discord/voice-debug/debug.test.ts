@@ -264,7 +264,7 @@ test("browser conversation keeps settings isolated and waits for actual playback
   const discord = new VoiceDebugState(() => true);
   browser.state.updateSettings(
     { ...DEFAULT_VOICE_SETTINGS, speechSpeed: 1.2 },
-    0,
+    browser.state.snapshot().revision,
   );
   expect(discord.getSettings().speechSpeed).toBe(1);
   browser.capture(Buffer.alloc(480));

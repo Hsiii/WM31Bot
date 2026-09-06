@@ -244,6 +244,7 @@ function turns() {
     .sort((a, b) => b.at - a.at);
 }
 function render() {
+  $("recognition-lab").hidden = !authorized || demo;
   $("record").hidden = data.mode !== "browser";
   $("empty").querySelector("p").textContent =
     data.mode === "browser"
@@ -502,6 +503,9 @@ function inspect(group) {
       .filter((event) => event.type === "tts.start")
       .map((event) => event.text)
       .join("\n") || "No text sent to speech synthesis";
+  $("recognition-diagnostics").textContent = last("whisper.diagnostics")
+    ? JSON.stringify(last("whisper.diagnostics").payload, null, 2)
+    : "No recognition diagnostics recorded";
   $("context").textContent = last("codex.context")
     ? JSON.stringify(last("codex.context").payload, null, 2)
     : "No Codex context recorded for this turn";
@@ -626,7 +630,7 @@ async function poll() {
     $("login-panel").hidden = true;
     $("logout").hidden = false;
     connection(data.mode === "browser" ? "Browser test" : "Discord", true);
-    if (!dirty) notice("");
+
     render();
   } catch (error) {
     connection(error.status === 401 ? "Not connected" : "Disconnected");
@@ -959,12 +963,23 @@ $("record").onclick = async () => {
           ),
         );
         if (epoch !== recordingEpoch) return;
-        const response = await fetch("/api/voice-debug/capture", {
-          method: "POST",
-          body: pcm,
-        });
+        const response = await fetch(
+          "/api/voice-debug/capture" +
+            ($("compare-only").checked ? "?compare=1" : ""),
+          {
+            method: "POST",
+            body: pcm,
+          },
+        );
         if (!response.ok) throw new Error((await response.json()).error);
-        $("record-status").textContent = "Turn submitted. Reply plays here.";
+        const saved = await response.json();
+        labSelected = saved.recordingId;
+        await loadRecordings();
+        if ($("compare-only").checked) {
+          await runComparison();
+          $("record-status").textContent =
+            "Saved. Comparing recognition profiles.";
+        } else $("record-status").textContent = "Saved. Reply plays here.";
       } catch (error) {
         notice(error.message, true);
       }
@@ -1037,3 +1052,207 @@ setInterval(async () => {
     playbackBusy = false;
   }
 }, 500);
+
+let labSelected = "",
+  labRecords = [],
+  labBusy = false;
+const profileDefaults = {
+  language: "auto",
+  beamSize: 1,
+  temperature: 0,
+  prompt: "",
+  vad: true,
+  vadThreshold: 0.5,
+  minSpeechMs: 250,
+  silenceMs: 500,
+  paddingMs: 200,
+};
+for (let i = 0; i < 2; i++) {
+  const box = element("fieldset");
+  box.append(element("legend", "", `Profile ${i + 1}`));
+  for (const [key, value] of Object.entries({
+    ...profileDefaults,
+    beamSize: i ? 3 : 1,
+  })) {
+    const label = element(
+      "label",
+      "",
+      {
+        language: "Language",
+        beamSize: "Beam size",
+        temperature: "Temperature",
+        prompt: "Vocabulary hint",
+        vad: "Speech detection",
+        vadThreshold: "Speech threshold",
+        minSpeechMs: "Minimum speech (ms)",
+        silenceMs: "Split silence (ms)",
+        paddingMs: "Speech padding (ms)",
+      }[key],
+    );
+    const input = element(key === "language" ? "select" : "input");
+    input.dataset.profile = i;
+    input.dataset.key = key;
+    if (key === "language")
+      for (const language of ["auto", "zh", "ja", "en"]) {
+        const option = element("option", "", language);
+        option.value = language;
+        input.append(option);
+      }
+    else if (typeof value === "boolean") {
+      input.type = "checkbox";
+      input.checked = value;
+    } else {
+      input.type = typeof value === "number" ? "number" : "text";
+      input.value = value;
+      if (input.type === "number")
+        input.step =
+          key === "temperature" || key === "vadThreshold" ? "0.1" : "1";
+    }
+    label.append(input);
+    box.append(label);
+  }
+  $("profiles").append(box);
+}
+function readProfiles() {
+  return [0, 1].map((i) =>
+    Object.fromEntries(
+      [...document.querySelectorAll(`[data-profile="${i}"]`)].map((input) => [
+        input.dataset.key,
+        input.type === "checkbox"
+          ? input.checked
+          : input.type === "number"
+            ? Number(input.value)
+            : input.value,
+      ]),
+    ),
+  );
+}
+async function loadRecordings() {
+  if (!authorized || demo || labBusy) return;
+  labBusy = true;
+  try {
+    const result = await api("recordings");
+    labRecords = result.recordings;
+    if (!labRecords.some((r) => r.id === labSelected))
+      labSelected = labRecords[0]?.id ?? "";
+    const selection = $("saved-recording");
+    if (selection.dataset.keys !== labRecords.map((r) => r.id).join()) {
+      selection.replaceChildren(
+        ...labRecords.map((r) => {
+          const option = element(
+            "option",
+            "",
+            `${new Date(r.at).toLocaleString()} · ${ms(r.audioMs)} ms`,
+          );
+          option.value = r.id;
+          return option;
+        }),
+      );
+      selection.dataset.keys = labRecords.map((r) => r.id).join();
+    }
+    selection.value = labSelected;
+    renderRecording();
+  } catch (error) {
+    $("lab-status").textContent = error.message;
+  } finally {
+    labBusy = false;
+  }
+}
+function renderRecording() {
+  const record = labRecords.find((r) => r.id === labSelected);
+  $("run-comparison").disabled =
+    !record ||
+    labRecords.some((r) =>
+      r.runs.some((run) => ["running", "queued"].includes(run.status)),
+    );
+  $("delete-recording").disabled = !record;
+  if ($("saved-audio").dataset.id !== labSelected) {
+    $("saved-audio").dataset.id = labSelected;
+    $("saved-audio").pause();
+    if (record)
+      $("saved-audio").src = `/api/voice-debug/recording?id=${record.id}`;
+    else $("saved-audio").removeAttribute("src");
+    $("saved-audio").load();
+    $("expected").value = record?.expected ?? "";
+  }
+  $("comparison-results").replaceChildren(
+    ...(record?.runs ?? [])
+      .slice()
+      .reverse()
+      .map((run) => {
+        const row = element("article", "comparison");
+        const result = run.result;
+        row.append(
+          element(
+            "strong",
+            "",
+            `${run.status} · ${run.settings.language} · beam ${run.settings.beamSize} · VAD ${run.settings.vad ? "on" : "off"}`,
+          ),
+        );
+        row.append(
+          element(
+            "p",
+            "",
+            result
+              ? result.text || "No speech recognized"
+              : (run.error ?? "Waiting for recognition"),
+          ),
+        );
+        if (result)
+          row.append(
+            element(
+              "p",
+              "muted",
+              `${ms(result.durationMs)} ms · language ${result.diagnostics.language ?? "unknown"} · detected ${result.diagnostics.detected_language ?? "unavailable"} (${result.diagnostics.detected_language_probability === undefined ? "unavailable" : result.diagnostics.detected_language_probability.toFixed(3)})`,
+            ),
+          );
+        if (record.expected)
+          row.append(element("p", "muted", `Expected: ${record.expected}`));
+        const details = element("details");
+        details.append(
+          element("summary", "", "Settings and segment diagnostics"),
+          element(
+            "pre",
+            "",
+            JSON.stringify(
+              { settings: run.settings, diagnostics: result?.diagnostics },
+              null,
+              2,
+            ),
+          ),
+        );
+        row.append(details);
+        return row;
+      }),
+  );
+}
+async function runComparison() {
+  try {
+    $("lab-status").textContent = "Starting comparison…";
+    await api("comparison", "POST", {
+      id: labSelected,
+      profiles: readProfiles(),
+      expected: $("expected").value,
+    });
+    $("lab-status").textContent =
+      "Running sequentially. Results are saved automatically.";
+    await loadRecordings();
+  } catch (error) {
+    $("lab-status").textContent = error.message;
+  }
+}
+$("run-comparison").onclick = runComparison;
+$("saved-recording").onchange = () => {
+  labSelected = $("saved-recording").value;
+  renderRecording();
+};
+$("delete-recording").onclick = async () => {
+  try {
+    await api(`recording?id=${labSelected}`, "DELETE");
+    labSelected = "";
+    await loadRecordings();
+  } catch (error) {
+    $("lab-status").textContent = error.message;
+  }
+};
+setInterval(loadRecordings, 2000);

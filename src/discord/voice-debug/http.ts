@@ -1,3 +1,8 @@
+import {
+  recognitionLab,
+  defaultProfiles,
+  profilesSchema,
+} from "./recognition-lab";
 import { createBrowserSession } from "./browser-session";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
@@ -138,6 +143,79 @@ export function createVoiceDebugHandler(
       if (!cookie || !sessions.has(cookie))
         return json({ error: "Sign in to view live voice diagnostics" }, 401);
       if (
+        url.pathname === "/api/voice-debug/recordings" &&
+        request.method === "GET"
+      )
+        return json({
+          recordings: await recognitionLab.list(),
+          defaults: defaultProfiles,
+        });
+      if (
+        url.pathname === "/api/voice-debug/comparison" &&
+        request.method === "POST"
+      ) {
+        const value = z
+          .object({
+            id: z.string().uuid(),
+            profiles: profilesSchema,
+            expected: z.string().max(4000).default(""),
+          })
+          .strict()
+          .parse(await input());
+        try {
+          return json(
+            await recognitionLab.run(value.id, value.profiles, value.expected),
+          );
+        } catch (error) {
+          return json(
+            {
+              error:
+                error instanceof Error ? error.message : "Comparison failed",
+            },
+            409,
+          );
+        }
+      }
+      if (
+        url.pathname === "/api/voice-debug/recording" &&
+        request.method === "DELETE"
+      ) {
+        try {
+          await recognitionLab.remove(url.searchParams.get("id") ?? "");
+          return json({ ok: true });
+        } catch (error) {
+          return json(
+            { error: error instanceof Error ? error.message : "Delete failed" },
+            409,
+          );
+        }
+      }
+      if (
+        url.pathname === "/api/voice-debug/recording" &&
+        request.method === "GET"
+      ) {
+        const pcm = await recognitionLab.audio(
+          url.searchParams.get("id") ?? "",
+        );
+        const wav = Buffer.alloc(44 + pcm.length);
+        wav.write("RIFF");
+        wav.writeUInt32LE(36 + pcm.length, 4);
+        wav.write("WAVEfmt ", 8);
+        wav.writeUInt32LE(16, 16);
+        wav.writeUInt16LE(1, 20);
+        wav.writeUInt16LE(1, 22);
+        wav.writeUInt32LE(24000, 24);
+        wav.writeUInt32LE(48000, 28);
+        wav.writeUInt16LE(2, 32);
+        wav.writeUInt16LE(16, 34);
+        wav.write("data", 36);
+        wav.writeUInt32LE(pcm.length, 40);
+        pcm.copy(wav, 44);
+        return new Response(new Uint8Array(wav), {
+          headers: { ...headers, "Content-Type": "audio/wav" },
+        });
+      }
+      if (
         url.pathname === "/api/voice-debug/browser" &&
         request.method === "POST"
       ) {
@@ -183,8 +261,23 @@ export function createVoiceDebugHandler(
           chunks.push(value);
         }
         if (!size || size % 2) return json({ error: "Invalid PCM audio" }, 400);
-        browser.capture(Buffer.concat(chunks));
-        return json({ ok: true });
+        const audio = Buffer.concat(chunks);
+        let recording;
+        try {
+          recording = await recognitionLab.store(audio);
+        } catch (error) {
+          return json(
+            {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Could not store recording",
+            },
+            409,
+          );
+        }
+        if (url.searchParams.get("compare") !== "1") browser.capture(audio);
+        return json({ ok: true, recordingId: recording.id });
       }
       if (url.pathname === "/api/voice-debug/playback" && browser) {
         if (request.method === "GET") return json(browser.clip());

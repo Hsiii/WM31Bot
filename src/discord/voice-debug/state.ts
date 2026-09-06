@@ -28,6 +28,7 @@ export type VoiceEventType =
   | "capture.end"
   | "utterance.queued"
   | "utterance.dropped"
+  | "whisper.diagnostics"
   | "whisper.start"
   | "whisper.finish"
   | "whisper.error"

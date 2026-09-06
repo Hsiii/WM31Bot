@@ -85,11 +85,16 @@ export class VoiceConversation {
 
   constructor(
     private readonly options: {
-      transcribe: (audio: Buffer, signal?: AbortSignal) => Promise<string>;
+      transcribe: (
+        audio: Buffer,
+        signal?: AbortSignal,
+        trace?: VoiceTrace,
+      ) => Promise<string>;
       respond: (input: VoiceReplyInput) => Promise<VoiceChatResponse | null>;
       output: VoiceOutput;
       gapMs?: number;
       transcriptionTimeoutMs?: number;
+      pendingAgeMs?: number;
       trace?: VoiceTrace;
       getSettings?: () => VoiceSettings;
     },
@@ -173,7 +178,10 @@ export class VoiceConversation {
         const pending = this.pending.shift()!;
         const recognitionStartedAt = performance.now();
         try {
-          if (Date.now() - pending.queuedAt <= MAX_PENDING_AGE_MS)
+          if (
+            Date.now() - pending.queuedAt <=
+            (this.options.pendingAgeMs ?? MAX_PENDING_AGE_MS)
+          )
             await this.transcribe(pending);
           else
             this.options.trace?.("utterance.dropped", {
@@ -233,7 +241,8 @@ export class VoiceConversation {
             settings?.transcriptionTimeoutMs ??
               this.options.transcriptionTimeoutMs ??
               8_000,
-            MAX_PENDING_AGE_MS - (Date.now() - queuedAt),
+            (this.options.pendingAgeMs ?? MAX_PENDING_AGE_MS) -
+              (Date.now() - queuedAt),
           ),
         ),
       ),
@@ -246,7 +255,7 @@ export class VoiceConversation {
     });
     const transcript = (
       await Promise.race([
-        this.options.transcribe(audio, signal),
+        this.options.transcribe(audio, signal, trace),
         aborted,
       ]).finally(() => signal.removeEventListener("abort", abort))
     ).trim();
