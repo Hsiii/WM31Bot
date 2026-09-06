@@ -240,8 +240,8 @@ export class VoiceConversation {
           Math.min(
             settings?.transcriptionTimeoutMs ??
               this.options.transcriptionTimeoutMs ??
-              30_000,
-            (this.options.pendingAgeMs ?? 60_000) - (Date.now() - queuedAt),
+              120_000,
+            (this.options.pendingAgeMs ?? 120_000) - (Date.now() - queuedAt),
           ),
         ),
       ),

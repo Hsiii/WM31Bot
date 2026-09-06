@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const defaults = {
   speechStartMs: 100,
   silenceMs: 700,
-  transcriptionTimeoutMs: 30000,
+  transcriptionTimeoutMs: 120000,
   feedbackDelayMs: 2000,
   feedbackEnabled: true,
   speechSpeed: 1,
@@ -31,7 +31,7 @@ const fields = [
     "transcriptionTimeoutMs",
     "Whisper deadline",
     1000,
-    30000,
+    120000,
     500,
     "ms",
     "Recognition is also bounded by audio age.",

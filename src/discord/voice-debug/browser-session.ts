@@ -20,7 +20,7 @@ export function createBrowserSession(deps: {
 }) {
   const state = new VoiceDebugState(() => true);
   state.updateSettings(
-    { ...state.getSettings(), transcriptionTimeoutMs: 30000 },
+    { ...state.getSettings(), transcriptionTimeoutMs: 120000 },
     0,
   );
   const session = state.session("browser", "Browser microphone");

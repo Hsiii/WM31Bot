@@ -5,7 +5,7 @@ export const voiceSettingsSchema = z
   .object({
     speechStartMs: z.number().int().min(40).max(500).multipleOf(20),
     silenceMs: z.number().int().min(200).max(2000).multipleOf(20),
-    transcriptionTimeoutMs: z.number().int().min(1000).max(30000),
+    transcriptionTimeoutMs: z.number().int().min(1000).max(120000),
     feedbackDelayMs: z.number().int().min(500).max(10000),
     feedbackEnabled: z.boolean(),
     speechSpeed: z.number().min(0.7).max(1.4),
@@ -15,7 +15,7 @@ export type VoiceSettings = z.infer<typeof voiceSettingsSchema>;
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   speechStartMs: 100,
   silenceMs: 700,
-  transcriptionTimeoutMs: 30000,
+  transcriptionTimeoutMs: 120000,
   feedbackDelayMs: 2000,
   feedbackEnabled: true,
   speechSpeed: 1,
